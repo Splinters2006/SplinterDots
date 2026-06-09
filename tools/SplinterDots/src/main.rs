@@ -907,18 +907,48 @@ impl SplinterDots {
             return Some(texture.clone());
         }
 
-        let bytes = fs::read(path).ok()?;
+        // First try to create a cropped preview PNG through ImageMagick.
+        // This makes tall/wide wallpapers preview correctly instead of failing.
+        let preview_path = wallpaper_preview_cache_path(path);
 
+        if !preview_path.exists() {
+            if let Some(parent) = preview_path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+
+            let _ = Command::new("magick")
+                .arg(path)
+                .args([
+                    "-auto-orient",
+                    "-resize",
+                    "960x540^",
+                    "-gravity",
+                    "center",
+                    "-extent",
+                    "960x540",
+                ])
+                .arg(&preview_path)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+
+        let image_path = if preview_path.exists() {
+            preview_path.as_path()
+        } else {
+            path
+        };
+
+        let bytes = fs::read(image_path).ok()?;
         let image = image::load_from_memory(&bytes)
             .or_else(|_| {
-                image::ImageReader::open(path)
+                image::ImageReader::open(image_path)
                     .map_err(image::ImageError::IoError)?
                     .with_guessed_format()?
                     .decode()
             })
             .ok()?;
 
-        // Cover/crop preview. This behaves like CSS object-fit: cover.
         let image = image
             .resize_to_fill(960, 540, image::imageops::FilterType::Lanczos3)
             .to_rgba8();
@@ -977,11 +1007,13 @@ impl SplinterDots {
                         ..Default::default()
                     }
                     .show(ui, |ui| {
-                        let image_size = Vec2::new(ui.available_width() - 18.0, 120.0);
+                        let preview_width = (ui.available_width() - 18.0).min(360.0);
+                        let image_size = Vec2::new(preview_width, preview_width * 9.0 / 16.0);
                         ui.set_min_width(image_size.x + 12.0);
 
-                        let (rect, response) =
-                            ui.allocate_exact_size(image_size, egui::Sense::click());
+                        ui.vertical_centered(|ui| {
+                            let (rect, response) =
+                                ui.allocate_exact_size(image_size, egui::Sense::click());
 
                         if let Some(texture) = texture {
                             ui.painter().image(
@@ -1008,9 +1040,10 @@ impl SplinterDots {
                             );
                         }
 
-                        if response.clicked() {
-                            clicked = Some(path.clone());
-                        }
+                            if response.clicked() {
+                                clicked = Some(path.clone());
+                            }
+                        });
                     });
 
                     ui.end_row();
@@ -1100,18 +1133,20 @@ impl SplinterDots {
                 let _ = fs::create_dir_all(&plugin_dir);
 
                 let theme_file = theme_dir.join("SplinterDots.theme.css");
-                if !theme_file.exists() {
+                let repo_theme_file = self
+                    .paths
+                    .root
+                    .join("files")
+                    .join("vesktop")
+                    .join("SplinterDots.theme.css");
+
+                if repo_theme_file.exists() {
+                    let _ = fs::copy(repo_theme_file, theme_file);
+                } else if !theme_file.exists() {
                     let _ = fs::write(
                         theme_file,
-                        r#":root {
-  --splinter-accent: #89b4fa;
-  --splinter-bg: #1e1e2e;
-  --splinter-card: #313244;
-}
-
-/* SplinterDots Vesktop theme placeholder.
-   Add your Vencord/Vesktop CSS here. */
-"#,
+                        "/* SplinterDots Vesktop theme file was missing from the repo. */
+",
                     );
                 }
         }
@@ -1179,10 +1214,20 @@ misc               = 313244
     fn install_addon_package(&mut self, package: &str) {
         let terminal = self.value("DOTFILES_TERMINAL");
         let helper = self.paths.script("splinterdots-style");
+
+        let packages = package
+            .split_whitespace()
+            .map(shell_quote)
+            .collect::<Vec<_>>()
+            .join(" ");
+
         let command = format!(
-            "{} install {}; echo; read -rp 'Press enter to close...'",
-            shell_quote(&helper.to_string_lossy()),
-            shell_quote(package)
+            "for pkg in {packages}; do {helper} install \"$pkg\" || exit 1; done; \
+             mkdir -p \"${{XDG_CACHE_HOME:-$HOME/.cache}}/splinterdots\"; \
+             touch \"${{XDG_CACHE_HOME:-$HOME/.cache}}/splinterdots/addons-refresh\"; \
+             echo; read -rp 'Press enter to close...'",
+            packages = packages,
+            helper = shell_quote(&helper.to_string_lossy()),
         );
 
         let result = Command::new("sh")
@@ -1191,7 +1236,10 @@ misc               = 313244
             .spawn();
 
         self.status = match result {
-            Ok(_) => format!("Opening installer for {package}"),
+            Ok(_) => {
+                self.configure_addon_after_install(package);
+                format!("Opening installer for {package}")
+            }
             Err(err) => format!("Could not open installer: {err}"),
         };
     }
@@ -3687,6 +3735,32 @@ fn cover_uv(image_size: Vec2, target_size: Vec2) -> egui::Rect {
 }
 
 
+
+fn wallpaper_preview_cache_path(path: &Path) -> PathBuf {
+    let cache_home = env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home_dir().join(".cache"));
+
+    let modified = fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+
+    let raw = format!("{}-{modified}", path.to_string_lossy());
+    let safe = raw
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect::<String>();
+
+    cache_home
+        .join("splinterdots")
+        .join("wallpaper-previews")
+        .join(format!("{safe}.png"))
+}
+
+
 fn scan_wallpaper_dir(value: &str) -> Vec<PathBuf> {
     let dir = expand_home_path(value);
 
@@ -4301,22 +4375,16 @@ fn addon_package_installed(package: &str) -> bool {
         return false;
     }
 
-    packages.iter().all(|pkg| {
-        match *pkg {
-            // Vesktop can be installed from AUR as vesktop-bin or as vesktop.
-            "vesktop-bin" => {
-                package_installed_cached("vesktop-bin")
-                    || package_installed_cached("vesktop")
-            }
-
-            // Spotify bundle can involve AUR package names, but spicetify may be installed under either name.
-            "spicetify-cli" => {
-                package_installed_cached("spicetify-cli")
-                    || package_installed_cached("spicetify")
-            }
-
-            other => package_installed_cached(other),
+    packages.iter().all(|pkg| match *pkg {
+        "vesktop-bin" => {
+            package_installed_cached("vesktop-bin")
+                || package_installed_cached("vesktop")
         }
+        "spicetify-cli" => {
+            package_installed_cached("spicetify-cli")
+                || package_installed_cached("spicetify")
+        }
+        other => package_installed_cached(other),
     })
 }
 
