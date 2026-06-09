@@ -1,14 +1,23 @@
 {
   "layer": "top",
   "position": "top",
-  "height": 34,
+  "height": 49,
   "margin-top": 8,
   "margin-bottom": 0,
   "margin-left": 10,
   "margin-right": 10,
-  "modules-left": ["hyprland/workspaces"],
-  "modules-center": ["clock"],
-  "modules-right": ["pulseaudio", "network", "battery", "tray"],
+  "modules-left": [
+    "hyprland/workspaces"
+  ],
+  "modules-center": [
+    "clock"
+  ],
+  "modules-right": [
+    "pulseaudio",
+    "network",
+    "battery",
+    "tray"
+  ],
   "hyprland/workspaces": {
     "disable-scroll": true,
     "all-outputs": true
