@@ -3,18 +3,20 @@ set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "$0")"
 ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
-APP_DIR="$ROOT_DIR/tools/dotfiles-center-rs"
-BIN="$APP_DIR/target/release/dotfiles-center-rs"
+BIN="$ROOT_DIR/target/release/dotfiles-center"
+MANIFEST="$ROOT_DIR/Cargo.toml"
+MAIN_RS="$ROOT_DIR/tools/dotfiles-center/src/main.rs"
+APP_TOML="$ROOT_DIR/tools/dotfiles-center/Cargo.toml"
 
 if ! command -v cargo >/dev/null 2>&1; then
-  echo "Rust is needed for Dotfiles Center."
-  echo "Install it with: sudo pacman -S rust"
+  echo "Cargo is required for Dotfiles Center."
+  echo "Install the dotfiles packages with: dotctl packages"
   exit 1
 fi
 
-if [ ! -x "$BIN" ] || [ "$APP_DIR/src/main.rs" -nt "$BIN" ] || [ "$APP_DIR/Cargo.toml" -nt "$BIN" ]; then
-  echo "Building Rust Dotfiles Center..."
-  (cd "$APP_DIR" && cargo build --release)
+if [ ! -x "$BIN" ] || [ "$MANIFEST" -nt "$BIN" ] || [ "$APP_TOML" -nt "$BIN" ] || [ "$MAIN_RS" -nt "$BIN" ]; then
+  echo "Building Dotfiles Center..."
+  cargo build --release --manifest-path "$MANIFEST" -p dotfiles-center
 fi
 
 SPLINTERDOTS_ROOT="$ROOT_DIR" exec "$BIN" "$@"

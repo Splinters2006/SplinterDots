@@ -80,3 +80,4 @@ zenity
 adwaita-icon-theme
 easyeffects
 rust
+cargo
