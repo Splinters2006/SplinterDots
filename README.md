@@ -28,6 +28,18 @@ Install recommended Arch packages too:
 ./install.sh --packages
 ```
 
+Do everything in one run:
+
+```sh
+./install.sh --all
+```
+
+Update the dotfiles repo and re-apply links:
+
+```sh
+./install.sh --upd
+```
+
 After installation, open a new terminal or reload your shell:
 
 ```sh
@@ -73,7 +85,7 @@ The installer links files from `home/` into your home directory:
 
 | Source | Destination |
 | --- | --- |
-| `home/.bashrc` | `~/.bashrc` |
+| `home/.zshrc` | `~/.zshrc` |
 | `home/.profile` | `~/.profile` |
 | `home/.gitconfig` | `~/.gitconfig` |
 | `home/.config/starship.toml` | `~/.config/starship.toml` |
@@ -90,6 +102,8 @@ After installing, use:
 dotctl status
 dotctl edit
 dotctl apply
+dotctl update
+dotctl all
 dotctl packages
 ```
 

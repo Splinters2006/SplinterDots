@@ -6,6 +6,7 @@ HOME_DIR="${HOME:?HOME is required}"
 BACKUP_DIR="$ROOT_DIR/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 DRY_RUN=0
 INSTALL_PACKAGES=0
+UPDATE_DOTFILES=0
 DOTFILES_NAME="Arch User"
 DOTFILES_EMAIL=""
 
@@ -16,6 +17,8 @@ Usage: ./install.sh [options]
 Options:
   --dry-run       Show actions without changing files
   --packages      Install recommended Arch packages with pacman
+  --upd           Update this dotfiles repo, then apply dotfiles
+  --all           Update repo, install packages, and apply dotfiles
   -h, --help      Show this help
 EOF
 }
@@ -46,6 +49,13 @@ while [ "$#" -gt 0 ]; do
       DRY_RUN=1
       ;;
     --packages)
+      INSTALL_PACKAGES=1
+      ;;
+    --upd)
+      UPDATE_DOTFILES=1
+      ;;
+    --all)
+      UPDATE_DOTFILES=1
       INSTALL_PACKAGES=1
       ;;
     -h|--help)
@@ -92,6 +102,30 @@ install_packages() {
   sudo pacman -S --needed "${packages[@]}"
 }
 
+update_dotfiles() {
+  if ! command -v git >/dev/null 2>&1; then
+    log "Skipping update: git was not found."
+    return
+  fi
+
+  if ! git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    log "Skipping update: $ROOT_DIR is not a Git worktree."
+    return
+  fi
+
+  if ! git -C "$ROOT_DIR" remote get-url origin >/dev/null 2>&1; then
+    log "Skipping update: no origin remote is configured."
+    return
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] git -C $ROOT_DIR pull --ff-only"
+    return
+  fi
+
+  git -C "$ROOT_DIR" pull --ff-only
+}
+
 load_settings() {
   if [ -f "$ROOT_DIR/config/dotfiles/settings.conf" ]; then
     # shellcheck disable=SC1091
@@ -121,6 +155,7 @@ write_git_user_config() {
       printf '\temail = %s\n' "$DOTFILES_EMAIL"
     fi
   } > "$dest"
+  log "wrote: $dest"
 }
 
 link_file() {
@@ -148,6 +183,10 @@ link_file() {
 
 log "Dotfiles root: $ROOT_DIR"
 load_settings
+
+if [ "$UPDATE_DOTFILES" -eq 1 ]; then
+  update_dotfiles
+fi
 
 if [ "$INSTALL_PACKAGES" -eq 1 ]; then
   install_packages

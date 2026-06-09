@@ -12,6 +12,8 @@ Commands:
   status      Show dotfile links and settings files
   edit        Edit the main settings file
   apply       Re-run the installer
+  update      Update this repo, then re-run the installer
+  all         Update repo, install packages, and apply dotfiles
   packages    Install recommended Arch packages
   uninstall   Remove symlinks created by these dotfiles
   help        Show this help
@@ -64,6 +66,14 @@ packages() {
   "$ROOT_DIR/install.sh" --packages
 }
 
+update_dotfiles() {
+  "$ROOT_DIR/install.sh" --upd
+}
+
+all() {
+  "$ROOT_DIR/install.sh" --all
+}
+
 uninstall() {
   find "$ROOT_DIR/home" -type f -print | while IFS= read -r src; do
     rel="${src#"$ROOT_DIR/home/"}"
@@ -91,6 +101,8 @@ case "$cmd" in
   status) status ;;
   edit) edit_settings ;;
   apply) apply ;;
+  update) update_dotfiles ;;
+  all) all ;;
   packages) packages ;;
   uninstall) uninstall ;;
   help|-h|--help) usage ;;

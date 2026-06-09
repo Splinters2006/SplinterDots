@@ -6,6 +6,7 @@ wget
 openssh
 
 # Shell and prompt
+zsh
 bash-completion
 starship
 
