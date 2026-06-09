@@ -4,4 +4,4 @@ set -euo pipefail
 SCRIPT_PATH="$(readlink -f "$0")"
 ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 
-exec "$ROOT_DIR/scripts/dotfiles-center" "$@"
+exec "$ROOT_DIR/scripts/SplinterDots" "$@"

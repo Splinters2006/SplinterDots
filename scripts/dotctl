@@ -18,7 +18,7 @@ Commands:
   aur         Install yay and packages from packages/aur.txt
   system      Configure greetd and enable desktop services
   welcome     Show the startup welcome tour now
-  center      Open the graphical Dotfiles Center
+  center      Open the graphical SplinterDots
   doctor      Print Hyprland, graphics, and service diagnostics
   uninstall   Remove symlinks created by these dotfiles
   help        Show this help
@@ -69,8 +69,8 @@ status() {
     printf 'missing %s\n' "$welcome_dest"
   fi
 
-  center_dest="$HOME/.local/bin/dotfiles-center"
-  if [ -L "$center_dest" ] && [ "$(readlink "$center_dest")" = "$ROOT_DIR/scripts/dotfiles-center" ]; then
+  center_dest="$HOME/.local/bin/SplinterDots"
+  if [ -L "$center_dest" ] && [ "$(readlink "$center_dest")" = "$ROOT_DIR/scripts/SplinterDots" ]; then
     printf 'linked  %s\n' "$center_dest"
   elif [ -e "$center_dest" ] || [ -L "$center_dest" ]; then
     printf 'custom  %s\n' "$center_dest"
@@ -172,7 +172,7 @@ welcome() {
 }
 
 center() {
-  "$ROOT_DIR/scripts/dotfiles-center" --force
+  "$ROOT_DIR/scripts/SplinterDots" --force
 }
 
 doctor() {
@@ -205,9 +205,9 @@ uninstall() {
     printf 'removed %s\n' "$HOME/.local/bin/dotfiles-welcome"
   fi
 
-  if [ -L "$HOME/.local/bin/dotfiles-center" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-center")" = "$ROOT_DIR/scripts/dotfiles-center" ]; then
-    rm "$HOME/.local/bin/dotfiles-center"
-    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-center"
+  if [ -L "$HOME/.local/bin/SplinterDots" ] && [ "$(readlink "$HOME/.local/bin/SplinterDots")" = "$ROOT_DIR/scripts/SplinterDots" ]; then
+    rm "$HOME/.local/bin/SplinterDots"
+    printf 'removed %s\n' "$HOME/.local/bin/SplinterDots"
   fi
 
   if [ -L "$HOME/.local/bin/dotfiles-wallpaper" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-wallpaper")" = "$ROOT_DIR/scripts/dotfiles-wallpaper" ]; then

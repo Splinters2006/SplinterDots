@@ -1,6 +1,6 @@
 use eframe::egui::{
-    self, Align, Color32, CornerRadius, FontId, Frame, Layout, Margin, RichText, ScrollArea,
-    Stroke, Vec2,
+    self, Align, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Frame,
+    Layout, Margin, RichText, ScrollArea, Stroke, Vec2,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -147,14 +147,14 @@ impl Tab {
 
     fn icon(self) -> &'static str {
         match self {
-            Tab::Overview => "⌂",
-            Tab::Hyprland => "◇",
-            Tab::Shortcuts => "⌘",
-            Tab::Appearance => "◐",
-            Tab::Addons => "+",
-            Tab::Bar => "▣",
-            Tab::Widgets => "✦",
-            Tab::Setup => "⚙",
+            Tab::Overview => "",
+            Tab::Hyprland => "",
+            Tab::Shortcuts => "",
+            Tab::Appearance => "",
+            Tab::Addons => "",
+            Tab::Bar => "󰖰",
+            Tab::Widgets => "󰃭",
+            Tab::Setup => "",
         }
     }
 }
@@ -192,7 +192,7 @@ struct Paths {
     hypr_schema_file: PathBuf,
 }
 
-struct DotfilesCenter {
+struct SplinterDots {
     paths: Paths,
     tab: Tab,
     values: HashMap<String, String>,
@@ -204,6 +204,7 @@ struct DotfilesCenter {
     hypr_search: String,
     wallpaper_images: Vec<PathBuf>,
     wallpaper_textures: HashMap<String, egui::TextureHandle>,
+    fastfetch_output: String,
     addon_search: String,
     addon_category_filter: String,
     status: String,
@@ -219,14 +220,100 @@ fn main() -> eframe::Result<()> {
     };
 
     eframe::run_native(
-        "Dotfiles Center",
+        "SplinterDots",
         options,
         Box::new(|cc| {
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
-            Ok(Box::new(DotfilesCenter::new()))
+            load_icon_font(&cc.egui_ctx);
+            Ok(Box::new(SplinterDots::new()))
         }),
     )
 }
+
+
+fn load_icon_font(ctx: &egui::Context) {
+    let candidates = [
+        "/usr/share/fonts/TTF/SymbolsNerdFont-Regular.ttf",
+        "/usr/share/fonts/TTF/SymbolsNerdFontMono-Regular.ttf",
+        "/usr/share/fonts/OTF/SymbolsNerdFont-Regular.otf",
+        "/usr/share/fonts/TTF/CaskaydiaCoveNerdFont-Regular.ttf",
+        "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf",
+    ];
+
+    let Some(bytes) = candidates.iter().find_map(|path| fs::read(path).ok()) else {
+        return;
+    };
+
+    let mut fonts = FontDefinitions::default();
+    fonts.font_data.insert(
+        "splinter-icons".to_string(),
+        FontData::from_owned(bytes).into(),
+    );
+    fonts
+        .families
+        .entry(FontFamily::Name("splinter-icons".into()))
+        .or_default()
+        .push("splinter-icons".to_string());
+
+    ctx.set_fonts(fonts);
+}
+
+fn icon_text(icon: &str, size: f32, color: Color32) -> RichText {
+    RichText::new(icon)
+        .font(FontId::new(size, FontFamily::Name("splinter-icons".into())))
+        .color(color)
+        .strong()
+}
+
+fn load_fastfetch_output() -> String {
+    let output = Command::new("fastfetch")
+        .args(["--logo", "none"])
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let text = String::from_utf8_lossy(&output.stdout).to_string();
+            let clean = strip_ansi(&text);
+            if clean.trim().is_empty() {
+                "fastfetch returned no output.".to_string()
+            } else {
+                clean
+            }
+        }
+        Ok(output) => {
+            let err = String::from_utf8_lossy(&output.stderr);
+            if err.trim().is_empty() {
+                "fastfetch failed without an error message.".to_string()
+            } else {
+                format!("fastfetch failed:\n{}", strip_ansi(&err))
+            }
+        }
+        Err(_) => "fastfetch is not installed or could not be started.".to_string(),
+    }
+}
+
+fn strip_ansi(input: &str) -> String {
+    let mut out = String::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for next in chars.by_ref() {
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+                continue;
+            }
+        }
+        out.push(ch);
+    }
+
+    out
+}
+
 
 impl Paths {
     fn new() -> Self {
@@ -279,7 +366,7 @@ impl Paths {
     }
 }
 
-impl DotfilesCenter {
+impl SplinterDots {
     fn new() -> Self {
         let paths = Paths::new();
         let values = read_settings(&paths);
@@ -288,6 +375,7 @@ impl DotfilesCenter {
         let hypr_schema = load_hypr_schema(&paths);
         let hypr_values = load_hypr_values(&paths, &hypr_schema);
         let wallpaper_images = scan_wallpaper_dir(&value_or(&values, "DOTFILES_WALLPAPER_DIR"));
+        let fastfetch_output = load_fastfetch_output();
         let no_show_on_startup = paths.disabled_file.exists();
 
         Self {
@@ -302,6 +390,7 @@ impl DotfilesCenter {
             hypr_search: String::new(),
             wallpaper_images,
             wallpaper_textures: HashMap::new(),
+            fastfetch_output,
             addon_search: String::new(),
             addon_category_filter: "Show All".to_string(),
             status: String::new(),
@@ -910,7 +999,7 @@ impl DotfilesCenter {
         let wanted = [
             ("App launcher", "Open apps"),
             ("Terminal", "Terminal"),
-            ("Dotfiles Center", "Dotfiles Center"),
+            ("SplinterDots", "SplinterDots"),
             ("Reload desktop", "Reload desktop"),
         ];
 
@@ -1000,7 +1089,7 @@ impl DotfilesCenter {
         }
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new(tab.icon()).color(text).size(17.0).strong());
+                ui.label(icon_text(tab.icon(), 18.0, text));
                 ui.add_space(6.0);
                 ui.label(RichText::new(tab.title()).color(text).strong());
             });
@@ -1068,77 +1157,48 @@ impl DotfilesCenter {
 
         Self::card(&theme, ui, |ui| {
             ui.horizontal(|ui| {
+                ui.label(icon_text("", 34.0, theme.accent));
+                ui.add_space(8.0);
+
                 ui.vertical(|ui| {
                     ui.label(
-                        RichText::new("Your desktop is ready to shape")
+                        RichText::new("System overview")
                             .size(22.0)
-                            .strong(),
+                            .strong()
+                            .color(theme.text),
                     );
                     ui.label(
-                        RichText::new("Friendly controls for your Arch + Hyprland setup.")
+                        RichText::new("Live system information from fastfetch.")
                             .color(theme.muted),
                     );
                 });
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.button("Refresh").clicked() {
+                        self.fastfetch_output = load_fastfetch_output();
+                    }
+                });
+            });
+        });
+
+        Self::card(&theme, ui, |ui| {
+            ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .max_height(ui.available_height() - 20.0)
+                .show(ui, |ui| {
                     Frame {
-                        fill: theme.accent,
-                        corner_radius: CornerRadius::same(255),
-                        inner_margin: Margin::symmetric(14, 8),
+                        fill: theme.panel_soft,
+                        corner_radius: CornerRadius::same(14),
+                        inner_margin: Margin::same(16),
+                        stroke: Stroke::new(1.0, theme.border),
                         ..Default::default()
                     }
                     .show(ui, |ui| {
-                        ui.label(RichText::new("Modern mode").color(Color32::WHITE).strong());
+                        for line in self.fastfetch_output.lines() {
+                            ui.monospace(line);
+                        }
                     });
                 });
-            });
-        });
-
-        egui::Grid::new("overview_stats")
-            .num_columns(3)
-            .spacing([12.0, 12.0])
-            .show(ui, |ui| {
-                self.stat_card(ui, "Desktop", "Hyprland", "Window manager");
-                self.stat_card(ui, "Bar", "Reactive QML", "Per-monitor workspaces");
-                self.stat_card(ui, "Widgets", "Configurable", "Optional modules");
-                ui.end_row();
-            });
-
-        Self::card(&theme, ui, |ui| {
-            ui.label(RichText::new("Favorite shortcuts").strong().size(17.0));
-            ui.add_space(10.0);
-
-            egui::Grid::new("overview-shortcuts")
-                .num_columns(3)
-                .spacing([12.0, 10.0])
-                .show(ui, |ui| {
-                    for (index, (key, label)) in self.shortcut_hint_rows().iter().enumerate() {
-                        Self::soft_card(&theme, ui, |ui| {
-                            ui.set_min_size(Vec2::new(200.0, 54.0));
-                            ui.label(RichText::new(key).strong().color(theme.text));
-                            ui.label(RichText::new(label).color(theme.muted));
-                        });
-                        if index % 3 == 2 {
-                            ui.end_row();
-                        }
-                    }
-                });
-        });
-
-        Self::card(&theme, ui, |ui| {
-            ui.label(RichText::new("Installed pieces").strong().size(17.0));
-            ui.add_space(8.0);
-            for item in [
-                "Hyprland · Quickshell QML bar · Wofi launcher · Mako notifications",
-                "Kitty terminal · Thunar file manager · Zen Browser",
-                "PipeWire audio · NetworkManager · Bluetooth",
-                "Screenshot · Clipboard · Wallpaper · XDG portals · greetd login",
-            ] {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("●").color(theme.accent));
-                    ui.label(RichText::new(item).color(theme.muted));
-                });
-            }
         });
     }
 
@@ -2249,7 +2309,7 @@ const WIDGET_TOGGLES: &[(&str, &str)] = &[
     ("Keyboard", "DOTFILES_BAR_SHOW_KEYBOARD"),
 ];
 
-impl eframe::App for DotfilesCenter {
+impl eframe::App for SplinterDots {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.apply_style(ctx);
         let theme = self.app_theme();
@@ -2378,7 +2438,7 @@ fn write_local_conf(paths: &Paths, values: &HashMap<String, String>) -> Result<(
     ensure_dir(&paths.dotfiles_dir)?;
 
     let mut lines = vec![
-        "# Machine-local dotfiles settings written by Dotfiles Center.".to_string(),
+        "# Machine-local dotfiles settings written by SplinterDots.".to_string(),
         "# It is safe to edit this file manually too.".to_string(),
     ];
 
@@ -2420,7 +2480,7 @@ fn default_shortcuts() -> Vec<Shortcut> {
             "app",
             "dotfiles-screenshot full",
         ),
-        sc("Dotfiles Center", "W", "app", "dotctl center"),
+        sc("SplinterDots", "W", "app", "dotctl center"),
         sc("Reload desktop", "SHIFT, R", "app", "hyprctl reload"),
     ]
 }
@@ -2599,7 +2659,7 @@ fn write_hyprland_settings(
     }
 
     let mut lines = vec![
-        "# Generated by Dotfiles Center.".to_string(),
+        "# Generated by SplinterDots.".to_string(),
         "# This file is safe to regenerate.".to_string(),
         String::new(),
     ];
@@ -2970,7 +3030,7 @@ fn write_quickshell_bar(paths: &Paths, values: &HashMap<String, String>) -> Resu
     };
 
     let template = r#"// SplinterDots Quickshell bar.
-// Generated by Dotfiles Center.
+// Generated by SplinterDots.
 
 import Quickshell
 import Quickshell.Io

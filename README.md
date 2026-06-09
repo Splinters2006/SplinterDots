@@ -1,6 +1,6 @@
-# Sleek Rust Dotfiles Center + Reactive QML Bar
+# Sleek Rust SplinterDots + Reactive QML Bar
 
-This replaces `tools/dotfiles-center/src/main.rs` with the completed version.
+This replaces `tools/SplinterDots/src/main.rs` with the completed version.
 
 Run from the repo root:
 

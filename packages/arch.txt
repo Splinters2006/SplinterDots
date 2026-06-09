@@ -51,7 +51,7 @@ bluez-utils
 greetd
 greetd-tuigreet
 
-# Required to build Dotfiles Center
+# Required to build SplinterDots
 rust
 cargo
 

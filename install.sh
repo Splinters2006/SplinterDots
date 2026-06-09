@@ -320,7 +320,7 @@ reenable_welcome_after_update() {
   fi
 
   rm -f "$disabled_file"
-  log "re-enabled Dotfiles Center startup popup after update"
+  log "re-enabled SplinterDots startup popup after update"
 }
 
 
@@ -340,7 +340,7 @@ ensure_hyprland_generated_config() {
   if [ ! -e "$repo_file" ]; then
     cat > "$repo_file" <<'EOF'
 # This file is created automatically by the SplinterDots installer.
-# Dotfiles Center can write Hyprland settings here.
+# SplinterDots can write Hyprland settings here.
 # It is safe if this file is empty.
 EOF
     log "created: $repo_file"
@@ -349,7 +349,7 @@ EOF
   if [ ! -e "$user_file" ] && [ ! -L "$user_file" ]; then
     cat > "$user_file" <<'EOF'
 # This file is created automatically by the SplinterDots installer.
-# Dotfiles Center can write Hyprland settings here.
+# SplinterDots can write Hyprland settings here.
 # It is safe if this file is empty.
 EOF
     log "created: $user_file"
@@ -419,7 +419,7 @@ reenable_welcome_after_update
 
 run mkdir -p "$HOME_DIR/.local/bin"
 link_file "$ROOT_DIR/scripts/dotctl" "$HOME_DIR/.local/bin/dotctl"
-link_file "$ROOT_DIR/scripts/dotfiles-center" "$HOME_DIR/.local/bin/dotfiles-center"
+link_file "$ROOT_DIR/scripts/SplinterDots" "$HOME_DIR/.local/bin/SplinterDots"
 link_file "$ROOT_DIR/scripts/dotfiles-hypr-autostart" "$HOME_DIR/.local/bin/dotfiles-hypr-autostart"
 link_file "$ROOT_DIR/scripts/dotfiles-hypr-doctor" "$HOME_DIR/.local/bin/dotfiles-hypr-doctor"
 link_file "$ROOT_DIR/scripts/dotfiles-start-hyprland" "$HOME_DIR/.local/bin/dotfiles-start-hyprland"

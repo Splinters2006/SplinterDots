@@ -64,7 +64,7 @@ Update the dotfiles repo and re-apply links:
 ./install.sh --upd
 ```
 
-After `--upd` or `--all`, Dotfiles Center is shown again on next graphical
+After `--upd` or `--all`, SplinterDots is shown again on next graphical
 login so users can see what changed.
 
 After installation, open a new terminal or reload your shell:
@@ -73,7 +73,7 @@ After installation, open a new terminal or reload your shell:
 exec "$SHELL"
 ```
 
-On graphical desktop login, Dotfiles Center appears. It explains keybinds and
+On graphical desktop login, SplinterDots appears. It explains keybinds and
 lets you change wallpaper, colors, Waybar layout, apps, and common Hyprland
 keybinds without hand-editing config files. Click `Don't show this on startup`
 to disable it.
@@ -170,7 +170,7 @@ All keybinds use the `Super` / Windows key.
 | `Super + V` | Toggle floating window |
 | `Super + S` | Select screenshot region, copy it, and save it |
 | `Super + Shift + S` | Save full screenshot |
-| `Super + W` | Open Dotfiles Center |
+| `Super + W` | Open SplinterDots |
 | `Super + Shift + R` | Reload Hyprland config |
 | `Super + Arrow keys` | Move focus |
 | `Super + Shift + Arrow keys` | Move focused window |
@@ -185,7 +185,7 @@ The `Keybinds` tab stores editable shortcuts in
 `~/.config/hypr/keybindings.conf`. You can add custom command shortcuts without
 writing Hyprland config by hand.
 
-The `Bar` tab in Dotfiles Center writes `~/.config/waybar/config` and
+The `Bar` tab in SplinterDots writes `~/.config/waybar/config` and
 `~/.config/waybar/style.css`. It can move the bar, round corners, change
 height/opacity, move workspaces and the clock, and reorder right-side modules.
 

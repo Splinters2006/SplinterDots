@@ -1,0 +1,145 @@
+./target/release/deps/dotfiles_center-d5114c939ddcd48f.d:1:/home/mira/SplinterDots/target/release/deps/dotfiles_center-d5114c939ddcd48f.d: tools/dotfiles-center/src/main.rs
+./target/release/deps/dotfiles_center-d5114c939ddcd48f.d:3:/home/mira/SplinterDots/target/release/deps/dotfiles_center-d5114c939ddcd48f: tools/dotfiles-center/src/main.rs
+./target/release/deps/dotfiles_center-d5114c939ddcd48f.d:5:tools/dotfiles-center/src/main.rs:
+./target/release/.fingerprint/dotfiles-center-d5114c939ddcd48f/output-bin-dotfiles-center:1:{"$message_type":"diagnostic","message":"use of deprecated struct `eframe::egui::SelectableLabel`: Use `Button::selectable()` instead","code":{"code":"deprecated","explanation":null},"level":"warning","spans":[{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":51083,"byte_end":51098,"line_start":1428,"line_end":1428,"column_start":43,"column_end":58,"is_primary":true,"text":[{"text":"                                    egui::SelectableLabel::new(","highlight_start":43,"highlight_end":58}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null}],"children":[{"message":"`#[warn(deprecated)]` on by default","code":null,"level":"note","spans":[],"children":[],"rendered":null}],"rendered":"\u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: use of deprecated struct `eframe::egui::SelectableLabel`: Use `Button::selectable()` instead\u001b[0m\n    \u001b[1m\u001b[94m--> \u001b[0mtools/dotfiles-center/src/main.rs:1428:43\n     \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[94m1428\u001b[0m \u001b[1m\u001b[94m|\u001b[0m \u001b[1m\u001b[94m...\u001b[0m                   egui::SelectableLabel::new(\n     \u001b[1m\u001b[94m|\u001b[0m                             \u001b[1m\u001b[33m^^^^^^^^^^^^^^^\u001b[0m\n     \u001b[1m\u001b[94m|\u001b[0m\n     \u001b[1m\u001b[94m= \u001b[0m\u001b[1mnote\u001b[0m: `#[warn(deprecated)]` on by default\n\n"}
+./target/release/.fingerprint/dotfiles-center-d5114c939ddcd48f/output-bin-dotfiles-center:2:{"$message_type":"diagnostic","message":"use of deprecated associated function `eframe::egui::SelectableLabel::new`: Use `Button::selectable()` instead","code":{"code":"deprecated","explanation":null},"level":"warning","spans":[{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":51100,"byte_end":51103,"line_start":1428,"line_end":1428,"column_start":60,"column_end":63,"is_primary":true,"text":[{"text":"                                    egui::SelectableLabel::new(","highlight_start":60,"highlight_end":63}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null}],"children":[],"rendered":"\u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: use of deprecated associated function `eframe::egui::SelectableLabel::new`: Use `Button::selectable()` instead\u001b[0m\n    \u001b[1m\u001b[94m--> \u001b[0mtools/dotfiles-center/src/main.rs:1428:60\n     \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[94m1428\u001b[0m \u001b[1m\u001b[94m|\u001b[0m \u001b[1m\u001b[94m...\u001b[0m                   egui::SelectableLabel::new(\n     \u001b[1m\u001b[94m|\u001b[0m                                              \u001b[1m\u001b[33m^^^\u001b[0m\n\n"}
+./target/release/.fingerprint/dotfiles-center-d5114c939ddcd48f/output-bin-dotfiles-center:3:{"$message_type":"diagnostic","message":"variant `Widgets` is never constructed","code":{"code":"dead_code","explanation":null},"level":"warning","spans":[{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":3624,"byte_end":3627,"line_start":110,"line_end":110,"column_start":6,"column_end":9,"is_primary":false,"text":[{"text":"enum Tab {","highlight_start":6,"highlight_end":9}],"label":"variant in this enum","suggested_replacement":null,"suggestion_applicability":null,"expansion":null},{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":3714,"byte_end":3721,"line_start":117,"line_end":117,"column_start":5,"column_end":12,"is_primary":true,"text":[{"text":"    Widgets,","highlight_start":5,"highlight_end":12}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null}],"children":[{"message":"`Tab` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis","code":null,"level":"note","spans":[],"children":[],"rendered":null},{"message":"`#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default","code":null,"level":"note","spans":[],"children":[],"rendered":null}],"rendered":"\u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: variant `Widgets` is never constructed\u001b[0m\n   \u001b[1m\u001b[94m--> \u001b[0mtools/dotfiles-center/src/main.rs:117:5\n    \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[94m110\u001b[0m \u001b[1m\u001b[94m|\u001b[0m enum Tab {\n    \u001b[1m\u001b[94m|\u001b[0m      \u001b[1m\u001b[94m---\u001b[0m \u001b[1m\u001b[94mvariant in this enum\u001b[0m\n\u001b[1m\u001b[94m...\u001b[0m\n\u001b[1m\u001b[94m117\u001b[0m \u001b[1m\u001b[94m|\u001b[0m     Widgets,\n    \u001b[1m\u001b[94m|\u001b[0m     \u001b[1m\u001b[33m^^^^^^^\u001b[0m\n    \u001b[1m\u001b[94m|\u001b[0m\n    \u001b[1m\u001b[94m= \u001b[0m\u001b[1mnote\u001b[0m: `Tab` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis\n    \u001b[1m\u001b[94m= \u001b[0m\u001b[1mnote\u001b[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\n"}
+./target/release/.fingerprint/dotfiles-center-d5114c939ddcd48f/output-bin-dotfiles-center:4:{"$message_type":"diagnostic","message":"methods `shortcut_hint_rows` and `stat_card` are never used","code":{"code":"dead_code","explanation":null},"level":"warning","spans":[{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":11122,"byte_end":11141,"line_start":369,"line_end":369,"column_start":1,"column_end":20,"is_primary":false,"text":[{"text":"impl DotfilesCenter {","highlight_start":1,"highlight_end":20}],"label":"methods in this implementation","suggested_replacement":null,"suggestion_applicability":null,"expansion":null},{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":34950,"byte_end":34968,"line_start":998,"line_end":998,"column_start":8,"column_end":26,"is_primary":true,"text":[{"text":"    fn shortcut_hint_rows(&self) -> Vec<(String, String)> {","highlight_start":8,"highlight_end":26}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null},{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":41537,"byte_end":41546,"line_start":1205,"line_end":1205,"column_start":8,"column_end":17,"is_primary":true,"text":[{"text":"    fn stat_card(&self, ui: &mut egui::Ui, label: &str, value: &str, note: &str) {","highlight_start":8,"highlight_end":17}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null}],"children":[],"rendered":"\u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: methods `shortcut_hint_rows` and `stat_card` are never used\u001b[0m\n    \u001b[1m\u001b[94m--> \u001b[0mtools/dotfiles-center/src/main.rs:998:8\n     \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[94m 369\u001b[0m \u001b[1m\u001b[94m|\u001b[0m impl DotfilesCenter {\n     \u001b[1m\u001b[94m|\u001b[0m \u001b[1m\u001b[94m-------------------\u001b[0m \u001b[1m\u001b[94mmethods in this implementation\u001b[0m\n\u001b[1m\u001b[94m...\u001b[0m\n\u001b[1m\u001b[94m 998\u001b[0m \u001b[1m\u001b[94m|\u001b[0m     fn shortcut_hint_rows(&self) -> Vec<(String, String)> {\n     \u001b[1m\u001b[94m|\u001b[0m        \u001b[1m\u001b[33m^^^^^^^^^^^^^^^^^^\u001b[0m\n\u001b[1m\u001b[94m...\u001b[0m\n\u001b[1m\u001b[94m1205\u001b[0m \u001b[1m\u001b[94m|\u001b[0m     fn stat_card(&self, ui: &mut egui::Ui, label: &str, value: &str, note: &str) {\n     \u001b[1m\u001b[94m|\u001b[0m        \u001b[1m\u001b[33m^^^^^^^^^\u001b[0m\n\n"}
+./target/release/.fingerprint/dotfiles-center-d5114c939ddcd48f/output-bin-dotfiles-center:5:{"$message_type":"diagnostic","message":"function `theme_choices` is never used","code":{"code":"dead_code","explanation":null},"level":"warning","spans":[{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":125032,"byte_end":125045,"line_start":3416,"line_end":3416,"column_start":4,"column_end":17,"is_primary":true,"text":[{"text":"fn theme_choices() -> &'static [&'static str] {","highlight_start":4,"highlight_end":17}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null}],"children":[],"rendered":"\u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: function `theme_choices` is never used\u001b[0m\n    \u001b[1m\u001b[94m--> \u001b[0mtools/dotfiles-center/src/main.rs:3416:4\n     \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[94m3416\u001b[0m \u001b[1m\u001b[94m|\u001b[0m fn theme_choices() -> &'static [&'static str] {\n     \u001b[1m\u001b[94m|\u001b[0m    \u001b[1m\u001b[33m^^^^^^^^^^^^^\u001b[0m\n\n"}
+./target/release/.fingerprint/dotfiles-center-d5114c939ddcd48f/output-bin-dotfiles-center:6:{"$message_type":"diagnostic","message":"function `theme_label` is never used","code":{"code":"dead_code","explanation":null},"level":"warning","spans":[{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":125253,"byte_end":125264,"line_start":3429,"line_end":3429,"column_start":4,"column_end":15,"is_primary":true,"text":[{"text":"fn theme_label(theme: &str) -> &'static str {","highlight_start":4,"highlight_end":15}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null}],"children":[],"rendered":"\u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: function `theme_label` is never used\u001b[0m\n    \u001b[1m\u001b[94m--> \u001b[0mtools/dotfiles-center/src/main.rs:3429:4\n     \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[94m3429\u001b[0m \u001b[1m\u001b[94m|\u001b[0m fn theme_label(theme: &str) -> &'static str {\n     \u001b[1m\u001b[94m|\u001b[0m    \u001b[1m\u001b[33m^^^^^^^^^^^\u001b[0m\n\n"}
+./target/release/.fingerprint/dotfiles-center-d5114c939ddcd48f/output-bin-dotfiles-center:7:{"$message_type":"diagnostic","message":"function `install_global_egui_font` is never used","code":{"code":"dead_code","explanation":null},"level":"warning","spans":[{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":125615,"byte_end":125639,"line_start":3443,"line_end":3443,"column_start":4,"column_end":28,"is_primary":true,"text":[{"text":"fn install_global_egui_font(ctx: &egui::Context, preferred_font: &str) {","highlight_start":4,"highlight_end":28}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null}],"children":[],"rendered":"\u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: function `install_global_egui_font` is never used\u001b[0m\n    \u001b[1m\u001b[94m--> \u001b[0mtools/dotfiles-center/src/main.rs:3443:4\n     \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[94m3443\u001b[0m \u001b[1m\u001b[94m|\u001b[0m fn install_global_egui_font(ctx: &egui::Context, preferred_font: &str) {\n     \u001b[1m\u001b[94m|\u001b[0m    \u001b[1m\u001b[33m^^^^^^^^^^^^^^^^^^^^^^^^\u001b[0m\n\n"}
+./target/release/.fingerprint/dotfiles-center-d5114c939ddcd48f/output-bin-dotfiles-center:8:{"$message_type":"diagnostic","message":"function `widget_setting` is never used","code":{"code":"dead_code","explanation":null},"level":"warning","spans":[{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":144523,"byte_end":144537,"line_start":4067,"line_end":4067,"column_start":4,"column_end":18,"is_primary":true,"text":[{"text":"fn widget_setting(id: &str) -> Option<&'static str> {","highlight_start":4,"highlight_end":18}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null}],"children":[],"rendered":"\u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: function `widget_setting` is never used\u001b[0m\n    \u001b[1m\u001b[94m--> \u001b[0mtools/dotfiles-center/src/main.rs:4067:4\n     \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[94m4067\u001b[0m \u001b[1m\u001b[94m|\u001b[0m fn widget_setting(id: &str) -> Option<&'static str> {\n     \u001b[1m\u001b[94m|\u001b[0m    \u001b[1m\u001b[33m^^^^^^^^^^^^^^\u001b[0m\n\n"}
+./target/release/.fingerprint/dotfiles-center-d5114c939ddcd48f/output-bin-dotfiles-center:9:{"$message_type":"diagnostic","message":"function `friendly_kind` is never used","code":{"code":"dead_code","explanation":null},"level":"warning","spans":[{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":149485,"byte_end":149498,"line_start":4242,"line_end":4242,"column_start":4,"column_end":17,"is_primary":true,"text":[{"text":"fn friendly_kind(kind: &str) -> &'static str {","highlight_start":4,"highlight_end":17}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null}],"children":[],"rendered":"\u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: function `friendly_kind` is never used\u001b[0m\n    \u001b[1m\u001b[94m--> \u001b[0mtools/dotfiles-center/src/main.rs:4242:4\n     \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[94m4242\u001b[0m \u001b[1m\u001b[94m|\u001b[0m fn friendly_kind(kind: &str) -> &'static str {\n     \u001b[1m\u001b[94m|\u001b[0m    \u001b[1m\u001b[33m^^^^^^^^^^^^^\u001b[0m\n\n"}
+./target/release/.fingerprint/dotfiles-center-d5114c939ddcd48f/output-bin-dotfiles-center:10:{"$message_type":"diagnostic","message":"function `format_shortcut_key` is never used","code":{"code":"dead_code","explanation":null},"level":"warning","spans":[{"file_name":"tools/dotfiles-center/src/main.rs","byte_start":149625,"byte_end":149644,"line_start":4250,"line_end":4250,"column_start":4,"column_end":23,"is_primary":true,"text":[{"text":"fn format_shortcut_key(key: &str) -> String {","highlight_start":4,"highlight_end":23}],"label":null,"suggested_replacement":null,"suggestion_applicability":null,"expansion":null}],"children":[],"rendered":"\u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: function `format_shortcut_key` is never used\u001b[0m\n    \u001b[1m\u001b[94m--> \u001b[0mtools/dotfiles-center/src/main.rs:4250:4\n     \u001b[1m\u001b[94m|\u001b[0m\n\u001b[1m\u001b[94m4250\u001b[0m \u001b[1m\u001b[94m|\u001b[0m fn format_shortcut_key(key: &str) -> String {\n     \u001b[1m\u001b[94m|\u001b[0m    \u001b[1m\u001b[33m^^^^^^^^^^^^^^^^^^^\u001b[0m\n\n"}
+./target/release/dotfiles-center.d:1:/home/mira/SplinterDots/target/release/dotfiles-center: /home/mira/SplinterDots/tools/dotfiles-center/src/main.rs
+./tools/SplinterDots/Cargo.toml.bak.1781010270:2:name = "dotfiles-center"
+./tools/SplinterDots/src/main.rs.bak:184:struct DotfilesCenter {
+./tools/SplinterDots/src/main.rs.bak:205:        "Dotfiles Center",
+./tools/SplinterDots/src/main.rs.bak:209:            Ok(Box::new(DotfilesCenter::new()))
+./tools/SplinterDots/src/main.rs.bak:259:impl DotfilesCenter {
+./tools/SplinterDots/src/main.rs.bak:469:            ("Dotfiles Center", "Dotfiles Center"),
+./tools/SplinterDots/src/main.rs.bak:1148:impl eframe::App for DotfilesCenter {
+./tools/SplinterDots/src/main.rs.bak:1266:        "# Machine-local dotfiles settings written by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.bak:1295:        sc("Dotfiles Center", "W", "app", "dotctl center"),
+./tools/SplinterDots/src/main.rs.bak:1454:        "# Generated by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.bak:1752:// Generated by Dotfiles Center.
+./tools/SplinterDots/src/main.rs.broken.1781010712.bak:188:struct DotfilesCenter {
+./tools/SplinterDots/src/main.rs.broken.1781010712.bak:212:        "Dotfiles Center",
+./tools/SplinterDots/src/main.rs.broken.1781010712.bak:216:            Ok(Box::new(DotfilesCenter::new()))
+./tools/SplinterDots/src/main.rs.broken.1781010712.bak:272:impl DotfilesCenter {
+./tools/SplinterDots/src/main.rs.broken.1781010712.bak:743:            ("Dotfiles Center", "Dotfiles Center"),
+./tools/SplinterDots/src/main.rs.broken.1781010712.bak:1653:impl eframe::App for DotfilesCenter {
+./tools/SplinterDots/src/main.rs.broken.1781010712.bak:1771:        "# Machine-local dotfiles settings written by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.broken.1781010712.bak:1813:        sc("Dotfiles Center", "W", "app", "dotctl center"),
+./tools/SplinterDots/src/main.rs.broken.1781010712.bak:2043:        "# Generated by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.broken.1781010712.bak:2353:// Generated by Dotfiles Center.
+./tools/SplinterDots/src/main.rs.shortcut-save.1781010895.bak:188:struct DotfilesCenter {
+./tools/SplinterDots/src/main.rs.shortcut-save.1781010895.bak:212:        "Dotfiles Center",
+./tools/SplinterDots/src/main.rs.shortcut-save.1781010895.bak:216:            Ok(Box::new(DotfilesCenter::new()))
+./tools/SplinterDots/src/main.rs.shortcut-save.1781010895.bak:272:impl DotfilesCenter {
+./tools/SplinterDots/src/main.rs.shortcut-save.1781010895.bak:743:            ("Dotfiles Center", "Dotfiles Center"),
+./tools/SplinterDots/src/main.rs.shortcut-save.1781010895.bak:1657:impl eframe::App for DotfilesCenter {
+./tools/SplinterDots/src/main.rs.shortcut-save.1781010895.bak:1775:        "# Machine-local dotfiles settings written by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.shortcut-save.1781010895.bak:1817:        sc("Dotfiles Center", "W", "app", "dotctl center"),
+./tools/SplinterDots/src/main.rs.shortcut-save.1781010895.bak:1996:        "# Generated by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.shortcut-save.1781010895.bak:2306:// Generated by Dotfiles Center.
+./tools/SplinterDots/src/main.rs.shortcut-dirty.1781011055.bak:188:struct DotfilesCenter {
+./tools/SplinterDots/src/main.rs.shortcut-dirty.1781011055.bak:212:        "Dotfiles Center",
+./tools/SplinterDots/src/main.rs.shortcut-dirty.1781011055.bak:216:            Ok(Box::new(DotfilesCenter::new()))
+./tools/SplinterDots/src/main.rs.shortcut-dirty.1781011055.bak:272:impl DotfilesCenter {
+./tools/SplinterDots/src/main.rs.shortcut-dirty.1781011055.bak:743:            ("Dotfiles Center", "Dotfiles Center"),
+./tools/SplinterDots/src/main.rs.shortcut-dirty.1781011055.bak:1685:impl eframe::App for DotfilesCenter {
+./tools/SplinterDots/src/main.rs.shortcut-dirty.1781011055.bak:1803:        "# Machine-local dotfiles settings written by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.shortcut-dirty.1781011055.bak:1845:        sc("Dotfiles Center", "W", "app", "dotctl center"),
+./tools/SplinterDots/src/main.rs.shortcut-dirty.1781011055.bak:2024:        "# Generated by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.shortcut-dirty.1781011055.bak:2334:// Generated by Dotfiles Center.
+./tools/SplinterDots/src/main.rs.addons.1781011172.bak:188:struct DotfilesCenter {
+./tools/SplinterDots/src/main.rs.addons.1781011172.bak:213:        "Dotfiles Center",
+./tools/SplinterDots/src/main.rs.addons.1781011172.bak:217:            Ok(Box::new(DotfilesCenter::new()))
+./tools/SplinterDots/src/main.rs.addons.1781011172.bak:273:impl DotfilesCenter {
+./tools/SplinterDots/src/main.rs.addons.1781011172.bak:769:            ("Dotfiles Center", "Dotfiles Center"),
+./tools/SplinterDots/src/main.rs.addons.1781011172.bak:1711:impl eframe::App for DotfilesCenter {
+./tools/SplinterDots/src/main.rs.addons.1781011172.bak:1839:        "# Machine-local dotfiles settings written by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.addons.1781011172.bak:1881:        sc("Dotfiles Center", "W", "app", "dotctl center"),
+./tools/SplinterDots/src/main.rs.addons.1781011172.bak:2060:        "# Generated by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.addons.1781011172.bak:2370:// Generated by Dotfiles Center.
+./tools/SplinterDots/src/main.rs.appearance-ui.1781010965.bak:188:struct DotfilesCenter {
+./tools/SplinterDots/src/main.rs.appearance-ui.1781010965.bak:212:        "Dotfiles Center",
+./tools/SplinterDots/src/main.rs.appearance-ui.1781010965.bak:216:            Ok(Box::new(DotfilesCenter::new()))
+./tools/SplinterDots/src/main.rs.appearance-ui.1781010965.bak:272:impl DotfilesCenter {
+./tools/SplinterDots/src/main.rs.appearance-ui.1781010965.bak:743:            ("Dotfiles Center", "Dotfiles Center"),
+./tools/SplinterDots/src/main.rs.appearance-ui.1781010965.bak:1657:impl eframe::App for DotfilesCenter {
+./tools/SplinterDots/src/main.rs.appearance-ui.1781010965.bak:1775:        "# Machine-local dotfiles settings written by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.appearance-ui.1781010965.bak:1817:        sc("Dotfiles Center", "W", "app", "dotctl center"),
+./tools/SplinterDots/src/main.rs.appearance-ui.1781010965.bak:1996:        "# Generated by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.appearance-ui.1781010965.bak:2306:// Generated by Dotfiles Center.
+./tools/SplinterDots/src/main.rs.addons-match.1781011228.bak:192:struct DotfilesCenter {
+./tools/SplinterDots/src/main.rs.addons-match.1781011228.bak:217:        "Dotfiles Center",
+./tools/SplinterDots/src/main.rs.addons-match.1781011228.bak:221:            Ok(Box::new(DotfilesCenter::new()))
+./tools/SplinterDots/src/main.rs.addons-match.1781011228.bak:277:impl DotfilesCenter {
+./tools/SplinterDots/src/main.rs.addons-match.1781011228.bak:793:            ("Dotfiles Center", "Dotfiles Center"),
+./tools/SplinterDots/src/main.rs.addons-match.1781011228.bak:1830:impl eframe::App for DotfilesCenter {
+./tools/SplinterDots/src/main.rs.addons-match.1781011228.bak:1958:        "# Machine-local dotfiles settings written by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.addons-match.1781011228.bak:2000:        sc("Dotfiles Center", "W", "app", "dotctl center"),
+./tools/SplinterDots/src/main.rs.addons-match.1781011228.bak:2179:        "# Generated by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.addons-match.1781011228.bak:2489:// Generated by Dotfiles Center.
+./tools/SplinterDots/src/main.rs.bak.1781010270:184:struct DotfilesCenter {
+./tools/SplinterDots/src/main.rs.bak.1781010270:206:        "Dotfiles Center",
+./tools/SplinterDots/src/main.rs.bak.1781010270:210:            Ok(Box::new(DotfilesCenter::new()))
+./tools/SplinterDots/src/main.rs.bak.1781010270:266:impl DotfilesCenter {
+./tools/SplinterDots/src/main.rs.bak.1781010270:511:            ("Dotfiles Center", "Dotfiles Center"),
+./tools/SplinterDots/src/main.rs.bak.1781010270:1321:impl eframe::App for DotfilesCenter {
+./tools/SplinterDots/src/main.rs.bak.1781010270:1439:        "# Machine-local dotfiles settings written by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.bak.1781010270:1481:        sc("Dotfiles Center", "W", "app", "dotctl center"),
+./tools/SplinterDots/src/main.rs.bak.1781010270:1660:        "# Generated by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.bak.1781010270:1970:// Generated by Dotfiles Center.
+./tools/SplinterDots/src/main.rs.bak.1781010048:184:struct DotfilesCenter {
+./tools/SplinterDots/src/main.rs.bak.1781010048:205:        "Dotfiles Center",
+./tools/SplinterDots/src/main.rs.bak.1781010048:209:            Ok(Box::new(DotfilesCenter::new()))
+./tools/SplinterDots/src/main.rs.bak.1781010048:265:impl DotfilesCenter {
+./tools/SplinterDots/src/main.rs.bak.1781010048:481:            ("Dotfiles Center", "Dotfiles Center"),
+./tools/SplinterDots/src/main.rs.bak.1781010048:1254:impl eframe::App for DotfilesCenter {
+./tools/SplinterDots/src/main.rs.bak.1781010048:1372:        "# Machine-local dotfiles settings written by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.bak.1781010048:1414:        sc("Dotfiles Center", "W", "app", "dotctl center"),
+./tools/SplinterDots/src/main.rs.bak.1781010048:1593:        "# Generated by Dotfiles Center.".to_string(),
+./tools/SplinterDots/src/main.rs.bak.1781010048:1903:// Generated by Dotfiles Center.
+./.dotfiles-change-backup/20260609-134257/scripts/dotfiles-center:56:    {"name": "Dotfiles Center", "key": "W", "type": "command", "value": "dotctl welcome"},
+./.dotfiles-change-backup/20260609-134257/scripts/dotfiles-center:86:        "# Machine-local dotfiles settings written by Dotfiles Center.",
+./.dotfiles-change-backup/20260609-134257/scripts/dotfiles-center:334:class DotfilesCenter(tk.Tk):
+./.dotfiles-change-backup/20260609-134257/scripts/dotfiles-center:348:        self.title("Dotfiles Center")
+./.dotfiles-change-backup/20260609-134257/scripts/dotfiles-center:456:        ttk.Label(header, text="Dotfiles Center", style="Title.TLabel").pack(anchor="w")
+./.dotfiles-change-backup/20260609-134257/scripts/dotfiles-center:498:            ("Super + W", "Dotfiles Center"),
+./.dotfiles-change-backup/20260609-134257/scripts/dotfiles-center:931:    app = DotfilesCenter(force)
+./.dotfiles-change-backup/20260609-142218/scripts/dotfiles-center:84:    {"name": "Dotfiles Center", "key": "W", "kind": "app", "value": "dotctl center"},
+./.dotfiles-change-backup/20260609-142218/scripts/dotfiles-center:121:        "# Machine-local dotfiles settings written by Dotfiles Center.",
+./.dotfiles-change-backup/20260609-142218/scripts/dotfiles-center:297:        "# Generated by Dotfiles Center. Edit with: dotctl center",
+./.dotfiles-change-backup/20260609-142218/scripts/dotfiles-center:587:// Generated by Dotfiles Center. Edit the Bar tab instead of hand-editing this file.
+./.dotfiles-change-backup/20260609-142218/scripts/dotfiles-center:861:class DotfilesCenter(tk.Tk):
+./.dotfiles-change-backup/20260609-142218/scripts/dotfiles-center:882:        self.title("Dotfiles Center")
+./.dotfiles-change-backup/20260609-142218/scripts/dotfiles-center:1030:        tk.Label(title_row, text="Dotfiles Center", bg=self.bg, fg=self.text,
+./.dotfiles-change-backup/20260609-142218/scripts/dotfiles-center:1098:            ("Dotfiles Center", "Dotfiles Center"),
+./.dotfiles-change-backup/20260609-142218/scripts/dotfiles-center:1665:    app = DotfilesCenter(force)
+./.dotfiles-change-backup/20260609-141253/scripts/dotfiles-center:77:    {"name": "Dotfiles Center", "key": "W", "kind": "app", "value": "dotctl center"},
+./.dotfiles-change-backup/20260609-141253/scripts/dotfiles-center:114:        "# Machine-local dotfiles settings written by Dotfiles Center.",
+./.dotfiles-change-backup/20260609-141253/scripts/dotfiles-center:278:        "# Generated by Dotfiles Center. Edit with: dotctl center",
+./.dotfiles-change-backup/20260609-141253/scripts/dotfiles-center:539:// Generated by Dotfiles Center. Edit the Bar tab instead of hand-editing this file.
+./.dotfiles-change-backup/20260609-141253/scripts/dotfiles-center:707:class DotfilesCenter(tk.Tk):
+./.dotfiles-change-backup/20260609-141253/scripts/dotfiles-center:728:        self.title("Dotfiles Center")
+./.dotfiles-change-backup/20260609-141253/scripts/dotfiles-center:873:        tk.Label(title_row, text="Dotfiles Center", bg=self.bg, fg=self.text,
+./.dotfiles-change-backup/20260609-141253/scripts/dotfiles-center:934:            ("Super + W",           "Dotfiles Center"),
+./.dotfiles-change-backup/20260609-141253/scripts/dotfiles-center:1463:    app = DotfilesCenter(force)
+./scripts/dotfiles-center:6:BIN="$ROOT_DIR/target/release/dotfiles-center"
+./scripts/dotfiles-center:8:MAIN_RS="$ROOT_DIR/tools/dotfiles-center/src/main.rs"
+./scripts/dotfiles-center:9:APP_TOML="$ROOT_DIR/tools/dotfiles-center/Cargo.toml"
+./scripts/dotfiles-center:12:  echo "Cargo is required for Dotfiles Center."
+./scripts/dotfiles-center:18:  echo "Building Dotfiles Center..."
+./scripts/dotfiles-center:19:  cargo build --release --manifest-path "$MANIFEST" -p dotfiles-center
+./scripts/dotctl:21:  center      Open the graphical Dotfiles Center
+./scripts/dotctl:72:  center_dest="$HOME/.local/bin/dotfiles-center"
+./scripts/dotctl:73:  if [ -L "$center_dest" ] && [ "$(readlink "$center_dest")" = "$ROOT_DIR/scripts/dotfiles-center" ]; then
+./scripts/dotctl:175:  "$ROOT_DIR/scripts/dotfiles-center" --force
+./scripts/dotctl:208:  if [ -L "$HOME/.local/bin/dotfiles-center" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-center")" = "$ROOT_DIR/scripts/dotfiles-center" ]; then
+./scripts/dotctl:209:    rm "$HOME/.local/bin/dotfiles-center"
+./scripts/dotctl:210:    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-center"
+./scripts/dotfiles-welcome:7:exec "$ROOT_DIR/scripts/dotfiles-center" "$@"
+./Cargo.lock:758:name = "dotfiles-center"

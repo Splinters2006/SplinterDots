@@ -3,6 +3,17 @@
 version = 4
 
 [[package]]
+name = "SplinterDots"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui",
+ "image",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ab_glyph"
 version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -752,17 +763,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
 dependencies = [
  "litrs",
-]
-
-[[package]]
-name = "dotfiles-center"
-version = "0.1.0"
-dependencies = [
- "eframe",
- "egui",
- "image",
- "serde",
- "serde_json",
 ]
 
 [[package]]
