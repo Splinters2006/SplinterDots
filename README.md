@@ -201,10 +201,24 @@ to a TTY with `Ctrl + Alt + F3`, log in, and run:
 dotctl doctor
 ```
 
+The graphical login starts Hyprland through `dotfiles-start-hyprland`, which
+sets the Wayland session environment and writes logs to:
+
+```sh
+~/.cache/hyprland/dotfiles-hyprland-*.log
+```
+
 Aquamarine errors are usually graphics/session backend problems. This setup
 installs the common Mesa/Vulkan userspace packages for Intel and AMD graphics,
 but NVIDIA systems still need the matching `nvidia` or `nvidia-dkms` driver
 stack for the installed kernel.
+
+For virtual machines or emergency fallback systems, you can allow software
+rendering by adding this to `~/.config/dotfiles/local.conf`:
+
+```sh
+DOTFILES_ALLOW_SOFTWARE_RENDERER="1"
+```
 
 The installer avoids replacing `~/.config/hypr/*` while Hyprland is already
 running because live config reloads can crash a fragile first session. Run the

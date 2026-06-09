@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="${DOTFILES_ROOT:-$HOME/dotfiles}"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+LOG_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/hyprland"
+LOG_FILE="$LOG_DIR/dotfiles-hyprland-$(date +%Y%m%d-%H%M%S).log"
+
+mkdir -p "$LOG_DIR"
+
+if [ -f "$ROOT_DIR/config/dotfiles/settings.conf" ]; then
+  # shellcheck disable=SC1090
+  . "$ROOT_DIR/config/dotfiles/settings.conf"
+fi
+
+if [ -f "$CONFIG_HOME/dotfiles/local.conf" ]; then
+  # shellcheck disable=SC1090
+  . "$CONFIG_HOME/dotfiles/local.conf"
+fi
+
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=Hyprland
+export XDG_SESSION_DESKTOP=Hyprland
+export GDK_BACKEND=wayland,x11
+export QT_QPA_PLATFORM="wayland;xcb"
+export SDL_VIDEODRIVER=wayland
+export CLUTTER_BACKEND=wayland
+
+if lsmod 2>/dev/null | grep -q '^nvidia'; then
+  export GBM_BACKEND=nvidia-drm
+  export __GLX_VENDOR_LIBRARY_NAME=nvidia
+  export LIBVA_DRIVER_NAME=nvidia
+fi
+
+if [ "${DOTFILES_ALLOW_SOFTWARE_RENDERER:-0}" = "1" ]; then
+  export WLR_RENDERER_ALLOW_SOFTWARE=1
+fi
+
+{
+  printf 'Starting Hyprland through dotfiles wrapper at %s\n' "$(date -Is)"
+  printf 'Log file: %s\n' "$LOG_FILE"
+  printf 'XDG_SESSION_TYPE=%s\n' "$XDG_SESSION_TYPE"
+  printf 'XDG_CURRENT_DESKTOP=%s\n' "$XDG_CURRENT_DESKTOP"
+  printf 'GPU summary:\n'
+  command -v lspci >/dev/null 2>&1 && lspci | grep -Ei 'vga|3d|display' || true
+  printf '\n--- Hyprland output ---\n'
+} > "$LOG_FILE"
+
+exec Hyprland >> "$LOG_FILE" 2>&1

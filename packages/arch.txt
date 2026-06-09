@@ -4,6 +4,7 @@ git
 curl
 wget
 openssh
+dbus
 xdg-user-dirs
 xdg-utils
 noto-fonts
