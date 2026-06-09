@@ -1,56 +1,38 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage() {
-  cat <<'EOF'
-Usage: dotfiles-screenshot <region|full>
-
-Commands:
-  region   Select a screen region, copy it to the clipboard, and save it
-  full     Save a full-screen screenshot
-EOF
-}
-
-notify() {
-  if command -v notify-send >/dev/null 2>&1; then
-    notify-send "Screenshot" "$1"
-  fi
-}
+mode="${1:-area}"
 
 need() {
   if ! command -v "$1" >/dev/null 2>&1; then
-    printf 'dotfiles-screenshot: missing command: %s\n' "$1" >&2
+    echo "Missing dependency: $1" >&2
     exit 1
   fi
 }
 
-shot_dir="${XDG_SCREENSHOTS_DIR:-${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots}"
-timestamp="$(date +%Y-%m-%d_%H-%M-%S)"
-path="$shot_dir/screenshot-$timestamp.png"
+need grim
+need wl-copy
 
-cmd="${1:-}"
-case "$cmd" in
-  region)
-    need grim
+notify_done() {
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send "Screenshot copied" "The screenshot was copied to your clipboard."
+  fi
+}
+
+case "$mode" in
+  area|region|selection)
     need slurp
-    need wl-copy
-    mkdir -p "$shot_dir"
     geometry="$(slurp)"
-    grim -g "$geometry" "$path"
-    wl-copy <"$path"
-    notify "Saved and copied region screenshot."
+    [ -n "$geometry" ] || exit 0
+    grim -g "$geometry" - | wl-copy --type image/png
+    notify_done
     ;;
-  full)
-    need grim
-    mkdir -p "$shot_dir"
-    grim "$path"
-    notify "Saved full screenshot."
-    ;;
-  -h|--help|help)
-    usage
+  full|screen)
+    grim - | wl-copy --type image/png
+    notify_done
     ;;
   *)
-    usage >&2
+    echo "Usage: dotfiles-screenshot [area|full]" >&2
     exit 1
     ;;
 esac
