@@ -1,0 +1,25 @@
+# Core tools
+base-devel
+git
+curl
+wget
+openssh
+
+# Shell and prompt
+bash-completion
+starship
+
+# Friendly command-line tools
+bat
+eza
+fd
+ripgrep
+fzf
+zoxide
+
+# Editors and terminal basics
+neovim
+tmux
+
+# Desktop/user tools
+firefox

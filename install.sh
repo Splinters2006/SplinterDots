@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOME_DIR="${HOME:?HOME is required}"
+BACKUP_DIR="$ROOT_DIR/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
+DRY_RUN=0
+INSTALL_PACKAGES=0
+DOTFILES_NAME="Arch User"
+DOTFILES_EMAIL=""
+
+usage() {
+  cat <<'EOF'
+Usage: ./install.sh [options]
+
+Options:
+  --dry-run       Show actions without changing files
+  --packages      Install recommended Arch packages with pacman
+  -h, --help      Show this help
+EOF
+}
+
+log() {
+  printf '%s\n' "$*"
+}
+
+action_log() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf 'Would %s\n' "$*"
+  else
+    printf '%s\n' "$*"
+  fi
+}
+
+run() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '[dry-run] %s\n' "$*"
+  else
+    "$@"
+  fi
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN=1
+      ;;
+    --packages)
+      INSTALL_PACKAGES=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'Unknown option: %s\n\n' "$1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [ "$(uname -s)" != "Linux" ]; then
+  log "This installer is intended for Linux. Continuing anyway."
+fi
+
+if [ -f /etc/arch-release ]; then
+  IS_ARCH=1
+else
+  IS_ARCH=0
+fi
+
+install_packages() {
+  if [ "$IS_ARCH" -ne 1 ]; then
+    log "Skipping packages: /etc/arch-release was not found."
+    return
+  fi
+
+  if ! command -v pacman >/dev/null 2>&1; then
+    log "Skipping packages: pacman was not found."
+    return
+  fi
+
+  mapfile -t packages < <(sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' "$ROOT_DIR/packages/arch.txt")
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] sudo pacman -S --needed ${packages[*]}"
+    return
+  fi
+
+  sudo pacman -S --needed "${packages[@]}"
+}
+
+load_settings() {
+  if [ -f "$ROOT_DIR/config/dotfiles/settings.conf" ]; then
+    # shellcheck disable=SC1091
+    . "$ROOT_DIR/config/dotfiles/settings.conf"
+  fi
+
+  if [ -f "$HOME_DIR/.config/dotfiles/local.conf" ]; then
+    # shellcheck disable=SC1091
+    . "$HOME_DIR/.config/dotfiles/local.conf"
+  fi
+}
+
+write_git_user_config() {
+  local dest="$HOME_DIR/.config/dotfiles/git-user.inc"
+
+  run mkdir -p "$(dirname "$dest")"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] write $dest"
+    return
+  fi
+
+  {
+    printf '[user]\n'
+    printf '\tname = %s\n' "${DOTFILES_NAME:-Arch User}"
+    if [ -n "${DOTFILES_EMAIL:-}" ]; then
+      printf '\temail = %s\n' "$DOTFILES_EMAIL"
+    fi
+  } > "$dest"
+}
+
+link_file() {
+  local src="$1"
+  local dest="$2"
+  local dest_dir
+  dest_dir="$(dirname "$dest")"
+
+  run mkdir -p "$dest_dir"
+
+  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then
+    log "Already linked: $dest"
+    return
+  fi
+
+  if [ -e "$dest" ] || [ -L "$dest" ]; then
+    run mkdir -p "$BACKUP_DIR$(dirname "$dest")"
+    run mv "$dest" "$BACKUP_DIR$dest"
+    action_log "back up: $dest"
+  fi
+
+  run ln -s "$src" "$dest"
+  action_log "link: $dest"
+}
+
+log "Dotfiles root: $ROOT_DIR"
+load_settings
+
+if [ "$INSTALL_PACKAGES" -eq 1 ]; then
+  install_packages
+fi
+
+find "$ROOT_DIR/home" -type f -print | while IFS= read -r src; do
+  rel="${src#"$ROOT_DIR/home/"}"
+  link_file "$src" "$HOME_DIR/$rel"
+done
+
+link_file "$ROOT_DIR/config/dotfiles/settings.conf" "$HOME_DIR/.config/dotfiles/settings.conf"
+write_git_user_config
+
+run mkdir -p "$HOME_DIR/.local/bin"
+link_file "$ROOT_DIR/scripts/dotctl" "$HOME_DIR/.local/bin/dotctl"
+
+log ""
+log "Done. Open a new shell or run: exec \"\$SHELL\""

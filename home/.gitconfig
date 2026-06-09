@@ -1,0 +1,27 @@
+[user]
+	name = Arch User
+
+[init]
+	defaultBranch = main
+
+[pull]
+	rebase = false
+
+[push]
+	autoSetupRemote = true
+
+[core]
+	editor = nvim
+
+[color]
+	ui = auto
+
+[alias]
+	st = status --short
+	co = checkout
+	br = branch
+	cm = commit
+	lg = log --oneline --decorate --graph --all
+
+[include]
+	path = ~/.config/dotfiles/git-user.inc

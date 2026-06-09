@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SELF="$(readlink -f "$0")"
+ROOT_DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+Usage: dotctl <command>
+
+Commands:
+  status      Show dotfile links and settings files
+  edit        Edit the main settings file
+  apply       Re-run the installer
+  packages    Install recommended Arch packages
+  uninstall   Remove symlinks created by these dotfiles
+  help        Show this help
+EOF
+}
+
+status() {
+  printf 'Dotfiles root: %s\n' "$ROOT_DIR"
+  printf 'Main settings: %s\n' "$ROOT_DIR/config/dotfiles/settings.conf"
+  printf 'Local settings: %s\n\n' "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.conf"
+
+  find "$ROOT_DIR/home" -type f -print | while IFS= read -r src; do
+    rel="${src#"$ROOT_DIR/home/"}"
+    dest="$HOME/$rel"
+    if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then
+      printf 'linked  %s\n' "$dest"
+    elif [ -e "$dest" ] || [ -L "$dest" ]; then
+      printf 'custom  %s\n' "$dest"
+    else
+      printf 'missing %s\n' "$dest"
+    fi
+  done
+
+  settings_dest="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/settings.conf"
+  if [ -L "$settings_dest" ] && [ "$(readlink "$settings_dest")" = "$ROOT_DIR/config/dotfiles/settings.conf" ]; then
+    printf 'linked  %s\n' "$settings_dest"
+  elif [ -e "$settings_dest" ] || [ -L "$settings_dest" ]; then
+    printf 'custom  %s\n' "$settings_dest"
+  else
+    printf 'missing %s\n' "$settings_dest"
+  fi
+
+  git_user_dest="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/git-user.inc"
+  if [ -f "$git_user_dest" ]; then
+    printf 'local   %s\n' "$git_user_dest"
+  else
+    printf 'missing %s\n' "$git_user_dest"
+  fi
+}
+
+edit_settings() {
+  "${EDITOR:-nvim}" "$ROOT_DIR/config/dotfiles/settings.conf"
+}
+
+apply() {
+  "$ROOT_DIR/install.sh"
+}
+
+packages() {
+  "$ROOT_DIR/install.sh" --packages
+}
+
+uninstall() {
+  find "$ROOT_DIR/home" -type f -print | while IFS= read -r src; do
+    rel="${src#"$ROOT_DIR/home/"}"
+    dest="$HOME/$rel"
+    if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then
+      rm "$dest"
+      printf 'removed %s\n' "$dest"
+    fi
+  done
+
+  settings_dest="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/settings.conf"
+  if [ -L "$settings_dest" ] && [ "$(readlink "$settings_dest")" = "$ROOT_DIR/config/dotfiles/settings.conf" ]; then
+    rm "$settings_dest"
+    printf 'removed %s\n' "$settings_dest"
+  fi
+
+  if [ -L "$HOME/.local/bin/dotctl" ] && [ "$(readlink "$HOME/.local/bin/dotctl")" = "$ROOT_DIR/scripts/dotctl" ]; then
+    rm "$HOME/.local/bin/dotctl"
+    printf 'removed %s\n' "$HOME/.local/bin/dotctl"
+  fi
+}
+
+cmd="${1:-help}"
+case "$cmd" in
+  status) status ;;
+  edit) edit_settings ;;
+  apply) apply ;;
+  packages) packages ;;
+  uninstall) uninstall ;;
+  help|-h|--help) usage ;;
+  *)
+    printf 'Unknown command: %s\n\n' "$cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
