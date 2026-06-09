@@ -86,6 +86,15 @@ status() {
     printf 'missing %s\n' "$wallpaper_dest"
   fi
 
+  autostart_dest="$HOME/.local/bin/dotfiles-hypr-autostart"
+  if [ -L "$autostart_dest" ] && [ "$(readlink "$autostart_dest")" = "$ROOT_DIR/scripts/dotfiles-hypr-autostart" ]; then
+    printf 'linked  %s\n' "$autostart_dest"
+  elif [ -e "$autostart_dest" ] || [ -L "$autostart_dest" ]; then
+    printf 'custom  %s\n' "$autostart_dest"
+  else
+    printf 'missing %s\n' "$autostart_dest"
+  fi
+
   if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/welcome-disabled" ]; then
     printf 'disabled startup welcome tour\n'
   else
@@ -163,6 +172,11 @@ uninstall() {
   if [ -L "$HOME/.local/bin/dotfiles-wallpaper" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-wallpaper")" = "$ROOT_DIR/scripts/dotfiles-wallpaper" ]; then
     rm "$HOME/.local/bin/dotfiles-wallpaper"
     printf 'removed %s\n' "$HOME/.local/bin/dotfiles-wallpaper"
+  fi
+
+  if [ -L "$HOME/.local/bin/dotfiles-hypr-autostart" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-hypr-autostart")" = "$ROOT_DIR/scripts/dotfiles-hypr-autostart" ]; then
+    rm "$HOME/.local/bin/dotfiles-hypr-autostart"
+    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-hypr-autostart"
   fi
 }
 

@@ -16,6 +16,7 @@ starship
 
 # Hyprland desktop
 hyprland
+xorg-xwayland
 xdg-desktop-portal
 xdg-desktop-portal-hyprland
 waybar

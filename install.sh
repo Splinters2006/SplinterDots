@@ -10,6 +10,7 @@ INSTALL_AUR=0
 UPDATE_DOTFILES=0
 CONFIGURE_SYSTEM=0
 NOCONFIRM=0
+LINK_LIVE_HYPR=0
 DOTFILES_NAME="Arch User"
 DOTFILES_EMAIL=""
 
@@ -25,6 +26,7 @@ Options:
   --system        Configure greetd and enable desktop services
   --all           Update repo, install pacman/AUR packages, configure system, and apply dotfiles
   --noconfirm     Pass --noconfirm to pacman, makepkg, and yay
+  --live-hypr     Link Hyprland config even when running inside Hyprland
   -h, --help      Show this help
 EOF
 }
@@ -74,6 +76,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --noconfirm)
       NOCONFIRM=1
+      ;;
+    --live-hypr)
+      LINK_LIVE_HYPR=1
       ;;
     -h|--help)
       usage
@@ -309,6 +314,15 @@ fi
 
 find "$ROOT_DIR/home" -type f -print | while IFS= read -r src; do
   rel="${src#"$ROOT_DIR/home/"}"
+  if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ "$LINK_LIVE_HYPR" -ne 1 ]; then
+    case "$rel" in
+      .config/hypr/*)
+        log "Skipping live Hyprland config while Hyprland is running: $HOME_DIR/$rel"
+        log "Run ./install.sh from a TTY, after reboot, or pass --live-hypr to force it."
+        continue
+        ;;
+    esac
+  fi
   link_file "$src" "$HOME_DIR/$rel"
 done
 
@@ -318,6 +332,7 @@ write_git_user_config
 run mkdir -p "$HOME_DIR/.local/bin"
 link_file "$ROOT_DIR/scripts/dotctl" "$HOME_DIR/.local/bin/dotctl"
 link_file "$ROOT_DIR/scripts/dotfiles-center" "$HOME_DIR/.local/bin/dotfiles-center"
+link_file "$ROOT_DIR/scripts/dotfiles-hypr-autostart" "$HOME_DIR/.local/bin/dotfiles-hypr-autostart"
 link_file "$ROOT_DIR/scripts/dotfiles-welcome" "$HOME_DIR/.local/bin/dotfiles-welcome"
 link_file "$ROOT_DIR/scripts/dotfiles-wallpaper" "$HOME_DIR/.local/bin/dotfiles-wallpaper"
 
