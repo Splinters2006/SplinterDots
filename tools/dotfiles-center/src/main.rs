@@ -816,6 +816,24 @@ impl DotfilesCenter {
         };
     }
 
+    fn uninstall_addon_package(&mut self, package: &str) {
+        let terminal = self.value("DOTFILES_TERMINAL");
+        let command = format!(
+            "sudo pacman -Rns {}; echo; read -rp 'Press enter to close...'",
+            shell_quote(package)
+        );
+
+        let result = Command::new("sh")
+            .arg("-c")
+            .arg(format!("{} -e sh -c {}", terminal, shell_quote(&command)))
+            .spawn();
+
+        self.status = match result {
+            Ok(_) => format!("Opening remover for {package}"),
+            Err(err) => format!("Could not open remover: {err}"),
+        };
+    }
+
     fn install_addon_package(&mut self, package: &str) {
         let terminal = self.value("DOTFILES_TERMINAL");
         let helper = self.paths.script("splinterdots-style");
@@ -1649,26 +1667,18 @@ impl DotfilesCenter {
 
                 ui.add_space(8.0);
 
-                ui.horizontal(|ui| {
-                    egui::ComboBox::from_id_salt("addon-category-filter")
-                        .selected_text(self.addon_category_filter.clone())
-                        .width(260.0)
-                        .show_ui(ui, |ui| {
-                            for category in addon_categories() {
-                                ui.selectable_value(
-                                    &mut self.addon_category_filter,
-                                    category.to_string(),
-                                    *category,
-                                );
-                            }
-                        });
-
-                    ui.label(
-                        RichText::new("Filter by category")
-                            .color(theme.muted)
-                            .size(12.0),
-                    );
-                });
+                egui::ComboBox::from_id_salt("addon-category-filter")
+                    .selected_text(self.addon_category_filter.clone())
+                    .width(260.0)
+                    .show_ui(ui, |ui| {
+                        for category in addon_categories() {
+                            ui.selectable_value(
+                                &mut self.addon_category_filter,
+                                category.to_string(),
+                                *category,
+                            );
+                        }
+                    });
             });
 
             ui.add_space(8.0);
@@ -1695,75 +1705,82 @@ impl DotfilesCenter {
             }
 
             egui::Grid::new("addons-plugin-grid")
-                .num_columns(2)
-                .spacing([14.0, 14.0])
+                .num_columns(3)
+                .spacing([12.0, 12.0])
                 .show(ui, |ui| {
                     for (index, addon) in addons.iter().enumerate() {
                         let installed = addon_package_installed(addon.package);
 
                         Frame {
                             fill: theme.panel_soft,
-                            corner_radius: CornerRadius::same(12),
+                            corner_radius: CornerRadius::same(14),
                             inner_margin: Margin::symmetric(14, 12),
                             stroke: Stroke::new(1.0, theme.border),
                             ..Default::default()
                         }
                         .show(ui, |ui| {
-                            ui.set_min_width(380.0);
-                            ui.set_min_height(112.0);
+                            ui.set_min_width(260.0);
+                            ui.set_max_width(260.0);
+                            ui.set_min_height(145.0);
 
-                            ui.horizontal(|ui| {
-                                ui.vertical(|ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.label(RichText::new(addon.name).strong().size(15.0));
-                                        ui.label(
-                                            RichText::new(addon.category)
-                                                .color(theme.muted)
-                                                .size(11.0),
-                                        );
+                            ui.vertical(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new(addon.name).strong().size(15.0));
+
+                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                        if installed {
+                                            if ui.button("🗑").on_hover_text("Remove addon").clicked() {
+                                                self.uninstall_addon_package(addon.package);
+                                            }
+                                        } else if ui.button("⬇").on_hover_text("Download / install").clicked() {
+                                            self.install_addon_package(addon.package);
+                                        }
                                     });
+                                });
 
-                                    ui.add_space(6.0);
+                                ui.add_space(2.0);
+                                ui.label(
+                                    RichText::new(addon.category)
+                                        .color(theme.muted)
+                                        .size(11.0),
+                                );
 
+                                ui.add_space(8.0);
+                                ui.label(
+                                    RichText::new(addon.description)
+                                        .color(theme.text)
+                                        .size(12.0),
+                                );
+
+                                ui.add_space(6.0);
+                                ui.label(
+                                    RichText::new("Preconfigured after install. Customizable later.")
+                                        .color(theme.muted)
+                                        .size(11.0),
+                                );
+
+                                ui.add_space(8.0);
+                                ui.monospace(addon.package);
+
+                                ui.add_space(6.0);
+                                if installed {
                                     ui.label(
-                                        RichText::new(addon.description)
-                                            .color(theme.text)
-                                            .size(12.0),
+                                        RichText::new("Installed")
+                                            .color(theme.success)
+                                            .size(11.0)
+                                            .strong(),
                                     );
-
-                                    ui.add_space(4.0);
-
+                                } else {
                                     ui.label(
-                                        RichText::new("Preconfigured after install. Customizable later.")
+                                        RichText::new("Not installed")
                                             .color(theme.muted)
                                             .size(11.0),
                                     );
-
-                                    ui.add_space(4.0);
-                                    ui.monospace(addon.package);
-                                });
-
-                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    if installed {
-                                        ui.label(
-                                            RichText::new("Installed")
-                                                .color(theme.success)
-                                                .strong(),
-                                        );
-                                    } else {
-                                        if ui.button("✕").on_hover_text("Not installed").clicked() {
-                                            self.install_addon_package(addon.package);
-                                        }
-
-                                        if ui.button("Download").clicked() {
-                                            self.install_addon_package(addon.package);
-                                        }
-                                    }
-                                });
+                                }
                             });
                         });
 
-                        if index % 2 == 1 {
+                        if index % 3 == 2 {
                             ui.end_row();
                         }
                     }
