@@ -1486,13 +1486,6 @@
     },
     {
       "section": "Desktop Behavior",
-      "path": "misc:disable_hyprland_qtutils_check",
-      "label": "Hide Hyprland Qt helper warning",
-      "type": "bool",
-      "default": "false"
-    },
-    {
-      "section": "Desktop Behavior",
       "path": "misc:lockdead_screen_delay",
       "label": "Lock failure warning delay",
       "type": "int",
@@ -2136,15 +2129,6 @@
       "label": "Hide config error popups",
       "type": "bool",
       "default": "false"
-    },
-    {
-      "section": "Troubleshooting",
-      "path": "debug:watchdog_timeout",
-      "label": "Crash watchdog timeout",
-      "type": "int",
-      "default": "5",
-      "min": 0,
-      "max": 60
     },
     {
       "section": "Troubleshooting",

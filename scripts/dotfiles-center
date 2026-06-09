@@ -3,6 +3,7 @@ import json
 import os
 import re
 import subprocess
+import shutil
 import sys
 import tkinter as tk
 from pathlib import Path
@@ -235,12 +236,32 @@ def render_hypr_tree(tree: dict, indent: int = 0) -> list[str]:
     return lines
 
 
+
+def hypr_option_supported(path: str) -> bool:
+    """Return False when this Hyprland version does not know a setting."""
+    if not shutil.which("hyprctl"):
+        return True
+
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        return True
+
+    result = subprocess.run(
+        ["hyprctl", "getoption", path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
 def write_hyprland_settings(schema: list[dict], values: dict[str, str]) -> None:
     HYPR_DIR.mkdir(parents=True, exist_ok=True)
     option_by_path = {option["path"]: option for option in schema}
     tree: dict = {}
 
     for path, option in option_by_path.items():
+        if not hypr_option_supported(path):
+            continue
+
         value = clean_hypr_value(option, values.get(path, option.get("default", "")))
         if value == "":
             continue

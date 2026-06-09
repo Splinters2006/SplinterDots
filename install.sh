@@ -316,6 +316,39 @@ reenable_welcome_after_update() {
   log "re-enabled Dotfiles Center startup popup after update"
 }
 
+
+ensure_hyprland_generated_config() {
+  local repo_file="$ROOT_DIR/home/.config/hypr/dotfiles-generated.conf"
+  local user_file="$HOME_DIR/.config/hypr/dotfiles-generated.conf"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] ensure $repo_file exists"
+    log "[dry-run] ensure $user_file exists"
+    return
+  fi
+
+  mkdir -p "$(dirname "$repo_file")"
+  mkdir -p "$(dirname "$user_file")"
+
+  if [ ! -e "$repo_file" ]; then
+    cat > "$repo_file" <<'EOF'
+# This file is created automatically by the SplinterDots installer.
+# Dotfiles Center can write Hyprland settings here.
+# It is safe if this file is empty.
+EOF
+    log "created: $repo_file"
+  fi
+
+  if [ ! -e "$user_file" ] && [ ! -L "$user_file" ]; then
+    cat > "$user_file" <<'EOF'
+# This file is created automatically by the SplinterDots installer.
+# Dotfiles Center can write Hyprland settings here.
+# It is safe if this file is empty.
+EOF
+    log "created: $user_file"
+  fi
+}
+
 link_file() {
   local src="$1"
   local dest="$2"
@@ -341,6 +374,7 @@ link_file() {
 
 log "Dotfiles root: $ROOT_DIR"
 load_settings
+ensure_hyprland_generated_config
 
 if [ "$UPDATE_DOTFILES" -eq 1 ]; then
   update_dotfiles
