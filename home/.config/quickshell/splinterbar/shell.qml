@@ -8,24 +8,57 @@ import QtQuick.Layouts
 
 Variants {
   model: Quickshell.screens
+
   delegate: Component {
     PanelWindow {
       id: root
       property int activeWorkspace: 1
+      property string screenName: modelData.name
       required property var modelData
       screen: modelData
-      anchors { top: true; bottom: false; left: true; right: true }
-      margins { top: 8; bottom: 0; left: 10; right: 10 }
-      implicitHeight: 39
+
+      anchors {
+        top: true
+        bottom: false
+        left: true
+        right: true
+      }
+
+      margins {
+        top: 8
+        bottom: 0
+        left: 10
+        right: 10
+      }
+
+      implicitHeight: 32
       color: "transparent"
 
       Process {
-        id: activeWorkspaceProc
-        command: ["hyprctl", "activeworkspace", "-j"]
+        id: stateProc
+        command: ["sh", "-c", "hyprctl monitors -j"]
         running: true
-        stdout: StdioCollector { onStreamFinished: { try { root.activeWorkspace = JSON.parse(this.text).id } catch (e) { } } }
+        stdout: StdioCollector {
+          onStreamFinished: {
+            try {
+              var monitors = JSON.parse(this.text)
+              for (var i = 0; i < monitors.length; i++) {
+                if (monitors[i].name === root.screenName && monitors[i].activeWorkspace) {
+                  root.activeWorkspace = monitors[i].activeWorkspace.id
+                }
+              }
+            } catch (e) {
+            }
+          }
+        }
       }
-      Timer { interval: 700; running: true; repeat: true; onTriggered: activeWorkspaceProc.running = true }
+
+      Timer {
+        interval: 40
+        running: true
+        repeat: true
+        onTriggered: stateProc.running = true
+      }
 
       Rectangle {
         anchors.fill: parent
@@ -33,6 +66,7 @@ Variants {
         color: "#e51e1e2e"
         border.width: 1
         border.color: "#313244"
+
         RowLayout {
           anchors.fill: parent
           anchors.leftMargin: 14
@@ -42,18 +76,38 @@ Variants {
           Row {
             Layout.alignment: Qt.AlignVCenter
             spacing: 6
+
             Repeater {
               model: 5
               Rectangle {
-                width: (index + 1) === root.activeWorkspace ? 37 : 25
-                height: (index + 1) === root.activeWorkspace ? 37 : 25
+                width: (index + 1) === root.activeWorkspace ? 30 : 18
+                height: (index + 1) === root.activeWorkspace ? 30 : 18
                 anchors.verticalCenter: parent.verticalCenter
                 radius: 24
                 color: (index + 1) === root.activeWorkspace ? "#89b4fa" : "#313244"
                 opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.72
-                Text { anchors.centerIn: parent; text: index + 1; color: (index + 1) === root.activeWorkspace ? "#11111b" : "#cdd6f4"; font.bold: true; font.pixelSize: 11 }
-                MouseArea { anchors.fill: parent; onClicked: switchWorkspace.running = true }
-                Process { id: switchWorkspace; command: ["hyprctl", "dispatch", "workspace", String(index + 1)] }
+
+                Text {
+                  anchors.centerIn: parent
+                  text: index + 1
+                  color: (index + 1) === root.activeWorkspace ? "#11111b" : "#cdd6f4"
+                  font.bold: true
+                  font.pixelSize: 11
+                  font.family: "Symbols Nerd Font"
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  onClicked: switchWorkspace.running = true
+                  hoverEnabled: true
+                  onEntered: parent.opacity = 1.0
+                  onExited: parent.opacity = (index + 1) === root.activeWorkspace ? 1.0 : 0.72
+                }
+
+                Process {
+                  id: switchWorkspace
+                  command: ["hyprctl", "dispatch", "workspace", String(index + 1)]
+                }
               }
             }
           }
@@ -65,9 +119,24 @@ Variants {
             color: "#cdd6f4"
             font.bold: true
             font.pixelSize: 12
-            text: "Loading..."
-            Process { id: dateProc; command: ["date", "+%a %d %b  %H:%M"]; running: true; stdout: StdioCollector { onStreamFinished: clock.text = this.text.trim() } }
-            Timer { interval: 1000; running: true; repeat: true; onTriggered: dateProc.running = true }
+            font.family: "Symbols Nerd Font"
+            text: "..."
+
+            Process {
+              id: dateProc
+              command: ["date", "+%a %d %b  %H:%M"]
+              running: true
+              stdout: StdioCollector {
+                onStreamFinished: clock.text = " " + this.text.trim()
+              }
+            }
+
+            Timer {
+              interval: 1000
+              running: true
+              repeat: true
+              onTriggered: dateProc.running = true
+            }
           }
           Item { Layout.fillWidth: true }
 
@@ -76,9 +145,24 @@ Variants {
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             color: "#bac2de"
             font.pixelSize: 12
+            font.family: "Symbols Nerd Font"
             text: ""
-            Process { id: statusProc; command: ["sh", "-c", "printf 'VOL '; wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"MUTE\"; else print v\"%\"}'; printf '  NET '; nmcli -t -f GENERAL.STATE device show 2>/dev/null | grep -q ':100' && echo on || echo off; bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && printf '  BAT %s%%' \"$bat\"; cpu=$(top -bn1 | grep 'Cpu(s)' | awk '{print int($2+$4)\"%\"}' 2>/dev/null); [ -n \"$cpu\" ] && printf '  CPU %s' \"$cpu\"; mem=$(free -m | awk '/^Mem/{printf \"%dMB\", $3}' 2>/dev/null); [ -n \"$mem\" ] && printf '  MEM %s' \"$mem\""]; running: true; stdout: StdioCollector { onStreamFinished: status.text = this.text.replace(/\n/g, "").trim() } }
-            Timer { interval: 3000; running: true; repeat: true; onTriggered: statusProc.running = true }
+
+            Process {
+              id: statusProc
+              command: ["sh", "-c", "printf ' '; wpctl get-volume \"@DEFAULT_AUDIO_SINK@\" 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"\"; else print v\"%\"}'; nmcli -t -f GENERAL.STATE device show 2>/dev/null | grep -q ':100' && printf '   on' || printf '   off'; bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && if [ \"$bat\" -le 20 ]; then printf '   %s%%!' \"$bat\"; else printf '   %s%%' \"$bat\"; fi; cpu=$(top -bn1 | awk -F'[, ]+' '/Cpu\\(s\\)/{print int($2+$4)}' 2>/dev/null); [ -n \"$cpu\" ] && printf '   CPU %s%%' \"$cpu\"; mem=$(free -m | awk '/^Mem/{printf \"%dMB\", $3}' 2>/dev/null); [ -n \"$mem\" ] && printf '   RAM %s' \"$mem\"; tmp=$(sensors 2>/dev/null | awk '/Package id 0|Tctl|temp1/{gsub(/[+°C]/, \"\", $2); print int($2)\"°C\"; exit}'); [ -n \"$tmp\" ] && printf '   %s' \"$tmp\"; disk=$(df -h \"/\" 2>/dev/null | awk 'NR==2{print $5}'); [ -n \"$disk\" ] && printf '   %s' \"$disk\"; bri=$(brightnessctl -m 2>/dev/null | awk -F, '{print $4}'); [ -n \"$bri\" ] && printf '   %s' \"$bri\"; bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf '   on' || printf '   off'; media=$(playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null | cut -c1-28); [ -n \"$media\" ] && printf '   %s' \"$media\"; upd=$(checkupdates 2>/dev/null | wc -l); [ -n \"$upd\" ] && [ \"$upd\" != \"0\" ] && printf '   %s' \"$upd\"; kb=$(hyprctl devices -j 2>/dev/null | grep -m1 -o '\"active_keymap\":\"[^\"]*' | cut -d'\"' -f4); [ -n \"$kb\" ] && printf '   KB %s' \"$kb\""]
+              running: true
+              stdout: StdioCollector {
+                onStreamFinished: status.text = this.text.replace(/\n/g, "").trim()
+              }
+            }
+
+            Timer {
+              interval: 1500
+              running: true
+              repeat: true
+              onTriggered: statusProc.running = true
+            }
           }
         }
       }
