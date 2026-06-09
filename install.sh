@@ -339,6 +339,7 @@ link_file "$ROOT_DIR/scripts/dotfiles-hypr-doctor" "$HOME_DIR/.local/bin/dotfile
 link_file "$ROOT_DIR/scripts/dotfiles-start-hyprland" "$HOME_DIR/.local/bin/dotfiles-start-hyprland"
 link_file "$ROOT_DIR/scripts/dotfiles-welcome" "$HOME_DIR/.local/bin/dotfiles-welcome"
 link_file "$ROOT_DIR/scripts/dotfiles-wallpaper" "$HOME_DIR/.local/bin/dotfiles-wallpaper"
+link_file "$ROOT_DIR/scripts/dotfiles-screenshot" "$HOME_DIR/.local/bin/dotfiles-screenshot"
 
 log ""
 log "Done. Open a new shell or run: exec \"\$SHELL\""

@@ -19,7 +19,7 @@ HYPR_KEYBINDS = HYPR_DIR / "keybindings.conf"
 
 DEFAULTS = {
     "DOTFILES_EDITOR": "nano",
-    "DOTFILES_BROWSER": "firefox",
+    "DOTFILES_BROWSER": "zen-browser",
     "DOTFILES_THEME": "dark",
     "DOTFILES_ACCENT": "#89b4fa",
     "DOTFILES_WALLPAPER": "",
@@ -32,7 +32,7 @@ KEYBIND_ACTIONS = [
     ("Terminal", "Return", "exec, $terminal"),
     ("File manager", "E", "exec, $fileManager"),
     ("App launcher", "D", "exec, $menu"),
-    ("Browser", "B", "exec, firefox"),
+    ("Browser", "B", "exec, $browser"),
     ("Close window", "C", "killactive"),
     ("Exit Hyprland", "M", "exit"),
     ("Fullscreen", "F", "fullscreen"),
@@ -97,12 +97,14 @@ def write_keybinds(values: dict, key_values: dict) -> None:
     terminal = values.get("DOTFILES_TERMINAL", DEFAULTS["DOTFILES_TERMINAL"])
     file_manager = values.get("DOTFILES_FILE_MANAGER", DEFAULTS["DOTFILES_FILE_MANAGER"])
     launcher = values.get("DOTFILES_APP_LAUNCHER", DEFAULTS["DOTFILES_APP_LAUNCHER"])
+    browser = values.get("DOTFILES_BROWSER", DEFAULTS["DOTFILES_BROWSER"])
 
     lines = [
         "$mainMod = SUPER",
         f"$terminal = {terminal}",
         f"$fileManager = {file_manager}",
         f"$menu = {launcher}",
+        f"$browser = {browser}",
         "",
     ]
 

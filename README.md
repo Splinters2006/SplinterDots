@@ -100,7 +100,7 @@ Example `local.conf`:
 ```sh
 DOTFILES_THEME="dark"
 DOTFILES_EDITOR="nano"
-DOTFILES_BROWSER="firefox"
+DOTFILES_BROWSER="zen-browser"
 DOTFILES_ENABLE_STARSHIP="1"
 ```
 
@@ -164,7 +164,7 @@ All keybinds use the `Super` / Windows key.
 | `Super + M` | Exit Hyprland |
 | `Super + F` | Toggle fullscreen |
 | `Super + V` | Toggle floating window |
-| `Super + S` | Select screenshot region and copy it |
+| `Super + S` | Select screenshot region, copy it, and save it |
 | `Super + Shift + S` | Save full screenshot |
 | `Super + W` | Open Dotfiles Center |
 | `Super + Shift + R` | Reload Hyprland config |

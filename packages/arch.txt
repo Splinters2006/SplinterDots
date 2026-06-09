@@ -71,7 +71,6 @@ python
 tk
 
 # Desktop/user tools
-firefox
 zenity
 adwaita-icon-theme
 easyeffects
