@@ -74,9 +74,9 @@ zoxide
 nano
 tmux
 python
-tk
 
 # Desktop/user tools
 zenity
 adwaita-icon-theme
 easyeffects
+rust
