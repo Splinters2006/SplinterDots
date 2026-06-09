@@ -57,3 +57,6 @@ nordzy-icon-theme
 bibata-cursor-theme
 capitaine-cursors
 qogir-cursor-theme
+
+# Optional clipboard manager
+cliphist

@@ -123,7 +123,7 @@ impl Tab {
             Tab::Shortcuts => "Shortcuts",
             Tab::Appearance => "Appearance",
             Tab::Addons => "Addons",
-            Tab::Bar => "QML Bar",
+            Tab::Bar => "Bar & Widgets",
             Tab::Widgets => "Widgets",
             Tab::Setup => "Setup",
         }
@@ -136,7 +136,7 @@ impl Tab {
             Tab::Shortcuts => "Keyboard and mouse controls",
             Tab::Appearance => "Theme, accent, and wallpaper",
             Tab::Addons => "Download optional fonts, icons, tools, and extras",
-            Tab::Bar => "Bar layout, icons, and speed",
+            Tab::Bar => "Bar layout, widgets, icons, and speed",
             Tab::Widgets => "Choose and configure every bar widget",
             Tab::Setup => "Default apps and helper actions",
         }
@@ -935,7 +935,6 @@ impl DotfilesCenter {
                     Tab::Appearance,
                     Tab::Addons,
                     Tab::Bar,
-                    Tab::Widgets,
                     Tab::Setup,
                 ] {
                     self.nav_button(ui, tab);
@@ -1615,45 +1614,69 @@ impl DotfilesCenter {
             ui.label(RichText::new("Addons").strong().size(20.0));
             ui.label(
                 RichText::new(
-                    "Optional extras are kept out of the base install. Install only what you want.",
+                    "Optional extras are grouped by what they change. Install only what you want.",
                 )
                 .color(theme.muted),
             );
-            ui.add_space(10.0);
+            ui.add_space(8.0);
             ui.label(
-                RichText::new("Base required packages stay minimal. Wallpapers require swww and it is installed with the base setup.")
+                RichText::new("Every addon comes preconfigured after install, and you can change it yourself later in SplinterDots.")
                     .color(theme.muted)
                     .size(12.0),
             );
         });
 
-        let mut grouped: BTreeMap<&'static str, Vec<AddonChoice>> = BTreeMap::new();
-        for addon in addon_choices() {
-            grouped.entry(addon.category).or_default().push(*addon);
-        }
+        let categories = [
+            "Fonts",
+            "Icon packs",
+            "Cursor themes",
+            "Desktop utilities",
+            "Terminal tools",
+            "Diagnostics",
+        ];
 
-        ScrollArea::vertical().show(ui, |ui| {
-            for (category, addons) in grouped {
+        ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            for category in categories {
+                let addons: Vec<AddonChoice> = addon_choices()
+                    .iter()
+                    .copied()
+                    .filter(|addon| addon.category == category)
+                    .collect();
+
+                if addons.is_empty() {
+                    continue;
+                }
+
                 Self::card(&theme, ui, |ui| {
-                    ui.label(RichText::new(category).strong().size(18.0));
-                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(category).strong().size(18.0));
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.label(
+                                RichText::new(format!("{} addons", addons.len()))
+                                    .color(theme.muted)
+                                    .size(11.0),
+                            );
+                        });
+                    });
+
+                    ui.add_space(10.0);
 
                     egui::Grid::new(format!("addons-grid-{category}"))
                         .num_columns(2)
-                        .spacing([12.0, 12.0])
+                        .spacing([10.0, 10.0])
                         .show(ui, |ui| {
                             for (index, addon) in addons.iter().enumerate() {
                                 let installed = addon_package_installed(addon.package);
 
                                 Frame {
                                     fill: theme.panel_soft,
-                                    corner_radius: CornerRadius::same(16),
-                                    inner_margin: Margin::same(14),
+                                    corner_radius: CornerRadius::same(14),
+                                    inner_margin: Margin::symmetric(12, 10),
                                     stroke: Stroke::new(1.0, theme.border),
                                     ..Default::default()
                                 }
                                 .show(ui, |ui| {
-                                    ui.set_min_width(360.0);
+                                    ui.set_min_width(320.0);
 
                                     ui.horizontal(|ui| {
                                         ui.vertical(|ui| {
@@ -1664,34 +1687,29 @@ impl DotfilesCenter {
                                                     .size(12.0),
                                             );
                                             ui.label(
-                                                RichText::new("Comes preconfigured after install. You can change it yourself later in SplinterDots.")
+                                                RichText::new("Preconfigured after install. Customizable later.")
                                                     .color(theme.muted)
                                                     .size(11.0),
                                             );
                                             ui.monospace(addon.package);
                                         });
 
-                                        ui.with_layout(
-                                            Layout::right_to_left(Align::Center),
-                                            |ui| {
-                                                if installed {
-                                                    ui.label(
-                                                        RichText::new("Installed")
-                                                            .color(theme.success)
-                                                            .strong(),
-                                                    );
-                                                } else if ui.button("Requires download").clicked() {
-                                                    self.install_addon_package(addon.package);
-                                                }
-                                            },
-                                        );
+                                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                            if installed {
+                                                ui.label(
+                                                    RichText::new("Installed")
+                                                        .color(theme.success)
+                                                        .strong(),
+                                                );
+                                            } else if ui.button("Download").clicked() {
+                                                self.install_addon_package(addon.package);
+                                            }
+                                        });
                                     });
 
                                     if !installed {
                                         ui.add_space(8.0);
-                                        if primary_button(ui, &theme, "Download / install")
-                                            .clicked()
-                                        {
+                                        if primary_button(ui, &theme, "Download / install").clicked() {
                                             self.install_addon_package(addon.package);
                                         }
                                     }
@@ -1762,6 +1780,20 @@ impl DotfilesCenter {
                 });
             });
         });
+
+        ui.add_space(18.0);
+        ui.separator();
+        ui.add_space(14.0);
+
+        Self::card(&self.app_theme(), ui, |ui| {
+            ui.label(RichText::new("Widgets").strong().size(18.0));
+            ui.label(
+                RichText::new("Widget controls are now part of Bar & Widgets.")
+                    .color(self.app_theme().muted),
+            );
+        });
+
+        self.widgets_tab(ui);
     }
 
     fn widgets_tab(&mut self, ui: &mut egui::Ui) {
@@ -3244,12 +3276,22 @@ fn style_choice_grid(
     let mut package_to_install = None;
     let is_font_picker = title.to_ascii_lowercase().contains("font");
 
-    ui.label(RichText::new(title).strong().size(16.0));
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(title).strong().size(16.0));
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.label(
+                RichText::new("Click an item to select it")
+                    .color(theme.muted)
+                    .size(11.0),
+            );
+        });
+    });
+
     ui.add_space(8.0);
 
     egui::Grid::new(format!("style-choice-grid-{title}"))
         .num_columns(2)
-        .spacing([12.0, 12.0])
+        .spacing([8.0, 8.0])
         .show(ui, |ui| {
             for (index, choice) in choices.iter().enumerate() {
                 let selected = current == choice.value;
@@ -3261,8 +3303,8 @@ fn style_choice_grid(
                     } else {
                         theme.panel_soft
                     },
-                    corner_radius: CornerRadius::same(16),
-                    inner_margin: Margin::same(12),
+                    corner_radius: CornerRadius::same(14),
+                    inner_margin: Margin::symmetric(10, 8),
                     stroke: Stroke::new(
                         if selected { 2.0 } else { 1.0 },
                         if selected { theme.accent } else { theme.border },
@@ -3270,7 +3312,7 @@ fn style_choice_grid(
                     ..Default::default()
                 }
                 .show(ui, |ui| {
-                    ui.set_min_width(280.0);
+                    ui.set_min_width(230.0);
 
                     ui.horizontal(|ui| {
                         if ui
@@ -3283,18 +3325,18 @@ fn style_choice_grid(
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             match choice.package {
                                 Some(package) if !installed => {
-                                    if ui.small_button("Requires download").clicked() {
+                                    if ui.small_button("Download").clicked() {
                                         package_to_install = Some(package);
                                     }
                                 }
                                 Some(_) => {
                                     ui.label(
-                                        RichText::new("Installed").color(theme.success).size(12.0),
+                                        RichText::new("Installed").color(theme.success).size(11.0),
                                     );
                                 }
                                 None => {
                                     ui.label(
-                                        RichText::new("Built in").color(theme.success).size(12.0),
+                                        RichText::new("Built in").color(theme.success).size(11.0),
                                     );
                                 }
                             }
@@ -3302,45 +3344,28 @@ fn style_choice_grid(
                     });
 
                     if is_font_picker {
-                        ui.add_space(8.0);
-                        Frame {
-                            fill: theme.card,
-                            corner_radius: CornerRadius::same(12),
-                            inner_margin: Margin::symmetric(10, 8),
-                            stroke: Stroke::new(1.0, theme.border),
-                            ..Default::default()
-                        }
-                        .show(ui, |ui| {
-                            ui.label(
-                                RichText::new(format!("{}  AaBbCc  123", choice.label))
-                                    .monospace()
-                                    .size(18.0)
-                                    .color(theme.text),
-                            );
-                        });
-
-                        if !installed {
-                            ui.label(
-                                RichText::new("Install this font for the exact preview.")
-                                    .color(theme.muted)
-                                    .size(11.0),
-                            );
-                        }
+                        ui.add_space(6.0);
+                        ui.label(
+                            RichText::new("AaBbCc 123 — The quick brown fox")
+                                .monospace()
+                                .size(15.0)
+                                .color(theme.text),
+                        );
                     }
 
                     if let Some(package) = choice.package {
                         if !installed {
-                            ui.add_space(6.0);
+                            ui.add_space(5.0);
                             ui.horizontal(|ui| {
                                 ui.label(
                                     RichText::new(package)
                                         .color(theme.muted)
-                                        .size(11.0)
+                                        .size(10.0)
                                         .monospace(),
                                 );
 
                                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    if ui.button("Download / install").clicked() {
+                                    if ui.small_button("Install").clicked() {
                                         package_to_install = Some(package);
                                     }
                                 });
@@ -3368,10 +3393,11 @@ struct AddonChoice {
 
 fn addon_choices() -> &'static [AddonChoice] {
     &[
+        // Fonts
         AddonChoice {
             category: "Fonts",
             name: "CaskaydiaCove Nerd Font",
-            description: "Recommended fancy SplinterDots UI font.",
+            description: "Recommended SplinterDots UI font.",
             package: "ttf-cascadia-code-nerd",
         },
         AddonChoice {
@@ -3398,89 +3424,130 @@ fn addon_choices() -> &'static [AddonChoice] {
             description: "Compact advanced terminal font.",
             package: "ttf-iosevka-nerd",
         },
+        // Icons
         AddonChoice {
-            category: "Icons",
+            category: "Icon packs",
             name: "Papirus Icons",
             description: "Modern icon pack for GTK apps.",
             package: "papirus-icon-theme",
         },
         AddonChoice {
-            category: "Icons",
+            category: "Icon packs",
             name: "Breeze Icons",
             description: "KDE-style icon pack.",
             package: "breeze-icons",
         },
         AddonChoice {
-            category: "Icons",
+            category: "Icon packs",
             name: "Tela Icons",
             description: "Colorful modern icon theme. May require AUR.",
             package: "tela-icon-theme",
         },
         AddonChoice {
-            category: "Icons",
+            category: "Icon packs",
             name: "Qogir Icons",
             description: "Flat icon theme. May require AUR.",
             package: "qogir-icon-theme",
         },
         AddonChoice {
-            category: "Icons",
+            category: "Icon packs",
             name: "Vimix Icons",
             description: "Material-style icon theme. May require AUR.",
             package: "vimix-icon-theme",
         },
+        // Cursors
         AddonChoice {
-            category: "Cursors",
+            category: "Cursor themes",
             name: "Bibata Cursor",
             description: "Popular modern cursor theme. May require AUR.",
             package: "bibata-cursor-theme",
         },
         AddonChoice {
-            category: "Cursors",
+            category: "Cursor themes",
             name: "Capitaine Cursor",
             description: "macOS-like cursor theme. May require AUR.",
             package: "capitaine-cursors",
         },
+        // Desktop utilities
         AddonChoice {
-            category: "Tools",
+            category: "Desktop utilities",
+            name: "Clipboard Manager",
+            description: "Clipboard history for Wayland using cliphist.",
+            package: "cliphist",
+        },
+        AddonChoice {
+            category: "Desktop utilities",
+            name: "Zenity",
+            description: "GUI dialogs for folder and file pickers.",
+            package: "zenity",
+        },
+        AddonChoice {
+            category: "Desktop utilities",
+            name: "Bluetooth GUI",
+            description: "Bluetooth tray and device manager.",
+            package: "blueman",
+        },
+        AddonChoice {
+            category: "Desktop utilities",
+            name: "Audio Control",
+            description: "Simple PipeWire/PulseAudio volume GUI.",
+            package: "pavucontrol",
+        },
+        AddonChoice {
+            category: "Desktop utilities",
+            name: "EasyEffects",
+            description: "Audio effects and equalizer.",
+            package: "easyeffects",
+        },
+        // Terminal tools
+        AddonChoice {
+            category: "Terminal tools",
             name: "Better ls: eza",
             description: "Nicer directory listings.",
             package: "eza",
         },
         AddonChoice {
-            category: "Tools",
+            category: "Terminal tools",
             name: "Better cat: bat",
             description: "Syntax-highlighted file viewer.",
             package: "bat",
         },
         AddonChoice {
-            category: "Tools",
-            name: "Fuzzy finder: fzf",
-            description: "Fast fuzzy searching in terminal.",
+            category: "Terminal tools",
+            name: "Fuzzy finder",
+            description: "Fast fuzzy search in terminal.",
             package: "fzf",
         },
         AddonChoice {
-            category: "Tools",
-            name: "Audio control: pavucontrol",
-            description: "Simple PipeWire/PulseAudio volume GUI.",
-            package: "pavucontrol",
+            category: "Terminal tools",
+            name: "Ripgrep",
+            description: "Fast recursive text search.",
+            package: "ripgrep",
         },
         AddonChoice {
-            category: "Tools",
-            name: "Bluetooth GUI: blueman",
-            description: "Bluetooth tray and device manager.",
-            package: "blueman",
+            category: "Terminal tools",
+            name: "Zoxide",
+            description: "Smarter cd command.",
+            package: "zoxide",
+        },
+        // Diagnostics
+        AddonChoice {
+            category: "Diagnostics",
+            name: "Mesa Utils",
+            description: "OpenGL information and debugging tools.",
+            package: "mesa-utils",
         },
         AddonChoice {
-            category: "Tools",
-            name: "EasyEffects",
-            description: "Audio effects and EQ.",
-            package: "easyeffects",
+            category: "Diagnostics",
+            name: "Vulkan Tools",
+            description: "Vulkan information and debugging tools.",
+            package: "vulkan-tools",
         },
         AddonChoice {
-            category: "Tools",
-            name: "Zenity",
-            description: "GUI dialogs for folder/file pickers.",
-            package: "zenity",
+            category: "Diagnostics",
+            name: "Sensors",
+            description: "Temperature and hardware sensor readings.",
+            package: "lm_sensors",
         },
     ]
 }
