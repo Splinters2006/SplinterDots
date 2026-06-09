@@ -618,26 +618,6 @@ Variants {{
       implicitHeight: {height}
       color: "transparent"
 
-      Process {
-        id: activeWorkspaceProc
-        command: ["sh", "-c", "hyprctl activeworkspace -j 2>/dev/null | sed -n 's/.*\"id\"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p'"]
-        running: true
-        stdout: StdioCollector {
-          onStreamFinished: {
-            var value = parseInt(this.text.trim())
-            if (!isNaN(value)) root.activeWorkspace = value
-          }
-        }
-      }
-
-      Timer {
-        interval: 700
-        running: true
-        repeat: true
-        onTriggered: activeWorkspaceProc.running = true
-      }
-
-
       Rectangle {{
         anchors.fill: parent
         radius: {radius}
