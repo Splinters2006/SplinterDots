@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if ! command -v spicetify >/dev/null 2>&1; then
+  echo "spicetify is not installed." >&2
+  exit 1
+fi
+
+if ! command -v spotify >/dev/null 2>&1; then
+  echo "spotify is not installed." >&2
+  exit 1
+fi
+
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/spicetify"
+theme_dir="$config_dir/Themes/SplinterDots"
+extensions_dir="$config_dir/Extensions"
+
+mkdir -p "$theme_dir" "$extensions_dir"
+
+if [ -d "$ROOT_DIR/files/spicetify/SplinterDots" ]; then
+  cp -r "$ROOT_DIR/files/spicetify/SplinterDots/." "$theme_dir/"
+fi
+
+if [ ! -f "$theme_dir/color.ini" ]; then
+  cat > "$theme_dir/color.ini" <<'THEME'
+[SplinterDots]
+text               = d3c6aa
+subtext            = a89984
+main               = 1e2427
+sidebar            = 263236
+player             = 263236
+card               = 323f43
+shadow             = 111820
+selected-row       = 3a494d
+button             = 89b4fa
+button-active      = 89b4fa
+button-disabled    = 5a6b70
+tab-active         = 3a494d
+notification       = 323f43
+notification-error = e67e80
+misc               = 3a494d
+THEME
+fi
+
+if [ ! -f "$theme_dir/user.css" ]; then
+  cat > "$theme_dir/user.css" <<'CSS'
+.Root,
+.Root__main-view,
+.Root__nav-bar,
+.Root__now-playing-bar {
+  background: #1e2427 !important;
+}
+
+.main-card-card {
+  background: #323f43 !important;
+  border-radius: 14px !important;
+}
+
+.main-card-card:hover {
+  background: #3a494d !important;
+}
+CSS
+fi
+
+if [ -d /opt/spotify ]; then
+  sudo chmod a+wr /opt/spotify || true
+  sudo chmod -R a+wr /opt/spotify/Apps || true
+fi
+
+spicetify config current_theme SplinterDots
+spicetify config color_scheme SplinterDots
+spicetify config inject_css 1
+spicetify config replace_colors 1
+spicetify config overwrite_assets 1
+
+spicetify backup || true
+spicetify apply
+spicetify update || true
+spicetify apply || true
+
+echo "Spicetify SplinterDots theme installed and applied."
