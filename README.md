@@ -8,6 +8,14 @@ Run from the repo root:
 ./apply_sleek_bar_update.sh
 ```
 
+#todo list
+make fonts actually work :sob:
+make fonts previewable
+make font buttons look less ass
+auto crop wallpapers to fit at native resolution
+all wallpapers previewable
+
+
 Then:
 
 ```bash

@@ -16,7 +16,6 @@ fi
 cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/splinterdots/wallpapers"
 mkdir -p "$cache_dir"
 
-# Get focused monitor size first. Fallback to first monitor.
 monitor_size="$(
   hyprctl monitors -j 2>/dev/null |
     jq -r '
@@ -26,20 +25,20 @@ monitor_size="$(
 )"
 
 if ! printf '%s' "$monitor_size" | grep -Eq '^[0-9]+x[0-9]+$'; then
-  # Fallback to common 16:9 if monitor detection fails.
   monitor_size="1920x1080"
 fi
 
 width="${monitor_size%x*}"
 height="${monitor_size#*x}"
 
+mtime="$(stat -c %Y "$input" 2>/dev/null || stat -f %m "$input")"
 hash="$(
-  printf '%s-%s-%s' "$input" "$width" "$height" "$(stat -c %Y "$input" 2>/dev/null || stat -f %m "$input")" |
+  printf '%s-%s-%s-%s' "$input" "$width" "$height" "$mtime" |
     sha256sum |
     awk '{print $1}'
 )"
 
-output="$cache_dir/${hash}.png"
+output="$cache_dir/${hash}-${width}x${height}.png"
 
 if [ ! -f "$output" ]; then
   magick "$input" \
@@ -47,6 +46,8 @@ if [ ! -f "$output" ]; then
     -resize "${width}x${height}^" \
     -gravity center \
     -extent "${width}x${height}" \
+    -strip \
+    -quality 100 \
     "$output"
 fi
 

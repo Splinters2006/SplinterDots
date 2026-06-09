@@ -31,7 +31,7 @@ Variants {
         right: 10
       }
 
-      implicitHeight: 34
+      implicitHeight: 40
       color: "transparent"
 
       Process {
@@ -54,7 +54,7 @@ Variants {
       }
 
       Timer {
-        interval: 120
+        interval: 40
         running: true
         repeat: true
         onTriggered: stateProc.running = true
@@ -62,7 +62,7 @@ Variants {
 
       Rectangle {
         anchors.fill: parent
-        radius: 8
+        radius: 28
         color: "#ea2d353b"
         border.width: 1
         border.color: "#3d484d"
@@ -80,10 +80,10 @@ Variants {
             Repeater {
               model: 5
               Rectangle {
-                width: (index + 1) === root.activeWorkspace ? 32 : 20
-                height: (index + 1) === root.activeWorkspace ? 32 : 20
+                width: (index + 1) === root.activeWorkspace ? 38 : 26
+                height: (index + 1) === root.activeWorkspace ? 38 : 26
                 anchors.verticalCenter: parent.verticalCenter
-                radius: 4
+                radius: 24
                 color: (index + 1) === root.activeWorkspace ? "#89b4fa" : "#3d484d"
                 opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.72
 

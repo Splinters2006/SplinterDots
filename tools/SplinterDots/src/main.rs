@@ -972,7 +972,7 @@ impl SplinterDots {
             Self::soft_card(theme, ui, |ui| {
                 ui.label(RichText::new("No wallpapers found in this folder.").color(theme.muted));
                 ui.label(
-                    RichText::new("Supported formats: png, jpg, jpeg, webp, gif, bmp")
+                    RichText::new("Supported formats: png, jpg, jpeg, webp, gif, bmp, tiff, avif")
                         .color(theme.muted)
                         .size(12.0),
                 );
@@ -984,71 +984,86 @@ impl SplinterDots {
         let images = self.wallpaper_images.clone();
         let mut clicked: Option<PathBuf> = None;
 
-        egui::Grid::new("wallpaper-preview-grid")
-            .num_columns(1)
-            .spacing([12.0, 12.0])
-            .show(ui, |ui| {
-                for (_index, path) in images.iter().enumerate() {
-                    let selected = path == &current;
-                    let texture = self.wallpaper_texture(ui.ctx(), path);
+        for path in images.iter() {
+            let selected = path == &current;
+            let texture = self.wallpaper_texture(ui.ctx(), path);
 
-                    Frame {
-                        fill: if selected {
-                            theme.card_hover
-                        } else {
-                            theme.panel_soft
-                        },
-                        corner_radius: CornerRadius::same(16),
-                        inner_margin: Margin::same(6),
-                        stroke: Stroke::new(
-                            if selected { 2.0 } else { 1.0 },
-                            if selected { theme.accent } else { theme.border },
-                        ),
-                        ..Default::default()
-                    }
-                    .show(ui, |ui| {
-                        let preview_width = (ui.available_width() - 18.0).min(360.0);
-                        let image_size = Vec2::new(preview_width, preview_width * 9.0 / 16.0);
-                        ui.set_min_width(image_size.x + 12.0);
+            let preview_width = 340.0_f32.min(ui.available_width() - 36.0);
+            let image_size = Vec2::new(preview_width, preview_width * 9.0 / 16.0);
 
-                        ui.vertical_centered(|ui| {
-                            let (rect, response) =
-                                ui.allocate_exact_size(image_size, egui::Sense::click());
+            let padding = 8.0;
+            let outer_size = Vec2::new(
+                image_size.x + padding * 2.0,
+                image_size.y + padding * 2.0,
+            );
 
-                        if let Some(texture) = texture {
-                            ui.painter().image(
-                                texture.id(),
-                                rect,
-                                egui::Rect::from_min_max(
-                                    egui::pos2(0.0, 0.0),
-                                    egui::pos2(1.0, 1.0),
-                                ),
-                                Color32::WHITE,
-                            );
-                        } else {
-                            ui.painter().rect_filled(
-                                rect,
-                                CornerRadius::same(10),
-                                theme.input,
-                            );
-                            ui.painter().text(
-                                rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                "Could not preview",
-                                FontId::proportional(14.0),
-                                theme.muted,
-                            );
-                        }
+            // Allocate exactly one row with the exact preview-card height.
+            // This prevents egui from vertically centering the wallpaper list
+            // inside a larger leftover area.
+            let row_width = ui.available_width();
+            let (row_rect, _) = ui.allocate_exact_size(
+                Vec2::new(row_width, outer_size.y),
+                egui::Sense::hover(),
+            );
 
-                            if response.clicked() {
-                                clicked = Some(path.clone());
-                            }
-                        });
-                    });
+            let outer_rect = egui::Rect::from_center_size(
+                egui::pos2(row_rect.center().x, row_rect.min.y + outer_size.y / 2.0),
+                outer_size,
+            );
 
-                    ui.end_row();
-                }
-            });
+            let response = ui.interact(
+                outer_rect,
+                ui.make_persistent_id(path.to_string_lossy()),
+                egui::Sense::click(),
+            );
+
+            ui.painter().rect(
+                outer_rect,
+                CornerRadius::same(14),
+                if selected { theme.card_hover } else { theme.panel_soft },
+                Stroke::new(
+                    if selected { 2.0 } else { 1.0 },
+                    if selected { theme.accent } else { theme.border },
+                ),
+                egui::StrokeKind::Inside,
+            );
+
+            let image_rect = egui::Rect::from_min_size(
+                outer_rect.min + egui::vec2(padding, padding),
+                image_size,
+            );
+
+            if let Some(texture) = texture {
+                ui.painter().image(
+                    texture.id(),
+                    image_rect,
+                    egui::Rect::from_min_max(
+                        egui::pos2(0.0, 0.0),
+                        egui::pos2(1.0, 1.0),
+                    ),
+                    Color32::WHITE,
+                );
+            } else {
+                ui.painter().rect_filled(
+                    image_rect,
+                    CornerRadius::same(10),
+                    theme.input,
+                );
+                ui.painter().text(
+                    image_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "Could not preview",
+                    FontId::proportional(14.0),
+                    theme.muted,
+                );
+            }
+
+            if response.clicked() {
+                clicked = Some(path.clone());
+            }
+
+            ui.add_space(6.0);
+        }
 
         if let Some(path) = clicked {
             self.set_value("DOTFILES_WALLPAPER", path.to_string_lossy().to_string());
@@ -1527,7 +1542,7 @@ misc               = 313244
                     .color(theme.muted),
             );
 
-            ui.add_space(12.0);
+            ui.add_space(8.0);
             ui.label(RichText::new("Search settings").color(theme.muted));
             ui.add_sized(
                 [ui.available_width(), 42.0],
@@ -1719,7 +1734,7 @@ misc               = 313244
                         });
                     });
 
-                    ui.add_space(12.0);
+                    ui.add_space(8.0);
 
                     for (index, keybind) in self.keybinds.iter().enumerate() {
                         let selected = self.selected_keybind == Some(index);
@@ -1752,7 +1767,7 @@ misc               = 313244
                         ui.add_space(8.0);
                     }
 
-                    ui.add_space(10.0);
+                    ui.add_space(6.0);
 
                     ui.horizontal_wrapped(|ui| {
                         if primary_button(ui, &theme, if self.keybind_changes_pending() { "Save changes *" } else { "Saved" }).clicked() {
@@ -1778,7 +1793,7 @@ misc               = 313244
                     ui.set_min_height(panel_height);
 
                     ui.label(RichText::new("Edit selected").strong().size(18.0));
-                    ui.add_space(12.0);
+                    ui.add_space(8.0);
 
                     let Some(index) = self.selected_keybind else {
                         ui.label(RichText::new("Select a keybind on the left to edit it.").color(theme.muted));
@@ -1804,7 +1819,7 @@ misc               = 313244
                             )
                             .changed();
 
-                        ui.add_space(10.0);
+                        ui.add_space(6.0);
 
                         
                         changed |= ui
@@ -1820,7 +1835,7 @@ misc               = 313244
                                 .size(11.0),
                         );
 
-                        ui.add_space(12.0);
+                        ui.add_space(8.0);
 
                         ui.label(RichText::new("Type").color(theme.muted));
                         egui::ComboBox::from_id_salt("keybind-kind-editor")
@@ -1842,7 +1857,7 @@ misc               = 313244
                                     .changed();
                             });
 
-                        ui.add_space(12.0);
+                        ui.add_space(8.0);
 
                         ui.label(RichText::new("What should happen").color(theme.muted));
                         changed |= ui
@@ -1908,7 +1923,7 @@ misc               = 313244
                             RichText::new("Choose the overall SplinterDots look.")
                                 .color(theme.muted),
                         );
-                        ui.add_space(12.0);
+                        ui.add_space(8.0);
 
                         let mut theme_value = self.value("DOTFILES_THEME");
 
@@ -1944,7 +1959,7 @@ misc               = 313244
                         labeled_text(ui, "Accent color", &mut accent);
                         self.set_value("DOTFILES_ACCENT", accent);
 
-                        ui.add_space(12.0);
+                        ui.add_space(8.0);
 
                         if primary_button(ui, &theme, "Apply theme").clicked() {
                             self.save_all();
@@ -1959,7 +1974,7 @@ misc               = 313244
                             RichText::new("Choose a folder and click a wallpaper preview.")
                                 .color(theme.muted),
                         );
-                        ui.add_space(10.0);
+                        ui.add_space(6.0);
 
                         let mut wallpaper_dir = self.value("DOTFILES_WALLPAPER_DIR");
                         ui.label(RichText::new("Wallpaper folder").color(theme.muted));
@@ -1994,7 +2009,7 @@ misc               = 313244
                             }
                         });
 
-                        ui.add_space(12.0);
+                        ui.add_space(8.0);
 
                         let current = self.value("DOTFILES_WALLPAPER");
                         if !current.trim().is_empty() {
@@ -2002,16 +2017,9 @@ misc               = 313244
                                 RichText::new(format!("Current: {}", shorten_text(&current, 48)))
                                     .color(theme.muted),
                             );
-                            ui.add_space(8.0);
                         }
 
-                        ScrollArea::vertical()
-                            .id_salt("appearance-wallpaper-scroll")
-                            .max_height(520.0)
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                self.wallpaper_grid(ui, &theme);
-                            });
+                        self.wallpaper_grid(ui, &theme);
                     });
 
                     // COLUMN 3: Fonts
@@ -2401,7 +2409,7 @@ misc               = 313244
                     self.widget_zone_editor(&mut columns[2], &theme, "Right", "right");
                 });
 
-                ui.add_space(12.0);
+                ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
                     if primary_button(ui, &theme, "Save and restart bar").clicked() {
@@ -2457,7 +2465,7 @@ misc               = 313244
             Self::card(&theme, ui, |ui| {
                 ui.label(RichText::new("Widget details").strong().size(18.0));
                 ui.label(RichText::new("These only apply when the matching widget is placed in the visual layout above.").color(theme.muted));
-                ui.add_space(10.0);
+                ui.add_space(6.0);
 
                 let mut fmt = self.value("DOTFILES_WIDGET_CLOCK_FORMAT");
                 labeled_text(ui, "Clock format", &mut fmt);
@@ -2498,7 +2506,7 @@ misc               = 313244
                     )
                     .color(theme.muted),
                 );
-                ui.add_space(10.0);
+                ui.add_space(6.0);
 
                 egui::Grid::new("widget_enable_grid")
                     .num_columns(2)
@@ -2598,7 +2606,7 @@ misc               = 313244
             ui.label(
                 RichText::new("These are used by keybinds and helper actions.").color(theme.muted),
             );
-            ui.add_space(10.0);
+            ui.add_space(6.0);
 
             for (label, key) in [
                 ("Terminal", "DOTFILES_TERMINAL"),
@@ -2615,7 +2623,7 @@ misc               = 313244
 
         Self::card(&theme, ui, |ui| {
             ui.label(RichText::new("Quick actions").strong().size(18.0));
-            ui.add_space(10.0);
+            ui.add_space(6.0);
 
             ui.horizontal(|ui| {
                 if ui.button("Open dotfiles folder").clicked() {
@@ -3735,6 +3743,16 @@ fn cover_uv(image_size: Vec2, target_size: Vec2) -> egui::Rect {
 }
 
 
+
+
+fn wallpaper_runtime_path(path: &Path) -> PathBuf {
+    let preview = wallpaper_preview_cache_path(path);
+    if preview.exists() {
+        preview
+    } else {
+        path.to_path_buf()
+    }
+}
 
 fn wallpaper_preview_cache_path(path: &Path) -> PathBuf {
     let cache_home = env::var_os("XDG_CACHE_HOME")

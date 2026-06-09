@@ -63,3 +63,4 @@ libnotify
 nano
 imagemagick
 jq
+libheif

@@ -1,0 +1,165 @@
+/**
+ * @name SplinterDots
+ * @author Splinters2006
+ * @description SplinterDots themed Vesktop/Vencord theme.
+ * @version 1.0.0
+ */
+
+:root {
+  --splinter-bg: #1e2427;
+  --splinter-bg-soft: #263236;
+  --splinter-panel: #323f43;
+  --splinter-panel-soft: #3a494d;
+  --splinter-card: #3d4c50;
+  --splinter-card-hover: #46575c;
+  --splinter-border: #5a6b70;
+  --splinter-text: #d3c6aa;
+  --splinter-muted: #a89984;
+  --splinter-accent: #89b4fa;
+  --splinter-danger: #e67e80;
+  --splinter-success: #a7c080;
+}
+
+/* Main app background */
+.appMount__51fd7,
+.app__160d8,
+.bg__960e4,
+.container__2637a,
+.sidebar_c48ade,
+.panels_c48ade,
+.chat_f75fb0,
+.chatContent_f75fb0,
+.container_f369db,
+.content_f75fb0,
+.page_c48ade {
+  background: var(--splinter-bg) !important;
+}
+
+/* Server/channel/member panels */
+.guilds_c48ade,
+.sidebar_c48ade,
+.privateChannels__35e86,
+.container__2637a,
+.members_c8ffbb,
+.membersWrap_c8ffbb {
+  background: var(--splinter-bg-soft) !important;
+}
+
+/* Cards, modals, popouts */
+.theme-dark .root__49fc1,
+.layer__960e4,
+.menu_c1e9c4,
+.userPopoutOuter_c69a7b,
+.container__55c99,
+.messagesPopoutWrap__45690,
+.drawerSizingWrapper__08434,
+.contentWrapper__08434,
+.quickswitcher_ac6cb0 {
+  background: var(--splinter-panel) !important;
+  border: 1px solid var(--splinter-border) !important;
+  border-radius: 16px !important;
+}
+
+/* Chat messages */
+.message__5126c,
+.messageListItem__5126c {
+  background: transparent !important;
+}
+
+.message__5126c:hover {
+  background: var(--splinter-panel-soft) !important;
+  border-radius: 12px !important;
+}
+
+/* Input box */
+.channelTextArea_f75fb0,
+.scrollableContainer__74017,
+.themedBackground__74017 {
+  background: var(--splinter-panel-soft) !important;
+  border-radius: 16px !important;
+  border: 1px solid var(--splinter-border) !important;
+}
+
+/* Search and small inputs */
+.searchBar__97492,
+.searchBarComponent__35e86,
+.input__0f084,
+.inputDefault_f8bc55 {
+  background: var(--splinter-bg) !important;
+  color: var(--splinter-text) !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--splinter-border) !important;
+}
+
+/* Channel list items */
+.wrapper__2ea32,
+.link__2ea32,
+.interactive_bf202d {
+  border-radius: 12px !important;
+}
+
+.wrapper__2ea32:hover .link__2ea32,
+.interactive_bf202d:hover {
+  background: var(--splinter-panel-soft) !important;
+}
+
+.modeSelected__2ea32 .link__2ea32,
+.interactiveSelected_bf202d {
+  background: color-mix(in srgb, var(--splinter-accent) 28%, var(--splinter-panel)) !important;
+}
+
+/* Buttons */
+.button__201d5,
+.lookFilled__201d5.colorBrand__201d5 {
+  background: var(--splinter-accent) !important;
+  color: #ffffff !important;
+  border-radius: 12px !important;
+}
+
+.button__201d5:hover,
+.lookFilled__201d5.colorBrand__201d5:hover {
+  filter: brightness(1.08) !important;
+}
+
+/* Text */
+body,
+.markup__75297,
+.name__2ea32,
+.title_f75fb0,
+.headerText_c19a55,
+.username_c19a55 {
+  color: var(--splinter-text) !important;
+}
+
+.text-sm-normal__95a78,
+.subtext__339d0,
+.topic__6ec1a,
+.timestamp_c19a55,
+.description__5d473 {
+  color: var(--splinter-muted) !important;
+}
+
+/* Mentions and links */
+.mention,
+.anchor_edefb8,
+.fakeLink_ada32f {
+  color: var(--splinter-accent) !important;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 10px !important;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--splinter-bg) !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--splinter-border) !important;
+  border-radius: 999px !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--splinter-accent) !important;
+}
