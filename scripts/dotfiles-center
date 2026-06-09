@@ -789,10 +789,25 @@ class Toggle(tk.Canvas):
     KNOB = "#ffffff"
 
     def __init__(self, parent, variable: tk.BooleanVar, **kwargs):
-        super().__init__(parent, width=self.W, height=self.H,
-                         highlightthickness=0, bd=0,
-                         bg=parent["bg"] if hasattr(parent, "__getitem__") else "#1f2937",
-                         **kwargs)
+        bg = kwargs.pop("bg", None)
+        if bg is None:
+            try:
+                bg = parent.cget("bg")
+            except tk.TclError:
+                try:
+                    bg = parent.cget("background")
+                except tk.TclError:
+                    bg = "#1f2937"
+
+        super().__init__(
+            parent,
+            width=self.W,
+            height=self.H,
+            highlightthickness=0,
+            bd=0,
+            bg=bg,
+            **kwargs,
+        )
         self._var = variable
         self._draw()
         self.bind("<Button-1>", self._toggle)
