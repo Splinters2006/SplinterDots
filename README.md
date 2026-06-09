@@ -64,6 +64,9 @@ Update the dotfiles repo and re-apply links:
 ./install.sh --upd
 ```
 
+After `--upd` or `--all`, Dotfiles Center is shown again on next graphical
+login so users can see what changed.
+
 After installation, open a new terminal or reload your shell:
 
 ```sh

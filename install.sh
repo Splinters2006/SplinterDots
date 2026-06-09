@@ -274,6 +274,22 @@ write_git_user_config() {
   log "wrote: $dest"
 }
 
+reenable_welcome_after_update() {
+  local disabled_file="$HOME_DIR/.config/dotfiles/welcome-disabled"
+
+  if [ "$UPDATE_DOTFILES" -ne 1 ]; then
+    return
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] rm -f $disabled_file"
+    return
+  fi
+
+  rm -f "$disabled_file"
+  log "re-enabled Dotfiles Center startup popup after update"
+}
+
 link_file() {
   local src="$1"
   local dest="$2"
@@ -332,6 +348,7 @@ done
 
 link_file "$ROOT_DIR/config/dotfiles/settings.conf" "$HOME_DIR/.config/dotfiles/settings.conf"
 write_git_user_config
+reenable_welcome_after_update
 
 run mkdir -p "$HOME_DIR/.local/bin"
 link_file "$ROOT_DIR/scripts/dotctl" "$HOME_DIR/.local/bin/dotctl"
