@@ -147,6 +147,7 @@ dotctl aur
 dotctl system
 dotctl welcome
 dotctl center
+dotctl doctor
 ```
 
 ## Default Hyprland Keybinds
@@ -190,6 +191,26 @@ EasyEffects starts with Hyprland and includes two presets:
 Open EasyEffects from the launcher, go to the Output and Input tabs, and select
 the matching preset. Presets are deliberately conservative because every mic,
 headset, and speaker is different.
+
+## Hyprland Crash Recovery
+
+If Hyprland crashes or prints many Aquamarine errors on a clean install, switch
+to a TTY with `Ctrl + Alt + F3`, log in, and run:
+
+```sh
+dotctl doctor
+```
+
+Aquamarine errors are usually graphics/session backend problems. This setup
+installs the common Mesa/Vulkan userspace packages for Intel and AMD graphics,
+but NVIDIA systems still need the matching `nvidia` or `nvidia-dkms` driver
+stack for the installed kernel.
+
+The installer avoids replacing `~/.config/hypr/*` while Hyprland is already
+running because live config reloads can crash a fragile first session. Run the
+installer from a TTY or after reboot for safest Hyprland config updates. Use
+`--live-hypr` only when you intentionally want to force a live Hyprland config
+replacement.
 
 ## Layout
 

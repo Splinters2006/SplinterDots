@@ -8,6 +8,7 @@ xdg-user-dirs
 xdg-utils
 noto-fonts
 ttf-dejavu
+pciutils
 
 # Shell and prompt
 zsh
@@ -17,6 +18,11 @@ starship
 # Hyprland desktop
 hyprland
 xorg-xwayland
+mesa
+mesa-utils
+libva-mesa-driver
+vulkan-icd-loader
+vulkan-tools
 xdg-desktop-portal
 xdg-desktop-portal-hyprland
 waybar

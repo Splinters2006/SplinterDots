@@ -333,6 +333,7 @@ run mkdir -p "$HOME_DIR/.local/bin"
 link_file "$ROOT_DIR/scripts/dotctl" "$HOME_DIR/.local/bin/dotctl"
 link_file "$ROOT_DIR/scripts/dotfiles-center" "$HOME_DIR/.local/bin/dotfiles-center"
 link_file "$ROOT_DIR/scripts/dotfiles-hypr-autostart" "$HOME_DIR/.local/bin/dotfiles-hypr-autostart"
+link_file "$ROOT_DIR/scripts/dotfiles-hypr-doctor" "$HOME_DIR/.local/bin/dotfiles-hypr-doctor"
 link_file "$ROOT_DIR/scripts/dotfiles-welcome" "$HOME_DIR/.local/bin/dotfiles-welcome"
 link_file "$ROOT_DIR/scripts/dotfiles-wallpaper" "$HOME_DIR/.local/bin/dotfiles-wallpaper"
 

@@ -19,6 +19,7 @@ Commands:
   system      Configure greetd and enable desktop services
   welcome     Show the startup welcome tour now
   center      Open the graphical Dotfiles Center
+  doctor      Print Hyprland, graphics, and service diagnostics
   uninstall   Remove symlinks created by these dotfiles
   help        Show this help
 
@@ -95,6 +96,15 @@ status() {
     printf 'missing %s\n' "$autostart_dest"
   fi
 
+  doctor_dest="$HOME/.local/bin/dotfiles-hypr-doctor"
+  if [ -L "$doctor_dest" ] && [ "$(readlink "$doctor_dest")" = "$ROOT_DIR/scripts/dotfiles-hypr-doctor" ]; then
+    printf 'linked  %s\n' "$doctor_dest"
+  elif [ -e "$doctor_dest" ] || [ -L "$doctor_dest" ]; then
+    printf 'custom  %s\n' "$doctor_dest"
+  else
+    printf 'missing %s\n' "$doctor_dest"
+  fi
+
   if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/welcome-disabled" ]; then
     printf 'disabled startup welcome tour\n'
   else
@@ -138,6 +148,10 @@ center() {
   "$ROOT_DIR/scripts/dotfiles-center" --force
 }
 
+doctor() {
+  "$ROOT_DIR/scripts/dotfiles-hypr-doctor"
+}
+
 uninstall() {
   find "$ROOT_DIR/home" -type f -print | while IFS= read -r src; do
     rel="${src#"$ROOT_DIR/home/"}"
@@ -178,6 +192,11 @@ uninstall() {
     rm "$HOME/.local/bin/dotfiles-hypr-autostart"
     printf 'removed %s\n' "$HOME/.local/bin/dotfiles-hypr-autostart"
   fi
+
+  if [ -L "$HOME/.local/bin/dotfiles-hypr-doctor" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-hypr-doctor")" = "$ROOT_DIR/scripts/dotfiles-hypr-doctor" ]; then
+    rm "$HOME/.local/bin/dotfiles-hypr-doctor"
+    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-hypr-doctor"
+  fi
 }
 
 cmd="${1:-help}"
@@ -195,6 +214,7 @@ case "$cmd" in
   system) system_setup "$@" ;;
   welcome) welcome ;;
   center) center ;;
+  doctor) doctor ;;
   uninstall) uninstall ;;
   help|-h|--help) usage ;;
   *)
