@@ -6,6 +6,7 @@ CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 LOG_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/hyprland"
 LOG_FILE="$LOG_DIR/dotfiles-hyprland-$(date +%Y%m%d-%H%M%S).log"
 HYPRLAND_COMMAND="${DOTFILES_HYPRLAND_COMMAND:-Hyprland}"
+REAL_START_HYPRLAND="${DOTFILES_REAL_START_HYPRLAND:-}"
 
 mkdir -p "$LOG_DIR"
 
@@ -19,13 +20,14 @@ if [ -f "$CONFIG_HOME/dotfiles/local.conf" ]; then
   . "$CONFIG_HOME/dotfiles/local.conf"
 fi
 
-export XDG_SESSION_TYPE=wayland
-export XDG_CURRENT_DESKTOP=Hyprland
-export XDG_SESSION_DESKTOP=Hyprland
-export GDK_BACKEND=wayland,x11
-export QT_QPA_PLATFORM="wayland;xcb"
-export SDL_VIDEODRIVER=wayland
-export CLUTTER_BACKEND=wayland
+if [ -z "$REAL_START_HYPRLAND" ]; then
+  for candidate in /usr/bin/start-hyprland /bin/start-hyprland; do
+    if [ -x "$candidate" ] && [ "$(readlink -f "$candidate")" != "$(readlink -f "$0")" ]; then
+      REAL_START_HYPRLAND="$candidate"
+      break
+    fi
+  done
+fi
 
 if lsmod 2>/dev/null | grep -q '^nvidia'; then
   export GBM_BACKEND=nvidia-drm
@@ -38,14 +40,28 @@ if [ "${DOTFILES_ALLOW_SOFTWARE_RENDERER:-0}" = "1" ]; then
 fi
 
 {
-  printf 'Starting Hyprland through start-hyprland at %s\n' "$(date -Is)"
+  printf 'Starting Hyprland at %s\n' "$(date -Is)"
   printf 'Log file: %s\n' "$LOG_FILE"
-  printf 'XDG_SESSION_TYPE=%s\n' "$XDG_SESSION_TYPE"
-  printf 'XDG_CURRENT_DESKTOP=%s\n' "$XDG_CURRENT_DESKTOP"
-  printf 'Hyprland command: %s\n' "$HYPRLAND_COMMAND"
+  if [ -n "$REAL_START_HYPRLAND" ]; then
+    printf 'Delegating to packaged start-hyprland: %s\n' "$REAL_START_HYPRLAND"
+  else
+    printf 'Packaged start-hyprland was not found; falling back to: %s\n' "$HYPRLAND_COMMAND"
+  fi
   printf 'GPU summary:\n'
   command -v lspci >/dev/null 2>&1 && lspci | grep -Ei 'vga|3d|display' || true
   printf '\n--- Hyprland output ---\n'
 } > "$LOG_FILE"
 
-exec $HYPRLAND_COMMAND >> "$LOG_FILE" 2>&1
+if [ -n "$REAL_START_HYPRLAND" ]; then
+  exec "$REAL_START_HYPRLAND" "$@" >> "$LOG_FILE" 2>&1
+fi
+
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=Hyprland
+export XDG_SESSION_DESKTOP=Hyprland
+export GDK_BACKEND=wayland,x11
+export QT_QPA_PLATFORM="wayland;xcb"
+export SDL_VIDEODRIVER=wayland
+export CLUTTER_BACKEND=wayland
+
+exec $HYPRLAND_COMMAND "$@" >> "$LOG_FILE" 2>&1
