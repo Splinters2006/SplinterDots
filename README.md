@@ -71,8 +71,9 @@ exec "$SHELL"
 ```
 
 On graphical desktop login, Dotfiles Center appears. It explains keybinds and
-lets you change wallpaper, colors, apps, and common Hyprland keybinds without
-hand-editing config files. Click `Don't show this on startup` to disable it.
+lets you change wallpaper, colors, Waybar layout, apps, and common Hyprland
+keybinds without hand-editing config files. Click `Don't show this on startup`
+to disable it.
 
 ## Customize
 
@@ -175,6 +176,10 @@ All keybinds use the `Super` / Windows key.
 
 Use `dotctl center` to change wallpaper, colors, apps, and keybinds
 graphically.
+
+The `Bar` tab in Dotfiles Center writes `~/.config/waybar/config` and
+`~/.config/waybar/style.css`. It can move the bar, round corners, change
+height/opacity, move workspaces and the clock, and reorder right-side modules.
 
 ## Audio And Bluetooth
 

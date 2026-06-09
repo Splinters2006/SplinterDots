@@ -7,13 +7,15 @@
 }
 
 window#waybar {
-  background: #1e1e2e;
+  background: rgba(30, 30, 46, 0.92);
   color: #cdd6f4;
+  border-radius: 8px;
 }
 
 #workspaces button {
   color: #cdd6f4;
   padding: 0 10px;
+  border-radius: 6px;
 }
 
 #workspaces button.active {

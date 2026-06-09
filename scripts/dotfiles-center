@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import json
 import re
 import subprocess
 import sys
@@ -16,6 +17,9 @@ DISABLED_FILE = DOTFILES_DIR / "welcome-disabled"
 HYPR_DIR = CONFIG_HOME / "hypr"
 HYPR_COLORS = HYPR_DIR / "colors.conf"
 HYPR_KEYBINDS = HYPR_DIR / "keybindings.conf"
+WAYBAR_DIR = CONFIG_HOME / "waybar"
+WAYBAR_CONFIG = WAYBAR_DIR / "config"
+WAYBAR_STYLE = WAYBAR_DIR / "style.css"
 
 DEFAULTS = {
     "DOTFILES_EDITOR": "nano",
@@ -26,6 +30,13 @@ DEFAULTS = {
     "DOTFILES_TERMINAL": "kitty",
     "DOTFILES_FILE_MANAGER": "thunar",
     "DOTFILES_APP_LAUNCHER": "wofi --show drun",
+    "DOTFILES_BAR_POSITION": "top",
+    "DOTFILES_BAR_HEIGHT": "34",
+    "DOTFILES_BAR_RADIUS": "8",
+    "DOTFILES_BAR_OPACITY": "0.92",
+    "DOTFILES_BAR_WORKSPACES": "left",
+    "DOTFILES_BAR_CLOCK": "center",
+    "DOTFILES_BAR_RIGHT": "pulseaudio,network,battery,tray",
 }
 
 KEYBIND_ACTIONS = [
@@ -142,22 +153,156 @@ def write_keybinds(values: dict, key_values: dict) -> None:
     HYPR_KEYBINDS.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def clamp_int(value: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        number = int(float(value))
+    except ValueError:
+        number = default
+    return max(minimum, min(maximum, number))
+
+
+def clamp_float(value: str, default: float, minimum: float, maximum: float) -> float:
+    try:
+        number = float(value)
+    except ValueError:
+        number = default
+    return max(minimum, min(maximum, number))
+
+
+def write_waybar(values: dict) -> None:
+    WAYBAR_DIR.mkdir(parents=True, exist_ok=True)
+
+    position = values.get("DOTFILES_BAR_POSITION", "top")
+    if position not in {"top", "bottom"}:
+        position = "top"
+
+    workspace_side = values.get("DOTFILES_BAR_WORKSPACES", "left")
+    clock_side = values.get("DOTFILES_BAR_CLOCK", "center")
+    height = clamp_int(values.get("DOTFILES_BAR_HEIGHT", "34"), 34, 24, 72)
+    radius = clamp_int(values.get("DOTFILES_BAR_RADIUS", "8"), 8, 0, 28)
+    opacity = clamp_float(values.get("DOTFILES_BAR_OPACITY", "0.92"), 0.92, 0.2, 1.0)
+
+    right_modules = [
+        module.strip()
+        for module in values.get("DOTFILES_BAR_RIGHT", "pulseaudio,network,battery,tray").split(",")
+        if module.strip()
+    ]
+
+    left: list[str] = []
+    center: list[str] = []
+    right: list[str] = []
+
+    if workspace_side == "center":
+        center.append("hyprland/workspaces")
+    elif workspace_side == "right":
+        right.append("hyprland/workspaces")
+    else:
+        left.append("hyprland/workspaces")
+
+    if clock_side == "left":
+        left.append("clock")
+    elif clock_side == "right":
+        right.append("clock")
+    else:
+        center.append("clock")
+
+    right.extend(right_modules)
+
+    config = {
+        "layer": "top",
+        "position": position,
+        "height": height,
+        "margin-top": 8 if position == "top" else 0,
+        "margin-bottom": 8 if position == "bottom" else 0,
+        "margin-left": 10,
+        "margin-right": 10,
+        "modules-left": left,
+        "modules-center": center,
+        "modules-right": right,
+        "hyprland/workspaces": {
+            "disable-scroll": True,
+            "all-outputs": True,
+        },
+        "clock": {
+            "format": "{:%a %d %b  %H:%M}",
+        },
+        "pulseaudio": {
+            "format": "VOL {volume}%",
+            "format-muted": "MUTED",
+        },
+        "network": {
+            "format-wifi": "NET {essid}",
+            "format-ethernet": "NET wired",
+            "format-disconnected": "NET off",
+        },
+        "battery": {
+            "format": "BAT {capacity}%",
+        },
+    }
+    WAYBAR_CONFIG.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    alpha = f"{opacity:.2f}"
+    style = f"""* {{
+  border: none;
+  border-radius: 0;
+  font-family: sans-serif;
+  font-size: 13px;
+  min-height: 0;
+}}
+
+window#waybar {{
+  background: rgba(30, 30, 46, {alpha});
+  color: #cdd6f4;
+  border-radius: {radius}px;
+}}
+
+#workspaces button {{
+  color: #cdd6f4;
+  padding: 0 10px;
+  border-radius: {max(0, radius - 2)}px;
+}}
+
+#workspaces button.active {{
+  background: {values.get("DOTFILES_ACCENT", "#89b4fa")};
+  color: #11111b;
+}}
+
+#clock,
+#pulseaudio,
+#network,
+#battery,
+#tray {{
+  padding: 0 12px;
+}}
+"""
+    WAYBAR_STYLE.write_text(style, encoding="utf-8")
+
+
 def run_quiet(command: list[str]) -> None:
     try:
-      subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
-      pass
+        pass
 
 
 class DotfilesCenter(tk.Tk):
+    bg = "#111827"
+    panel = "#172033"
+    card = "#1f2937"
+    card_soft = "#243044"
+    text = "#e5e7eb"
+    muted = "#9ca3af"
+    accent = "#89b4fa"
+    accent_dark = "#2563eb"
+
     def __init__(self, force: bool) -> None:
         super().__init__()
         self.force = force
         self.values = read_local_conf()
         self.title("Dotfiles Center")
-        self.geometry("820x620")
-        self.minsize(760, 560)
-        self.configure(bg="#f4f6f8")
+        self.geometry("920x680")
+        self.minsize(820, 600)
+        self.configure(bg=self.bg)
 
         self.vars = {key: tk.StringVar(value=value) for key, value in self.values.items()}
         self.key_vars = {
@@ -166,26 +311,105 @@ class DotfilesCenter(tk.Tk):
         }
         self.no_show_var = tk.BooleanVar(value=DISABLED_FILE.exists())
 
+        self._setup_style()
         self._build()
 
+    def _setup_style(self) -> None:
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        def configure(name: str, **options: object) -> None:
+            try:
+                style.configure(name, **options)
+            except tk.TclError:
+                pass
+
+        def map_style(name: str, **options: object) -> None:
+            try:
+                style.map(name, **options)
+            except tk.TclError:
+                pass
+
+        configure(".", font=("Sans", 10), background=self.bg, foreground=self.text)
+        configure("Root.TFrame", background=self.bg)
+        configure("Panel.TFrame", background=self.panel)
+        configure("Card.TFrame", background=self.card, relief="flat")
+        configure("Soft.TFrame", background=self.card_soft)
+        configure("Title.TLabel", background=self.bg, foreground=self.text, font=("Sans", 24, "bold"))
+        configure("Subtitle.TLabel", background=self.bg, foreground=self.muted, font=("Sans", 11))
+        configure("Heading.TLabel", background=self.card, foreground=self.text, font=("Sans", 14, "bold"))
+        configure("Body.TLabel", background=self.card, foreground=self.muted, font=("Sans", 10))
+        configure("Muted.TLabel", background=self.bg, foreground=self.muted)
+        configure("Card.TLabel", background=self.card, foreground=self.text)
+        configure("CardMuted.TLabel", background=self.card, foreground=self.muted)
+
+        configure(
+            "Accent.TButton",
+            background=self.accent_dark,
+            foreground="#ffffff",
+            borderwidth=0,
+            focusthickness=0,
+            padding=(14, 9),
+        )
+        map_style("Accent.TButton", background=[("active", "#3b82f6"), ("pressed", "#1d4ed8")])
+        configure("TButton", padding=(12, 8), borderwidth=0)
+        configure("TCheckbutton", background=self.bg, foreground=self.text)
+        map_style("TCheckbutton", background=[("active", self.bg)])
+
+        configure(
+            "TNotebook",
+            background=self.bg,
+            borderwidth=0,
+            tabmargins=(0, 8, 0, 0),
+        )
+        configure(
+            "TNotebook.Tab",
+            background=self.panel,
+            foreground=self.muted,
+            padding=(18, 10),
+            borderwidth=0,
+        )
+        map_style(
+            "TNotebook.Tab",
+            background=[("selected", self.card)],
+            foreground=[("selected", self.text), ("active", self.text)],
+        )
+        configure("TEntry", fieldbackground="#0f172a", foreground=self.text, padding=8)
+        configure("TCombobox", fieldbackground="#0f172a", foreground=self.text, padding=8)
+
+    def _card(self, parent: tk.Widget, padding: int = 16) -> ttk.Frame:
+        card = ttk.Frame(parent, style="Card.TFrame", padding=padding)
+        card.pack(fill="x", pady=(0, 14))
+        return card
+
+    def _card_title(self, parent: tk.Widget, title: str, body: str | None = None) -> None:
+        ttk.Label(parent, text=title, style="Heading.TLabel").pack(anchor="w")
+        if body:
+            ttk.Label(parent, text=body, style="Body.TLabel", wraplength=760).pack(anchor="w", pady=(5, 0))
+
     def _build(self) -> None:
-        header = ttk.Frame(self, padding=(18, 16, 18, 8))
+        header = ttk.Frame(self, style="Root.TFrame", padding=(26, 24, 26, 8))
         header.pack(fill="x")
-        ttk.Label(header, text="Dotfiles Center", font=("Sans", 20, "bold")).pack(anchor="w")
+        ttk.Label(header, text="Dotfiles Center", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             header,
-            text="Hyprland setup, keybinds, wallpaper, colors, and beginner-friendly controls.",
-        ).pack(anchor="w", pady=(4, 0))
+            text="A friendly control panel for Hyprland, appearance, keybinds, audio, and setup.",
+            style="Subtitle.TLabel",
+        ).pack(anchor="w", pady=(6, 0))
 
         notebook = ttk.Notebook(self)
-        notebook.pack(fill="both", expand=True, padx=18, pady=12)
+        notebook.pack(fill="both", expand=True, padx=26, pady=12)
 
         self._overview_tab(notebook)
         self._keybinds_tab(notebook)
         self._appearance_tab(notebook)
+        self._bar_tab(notebook)
         self._setup_tab(notebook)
 
-        footer = ttk.Frame(self, padding=(18, 0, 18, 16))
+        footer = ttk.Frame(self, style="Root.TFrame", padding=(26, 2, 26, 22))
         footer.pack(fill="x")
         ttk.Checkbutton(
             footer,
@@ -193,18 +417,53 @@ class DotfilesCenter(tk.Tk):
             variable=self.no_show_var,
             command=self.save_startup_choice,
         ).pack(side="left")
-        ttk.Button(footer, text="Save all changes", command=self.save_all).pack(side="right")
+        ttk.Button(footer, text="Save changes", style="Accent.TButton", command=self.save_all).pack(side="right")
 
     def _overview_tab(self, notebook: ttk.Notebook) -> None:
-        frame = ttk.Frame(notebook, padding=16)
+        frame = ttk.Frame(notebook, style="Panel.TFrame", padding=18)
         notebook.add(frame, text="Overview")
 
-        text = tk.Text(frame, wrap="word", height=18, relief="flat", bg="#ffffff", padx=14, pady=12)
+        hero = self._card(frame, padding=20)
+        self._card_title(
+            hero,
+            "Your Arch desktop, ready to shape",
+            "This setup turns a minimal Arch install into a complete Hyprland desktop with clear controls instead of hidden config chores.",
+        )
+
+        quick = ttk.Frame(hero, style="Card.TFrame")
+        quick.pack(fill="x", pady=(18, 0))
+        quick_items = [
+            ("Super + D", "Open apps"),
+            ("Super + Return", "Terminal"),
+            ("Super + W", "Dotfiles Center"),
+            ("Super + Shift + R", "Reload Hyprland"),
+        ]
+        for column, (key, label) in enumerate(quick_items):
+            tile = ttk.Frame(quick, style="Soft.TFrame", padding=(14, 10))
+            tile.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 8, 0))
+            ttk.Label(tile, text=key, background=self.card_soft, foreground=self.text, font=("Sans", 11, "bold")).pack(anchor="w")
+            ttk.Label(tile, text=label, background=self.card_soft, foreground=self.muted).pack(anchor="w", pady=(3, 0))
+            quick.columnconfigure(column, weight=1)
+
+        details = self._card(frame)
+        self._card_title(details, "What --all installs")
+        text = tk.Text(
+            details,
+            wrap="word",
+            height=13,
+            relief="flat",
+            bg=self.card,
+            fg=self.text,
+            insertbackground=self.text,
+            padx=0,
+            pady=10,
+            borderwidth=0,
+            highlightthickness=0,
+            font=("Sans", 10),
+        )
         text.pack(fill="both", expand=True)
         text.insert(
             "1.0",
-            "This setup is built for Hyprland on a clean minimal Arch install.\n\n"
-            "What --all installs:\n"
             "- Hyprland window manager\n"
             "- Waybar top bar\n"
             "- Wofi app launcher\n"
@@ -212,31 +471,31 @@ class DotfilesCenter(tk.Tk):
             "- Kitty terminal\n"
             "- Thunar file manager\n"
             "- Firefox browser\n"
-            "- Screenshot, clipboard, wallpaper, audio, network, portal, and login tools\n\n"
-            "Important commands:\n"
-            "- Super + D opens the app launcher\n"
-            "- Super + Return opens the terminal\n"
-            "- Super + W opens this Dotfiles Center\n"
-            "- Super + Shift + R reloads Hyprland after config changes\n"
-            "- dotctl all updates, installs packages, and applies dotfiles\n"
-            "- dotctl status shows what is linked\n\n"
-            "After installing from a TTY, start Hyprland with: Hyprland\n"
-            "If you enable greetd, you can log into Hyprland from a graphical login prompt.",
+            "- Screenshot, clipboard, wallpaper, audio, network, portal, Bluetooth, and login tools\n\n"
+            "Useful terminal commands:\n"
+            "- dotctl all: update, install, configure, and apply\n"
+            "- dotctl status: show linked files\n"
+            "- dotctl doctor: debug Hyprland and graphics issues",
         )
         text.configure(state="disabled")
 
     def _keybinds_tab(self, notebook: ttk.Notebook) -> None:
-        frame = ttk.Frame(notebook, padding=16)
+        frame = ttk.Frame(notebook, style="Panel.TFrame", padding=18)
         notebook.add(frame, text="Keybinds")
 
-        ttk.Label(frame, text="Main modifier: Super / Windows key", font=("Sans", 12, "bold")).pack(anchor="w")
-        ttk.Label(frame, text="Change the keys below, then click Save all changes. Hyprland can reload with Super + D then search Reload, or log out and back in.").pack(anchor="w", pady=(0, 10))
+        intro = self._card(frame)
+        self._card_title(
+            intro,
+            "Keybinds",
+            "Main modifier: Super / Windows key. Change the keys below, save, then press Super + Shift + R to reload Hyprland.",
+        )
 
-        table = ttk.Frame(frame)
+        table_card = self._card(frame)
+        table = ttk.Frame(table_card, style="Card.TFrame")
         table.pack(fill="both", expand=True)
-        ttk.Label(table, text="Action", font=("Sans", 10, "bold")).grid(row=0, column=0, sticky="w", padx=4, pady=4)
-        ttk.Label(table, text="Key", font=("Sans", 10, "bold")).grid(row=0, column=1, sticky="w", padx=4, pady=4)
-        ttk.Label(table, text="What it does", font=("Sans", 10, "bold")).grid(row=0, column=2, sticky="w", padx=4, pady=4)
+        ttk.Label(table, text="Action", style="CardMuted.TLabel").grid(row=0, column=0, sticky="w", padx=6, pady=(0, 8))
+        ttk.Label(table, text="Key", style="CardMuted.TLabel").grid(row=0, column=1, sticky="w", padx=6, pady=(0, 8))
+        ttk.Label(table, text="Purpose", style="CardMuted.TLabel").grid(row=0, column=2, sticky="w", padx=6, pady=(0, 8))
 
         descriptions = {
             "Terminal": "Open a terminal window",
@@ -254,38 +513,147 @@ class DotfilesCenter(tk.Tk):
         }
 
         for row, (label, _default_key, _action) in enumerate(KEYBIND_ACTIONS, start=1):
-            ttk.Label(table, text=label).grid(row=row, column=0, sticky="w", padx=4, pady=4)
-            ttk.Entry(table, textvariable=self.key_vars[label], width=16).grid(row=row, column=1, sticky="w", padx=4, pady=4)
-            ttk.Label(table, text=descriptions[label]).grid(row=row, column=2, sticky="w", padx=4, pady=4)
+            ttk.Label(table, text=label, style="Card.TLabel").grid(row=row, column=0, sticky="w", padx=6, pady=5)
+            ttk.Entry(table, textvariable=self.key_vars[label], width=16).grid(row=row, column=1, sticky="w", padx=6, pady=5)
+            ttk.Label(table, text=descriptions[label], style="CardMuted.TLabel").grid(row=row, column=2, sticky="w", padx=6, pady=5)
 
         table.columnconfigure(2, weight=1)
 
     def _appearance_tab(self, notebook: ttk.Notebook) -> None:
-        frame = ttk.Frame(notebook, padding=16)
+        frame = ttk.Frame(notebook, style="Panel.TFrame", padding=18)
         notebook.add(frame, text="Appearance")
 
-        grid = ttk.Frame(frame)
+        card = self._card(frame)
+        self._card_title(card, "Appearance", "Pick a wallpaper, choose an accent color, and keep the desktop feeling like yours.")
+
+        grid = ttk.Frame(card, style="Card.TFrame")
         grid.pack(fill="x")
 
-        ttk.Label(grid, text="Wallpaper").grid(row=0, column=0, sticky="w", pady=8)
+        ttk.Label(grid, text="Wallpaper", style="Card.TLabel").grid(row=0, column=0, sticky="w", pady=10)
         ttk.Entry(grid, textvariable=self.vars["DOTFILES_WALLPAPER"], width=58).grid(row=0, column=1, sticky="ew", padx=8)
         ttk.Button(grid, text="Choose image", command=self.choose_wallpaper).grid(row=0, column=2, sticky="ew")
 
-        ttk.Label(grid, text="Accent color").grid(row=1, column=0, sticky="w", pady=8)
+        ttk.Label(grid, text="Accent color", style="Card.TLabel").grid(row=1, column=0, sticky="w", pady=10)
         ttk.Entry(grid, textvariable=self.vars["DOTFILES_ACCENT"], width=18).grid(row=1, column=1, sticky="w", padx=8)
         ttk.Button(grid, text="Pick color", command=self.choose_color).grid(row=1, column=2, sticky="ew")
 
-        ttk.Label(grid, text="Theme").grid(row=2, column=0, sticky="w", pady=8)
+        ttk.Label(grid, text="Theme", style="Card.TLabel").grid(row=2, column=0, sticky="w", pady=10)
         ttk.Combobox(grid, textvariable=self.vars["DOTFILES_THEME"], values=["dark", "light"], state="readonly", width=16).grid(row=2, column=1, sticky="w", padx=8)
 
         grid.columnconfigure(1, weight=1)
 
-        ttk.Button(frame, text="Apply wallpaper now", command=self.apply_wallpaper).pack(anchor="w", pady=(18, 4))
-        ttk.Label(frame, text="Wallpaper uses swww. If no image is selected, the desktop uses a clean solid background.").pack(anchor="w")
+        ttk.Button(card, text="Apply wallpaper now", style="Accent.TButton", command=self.apply_wallpaper).pack(anchor="w", pady=(18, 4))
+        ttk.Label(card, text="Wallpaper uses swww. If no image is selected, the desktop uses a clean solid background.", style="CardMuted.TLabel").pack(anchor="w")
+
+    def _bar_tab(self, notebook: ttk.Notebook) -> None:
+        frame = ttk.Frame(notebook, style="Panel.TFrame", padding=18)
+        notebook.add(frame, text="Bar")
+
+        layout = self._card(frame)
+        self._card_title(layout, "Waybar layout", "Move the bar, choose where workspaces and the clock sit, and reorder the right-side modules.")
+
+        grid = ttk.Frame(layout, style="Card.TFrame")
+        grid.pack(fill="x", pady=(12, 0))
+
+        ttk.Label(grid, text="Position", style="Card.TLabel").grid(row=0, column=0, sticky="w", pady=8)
+        ttk.Combobox(
+            grid,
+            textvariable=self.vars["DOTFILES_BAR_POSITION"],
+            values=["top", "bottom"],
+            state="readonly",
+            width=14,
+        ).grid(row=0, column=1, sticky="w", padx=8, pady=8)
+
+        ttk.Label(grid, text="Workspaces", style="Card.TLabel").grid(row=1, column=0, sticky="w", pady=8)
+        ttk.Combobox(
+            grid,
+            textvariable=self.vars["DOTFILES_BAR_WORKSPACES"],
+            values=["left", "center", "right"],
+            state="readonly",
+            width=14,
+        ).grid(row=1, column=1, sticky="w", padx=8, pady=8)
+
+        ttk.Label(grid, text="Clock", style="Card.TLabel").grid(row=2, column=0, sticky="w", pady=8)
+        ttk.Combobox(
+            grid,
+            textvariable=self.vars["DOTFILES_BAR_CLOCK"],
+            values=["left", "center", "right"],
+            state="readonly",
+            width=14,
+        ).grid(row=2, column=1, sticky="w", padx=8, pady=8)
+
+        ttk.Label(grid, text="Right modules", style="Card.TLabel").grid(row=3, column=0, sticky="w", pady=8)
+        ttk.Entry(grid, textvariable=self.vars["DOTFILES_BAR_RIGHT"], width=44).grid(row=3, column=1, sticky="ew", padx=8, pady=8)
+        ttk.Label(
+            grid,
+            text="Example: pulseaudio,network,battery,tray",
+            style="CardMuted.TLabel",
+        ).grid(row=4, column=1, sticky="w", padx=8, pady=(0, 8))
+
+        grid.columnconfigure(1, weight=1)
+
+        style_card = self._card(frame)
+        self._card_title(style_card, "Shape and spacing", "Round the bar, make it taller, or tune transparency.")
+
+        controls = ttk.Frame(style_card, style="Card.TFrame")
+        controls.pack(fill="x", pady=(12, 0))
+
+        ttk.Label(controls, text="Height", style="Card.TLabel").grid(row=0, column=0, sticky="w", pady=8)
+        tk.Scale(
+            controls,
+            from_=24,
+            to=72,
+            orient="horizontal",
+            variable=self.vars["DOTFILES_BAR_HEIGHT"],
+            bg=self.card,
+            fg=self.text,
+            troughcolor=self.card_soft,
+            highlightthickness=0,
+            length=260,
+        ).grid(row=0, column=1, sticky="ew", padx=8, pady=4)
+
+        ttk.Label(controls, text="Rounding", style="Card.TLabel").grid(row=1, column=0, sticky="w", pady=8)
+        tk.Scale(
+            controls,
+            from_=0,
+            to=28,
+            orient="horizontal",
+            variable=self.vars["DOTFILES_BAR_RADIUS"],
+            bg=self.card,
+            fg=self.text,
+            troughcolor=self.card_soft,
+            highlightthickness=0,
+            length=260,
+        ).grid(row=1, column=1, sticky="ew", padx=8, pady=4)
+
+        ttk.Label(controls, text="Opacity", style="Card.TLabel").grid(row=2, column=0, sticky="w", pady=8)
+        tk.Scale(
+            controls,
+            from_=0.2,
+            to=1.0,
+            resolution=0.05,
+            orient="horizontal",
+            variable=self.vars["DOTFILES_BAR_OPACITY"],
+            bg=self.card,
+            fg=self.text,
+            troughcolor=self.card_soft,
+            highlightthickness=0,
+            length=260,
+        ).grid(row=2, column=1, sticky="ew", padx=8, pady=4)
+
+        controls.columnconfigure(1, weight=1)
+
+        buttons = ttk.Frame(style_card, style="Card.TFrame")
+        buttons.pack(anchor="w", pady=(14, 0))
+        ttk.Button(buttons, text="Save and restart Waybar", style="Accent.TButton", command=self.save_and_restart_waybar).pack(side="left")
+        ttk.Button(buttons, text="Restart Waybar only", command=self.restart_waybar).pack(side="left", padx=8)
 
     def _setup_tab(self, notebook: ttk.Notebook) -> None:
-        frame = ttk.Frame(notebook, padding=16)
+        frame = ttk.Frame(notebook, style="Panel.TFrame", padding=18)
         notebook.add(frame, text="Setup")
+
+        card = self._card(frame)
+        self._card_title(card, "Default apps", "Choose the apps launched by keybinds and helper actions.")
 
         fields = [
             ("Terminal", "DOTFILES_TERMINAL"),
@@ -296,17 +664,19 @@ class DotfilesCenter(tk.Tk):
         ]
 
         for row, (label, key) in enumerate(fields):
-            ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=7)
-            ttk.Entry(frame, textvariable=self.vars[key], width=42).grid(row=row, column=1, sticky="ew", padx=8, pady=7)
+            ttk.Label(card, text=label, style="Card.TLabel").grid(row=row, column=0, sticky="w", pady=8)
+            ttk.Entry(card, textvariable=self.vars[key], width=42).grid(row=row, column=1, sticky="ew", padx=8, pady=8)
 
-        frame.columnconfigure(1, weight=1)
+        card.columnconfigure(1, weight=1)
 
-        buttons = ttk.Frame(frame)
-        buttons.grid(row=len(fields), column=0, columnspan=2, sticky="w", pady=(18, 0))
-        ttk.Button(buttons, text="Open dotfiles folder", command=lambda: run_quiet(["xdg-open", str(ROOT)])).pack(side="left", padx=(0, 8))
-        ttk.Button(buttons, text="Open settings file", command=lambda: run_quiet([self.vars["DOTFILES_EDITOR"].get(), str(ROOT / "config/dotfiles/settings.conf")])).pack(side="left", padx=8)
+        actions = self._card(frame)
+        self._card_title(actions, "Quick actions")
+        buttons = ttk.Frame(actions, style="Card.TFrame")
+        buttons.pack(anchor="w", pady=(12, 0))
+        ttk.Button(buttons, text="Open dotfiles", command=lambda: run_quiet(["xdg-open", str(ROOT)])).pack(side="left", padx=(0, 8))
+        ttk.Button(buttons, text="Edit settings", command=lambda: run_quiet([self.vars["DOTFILES_EDITOR"].get(), str(ROOT / "config/dotfiles/settings.conf")])).pack(side="left", padx=8)
         ttk.Button(buttons, text="Show status", command=lambda: run_quiet(["kitty", "-e", "dotctl", "status"])).pack(side="left", padx=8)
-        ttk.Button(buttons, text="Reload Hyprland", command=lambda: run_quiet(["hyprctl", "reload"])).pack(side="left", padx=8)
+        ttk.Button(buttons, text="Reload Hyprland", style="Accent.TButton", command=lambda: run_quiet(["hyprctl", "reload"])).pack(side="left", padx=8)
 
     def choose_wallpaper(self) -> None:
         path = filedialog.askopenfilename(
@@ -333,9 +703,21 @@ class DotfilesCenter(tk.Tk):
         write_local_conf(values)
         write_colors(values["DOTFILES_ACCENT"])
         write_keybinds(values, {key: var.get() for key, var in self.key_vars.items()})
+        write_waybar(values)
         self.save_startup_choice()
         self.apply_wallpaper(show_errors=False)
         messagebox.showinfo("Saved", "Dotfiles settings saved. Hyprland will use them after reload or next login.")
+
+    def save_and_restart_waybar(self) -> None:
+        values = {key: var.get() for key, var in self.vars.items()}
+        write_local_conf(values)
+        write_waybar(values)
+        self.restart_waybar()
+        messagebox.showinfo("Waybar", "Waybar settings saved and restarted.")
+
+    def restart_waybar(self) -> None:
+        subprocess.run(["pkill", "-x", "waybar"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        run_quiet(["waybar"])
 
     def apply_wallpaper(self, show_errors: bool = True) -> None:
         wallpaper = self.vars["DOTFILES_WALLPAPER"].get()
