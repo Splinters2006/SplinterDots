@@ -15,26 +15,26 @@ Variants {
       screen: modelData
 
       anchors {
-        top: true
-        bottom: false
+        top: false
+        bottom: true
         left: true
         right: true
       }
 
       margins {
-        top: 8
-        bottom: 0
+        top: 0
+        bottom: 8
         left: 10
         right: 10
       }
 
-      implicitHeight: 34
+      implicitHeight: 49
       color: "transparent"
 
       Rectangle {
         anchors.fill: parent
         radius: 8
-        color: "#ea1e1e2e"
+        color: "#e51e1e2e"
         border.width: 1
         border.color: "#313244"
 
