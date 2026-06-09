@@ -3,11 +3,14 @@ set -euo pipefail
 
 mode="${1:-area}"
 lock_file="${XDG_RUNTIME_DIR:-/tmp}/splinterdots-screenshot.lock"
+tmp_file=""
 
-exec 9>"$lock_file"
-if ! flock -n 9; then
-  exit 0
-fi
+cleanup() {
+  if [ -n "${tmp_file:-}" ] && [ -f "$tmp_file" ]; then
+    rm -f "$tmp_file"
+  fi
+}
+trap cleanup EXIT INT TERM
 
 need() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -16,41 +19,57 @@ need() {
   fi
 }
 
-need grim
-need wl-copy
-
 notify_done() {
   if command -v notify-send >/dev/null 2>&1; then
     notify-send "Screenshot copied" "The screenshot was copied to your clipboard."
   fi
 }
 
-copy_full() {
-  # Small delay so launcher/UI overlays have time to disappear.
-  sleep 0.15
-  grim - | wl-copy --type image/png
+copy_to_clipboard() {
+  need wl-copy
+
+  # Important: close the lock before wl-copy starts its clipboard background process.
+  # Otherwise the lock can stay held forever and only the first screenshot works.
+  exec 9>&-
+
+  wl-copy --type image/png < "$tmp_file"
   notify_done
 }
 
-copy_area() {
+capture_full() {
+  need grim
+
+  tmp_file="$(mktemp --suffix=.png)"
+  sleep 0.15
+  grim "$tmp_file"
+  copy_to_clipboard
+}
+
+capture_area() {
+  need grim
   need slurp
 
+  local geometry
   geometry="$(slurp)"
   [ -n "$geometry" ] || exit 0
 
-  # Important: let the slurp selection overlay disappear before grim captures.
+  tmp_file="$(mktemp --suffix=.png)"
   sleep 0.18
-
-  grim -g "$geometry" - | wl-copy --type image/png
-  notify_done
+  grim -g "$geometry" "$tmp_file"
+  copy_to_clipboard
 }
+
+exec 9>"$lock_file"
+if ! flock -n 9; then
+  exit 0
+fi
 
 case "$mode" in
   area|region|selection)
-    copy_area
+    capture_area
     ;;
   full|screen)
-    copy_full
+    capture_full
     ;;
   *)
     echo "Usage: splinter-screenshot [area|full]" >&2

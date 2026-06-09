@@ -57,3 +57,6 @@ greetd-tuigreet
 noto-fonts
 ttf-nerd-fonts-symbols
 rustup
+zenity
+util-linux
+libnotify
