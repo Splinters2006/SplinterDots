@@ -204,6 +204,8 @@ struct DotfilesCenter {
     hypr_search: String,
     wallpaper_images: Vec<PathBuf>,
     wallpaper_textures: HashMap<String, egui::TextureHandle>,
+    addon_search: String,
+    addon_category_filter: String,
     status: String,
     no_show_on_startup: bool,
 }
@@ -300,6 +302,8 @@ impl DotfilesCenter {
             hypr_search: String::new(),
             wallpaper_images,
             wallpaper_textures: HashMap::new(),
+            addon_search: String::new(),
+            addon_category_filter: "Show All".to_string(),
             status: String::new(),
             no_show_on_startup,
         }
@@ -678,7 +682,13 @@ impl DotfilesCenter {
 
         let bytes = fs::read(path).ok()?;
         let image = image::load_from_memory(&bytes).ok()?;
-        let image = image.thumbnail(360, 220).to_rgba8();
+
+        // Use a larger, aspect-correct, high-quality preview instead of a tiny stretched thumbnail.
+        // This keeps the wallpaper grid sharp even when the UI card is resized.
+        let image = image
+            .resize_to_fill(960, 540, image::imageops::FilterType::Lanczos3)
+            .to_rgba8();
+
         let size = [image.width() as usize, image.height() as usize];
         let pixels = image.into_raw();
 
@@ -725,7 +735,7 @@ impl DotfilesCenter {
                             theme.panel_soft
                         },
                         corner_radius: CornerRadius::same(16),
-                        inner_margin: Margin::same(10),
+                        inner_margin: Margin::same(6),
                         stroke: Stroke::new(
                             if selected { 2.0 } else { 1.0 },
                             if selected { theme.accent } else { theme.border },
@@ -733,11 +743,12 @@ impl DotfilesCenter {
                         ..Default::default()
                     }
                     .show(ui, |ui| {
-                        ui.set_min_width(210.0);
+                        let image_size = Vec2::new(240.0, 135.0);
+                        ui.set_min_width(image_size.x + 12.0);
 
                         if let Some(texture) = texture {
                             let response = ui.add(
-                                egui::Image::new((texture.id(), Vec2::new(210.0, 128.0)))
+                                egui::Image::new((texture.id(), image_size))
                                     .sense(egui::Sense::click()),
                             );
 
@@ -745,10 +756,7 @@ impl DotfilesCenter {
                                 clicked = Some(path.clone());
                             }
                         } else if ui
-                            .add_sized(
-                                Vec2::new(210.0, 128.0),
-                                egui::Button::new("Could not preview"),
-                            )
+                            .add_sized(image_size, egui::Button::new("Could not preview"))
                             .clicked()
                         {
                             clicked = Some(path.clone());
@@ -1613,118 +1621,153 @@ impl DotfilesCenter {
     fn addons_tab(&mut self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
 
-        Self::card(&theme, ui, |ui| {
-            ui.label(RichText::new("Addons").strong().size(20.0));
-            ui.label(
-                RichText::new(
-                    "Optional extras are grouped by what they change. Install only what you want.",
-                )
-                .color(theme.muted),
-            );
-            ui.add_space(8.0);
-            ui.label(
-                RichText::new("Every addon comes preconfigured after install, and you can change it yourself later in SplinterDots.")
-                    .color(theme.muted)
-                    .size(12.0),
-            );
-        });
-
-        let categories = [
-            "Fonts",
-            "Icon packs",
-            "Cursor themes",
-            "Desktop utilities",
-            "Terminal tools",
-            "Diagnostics",
-        ];
-
         ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            for category in categories {
-                let addons: Vec<AddonChoice> = addon_choices()
-                    .iter()
-                    .copied()
-                    .filter(|addon| addon.category == category)
-                    .collect();
+            Self::card(&theme, ui, |ui| {
+                ui.label(RichText::new("Addons").strong().size(22.0));
+                ui.label(
+                    RichText::new("Optional extras are grouped, searchable, and installed only when you choose them.")
+                        .color(theme.muted),
+                );
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new("Every addon comes preconfigured after install, and you can change it yourself later in SplinterDots.")
+                        .color(theme.muted)
+                        .size(12.0),
+                );
+            });
 
-                if addons.is_empty() {
-                    continue;
-                }
+            Self::card(&theme, ui, |ui| {
+                ui.label(RichText::new("Filters").strong().size(17.0));
+                ui.add_space(8.0);
 
-                Self::card(&theme, ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(category).strong().size(18.0));
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.label(
-                                RichText::new(format!("{} addons", addons.len()))
-                                    .color(theme.muted)
-                                    .size(11.0),
-                            );
+                ui.add_sized(
+                    [ui.available_width(), 42.0],
+                    egui::TextEdit::singleline(&mut self.addon_search)
+                        .hint_text("Search for an addon...")
+                        .desired_width(f32::INFINITY),
+                );
+
+                ui.add_space(8.0);
+
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt("addon-category-filter")
+                        .selected_text(self.addon_category_filter.clone())
+                        .width(260.0)
+                        .show_ui(ui, |ui| {
+                            for category in addon_categories() {
+                                ui.selectable_value(
+                                    &mut self.addon_category_filter,
+                                    category.to_string(),
+                                    *category,
+                                );
+                            }
                         });
-                    });
 
-                    ui.add_space(10.0);
+                    ui.label(
+                        RichText::new("Filter by category")
+                            .color(theme.muted)
+                            .size(12.0),
+                    );
+                });
+            });
 
-                    egui::Grid::new(format!("addons-grid-{category}"))
-                        .num_columns(2)
-                        .spacing([10.0, 10.0])
+            ui.add_space(8.0);
+            ui.label(RichText::new("Addons").strong().size(18.0));
+            ui.add_space(8.0);
+
+            let addons: Vec<AddonChoice> = addon_choices()
+                .iter()
+                .copied()
+                .filter(|addon| {
+                    addon_matches_filter(
+                        addon,
+                        &self.addon_search,
+                        &self.addon_category_filter,
+                    )
+                })
+                .collect();
+
+            if addons.is_empty() {
+                Self::card(&theme, ui, |ui| {
+                    ui.label(RichText::new("No addons matched your search.").color(theme.muted));
+                });
+                return;
+            }
+
+            egui::Grid::new("addons-plugin-grid")
+                .num_columns(2)
+                .spacing([14.0, 14.0])
+                .show(ui, |ui| {
+                    for (index, addon) in addons.iter().enumerate() {
+                        let installed = addon_package_installed(addon.package);
+
+                        Frame {
+                            fill: theme.panel_soft,
+                            corner_radius: CornerRadius::same(12),
+                            inner_margin: Margin::symmetric(14, 12),
+                            stroke: Stroke::new(1.0, theme.border),
+                            ..Default::default()
+                        }
                         .show(ui, |ui| {
-                            for (index, addon) in addons.iter().enumerate() {
-                                let installed = addon_package_installed(addon.package);
+                            ui.set_min_width(380.0);
+                            ui.set_min_height(112.0);
 
-                                Frame {
-                                    fill: theme.panel_soft,
-                                    corner_radius: CornerRadius::same(14),
-                                    inner_margin: Margin::symmetric(12, 10),
-                                    stroke: Stroke::new(1.0, theme.border),
-                                    ..Default::default()
-                                }
-                                .show(ui, |ui| {
-                                    ui.set_min_width(320.0);
-
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
                                     ui.horizontal(|ui| {
-                                        ui.vertical(|ui| {
-                                            ui.label(RichText::new(addon.name).strong());
-                                            ui.label(
-                                                RichText::new(addon.description)
-                                                    .color(theme.muted)
-                                                    .size(12.0),
-                                            );
-                                            ui.label(
-                                                RichText::new("Preconfigured after install. Customizable later.")
-                                                    .color(theme.muted)
-                                                    .size(11.0),
-                                            );
-                                            ui.monospace(addon.package);
-                                        });
-
-                                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                            if installed {
-                                                ui.label(
-                                                    RichText::new("Installed")
-                                                        .color(theme.success)
-                                                        .strong(),
-                                                );
-                                            } else if ui.button("Download").clicked() {
-                                                self.install_addon_package(addon.package);
-                                            }
-                                        });
+                                        ui.label(RichText::new(addon.name).strong().size(15.0));
+                                        ui.label(
+                                            RichText::new(addon.category)
+                                                .color(theme.muted)
+                                                .size(11.0),
+                                        );
                                     });
 
-                                    if !installed {
-                                        ui.add_space(8.0);
-                                        if primary_button(ui, &theme, "Download / install").clicked() {
+                                    ui.add_space(6.0);
+
+                                    ui.label(
+                                        RichText::new(addon.description)
+                                            .color(theme.text)
+                                            .size(12.0),
+                                    );
+
+                                    ui.add_space(4.0);
+
+                                    ui.label(
+                                        RichText::new("Preconfigured after install. Customizable later.")
+                                            .color(theme.muted)
+                                            .size(11.0),
+                                    );
+
+                                    ui.add_space(4.0);
+                                    ui.monospace(addon.package);
+                                });
+
+                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                    if installed {
+                                        ui.label(
+                                            RichText::new("Installed")
+                                                .color(theme.success)
+                                                .strong(),
+                                        );
+                                    } else {
+                                        if ui.button("✕").on_hover_text("Not installed").clicked() {
+                                            self.install_addon_package(addon.package);
+                                        }
+
+                                        if ui.button("Download").clicked() {
                                             self.install_addon_package(addon.package);
                                         }
                                     }
                                 });
-
-                                if index % 2 == 1 {
-                                    ui.end_row();
-                                }
-                            }
+                            });
                         });
+
+                        if index % 2 == 1 {
+                            ui.end_row();
+                        }
+                    }
                 });
-            }
         });
     }
 
@@ -3734,6 +3777,40 @@ fn addon_choices() -> &'static [AddonChoice] {
             package: "lm_sensors",
         },
     ]
+}
+
+fn addon_categories() -> &'static [&'static str] {
+    &[
+        "Show All",
+        "Fonts",
+        "Icon packs",
+        "Cursor themes",
+        "Desktop utilities",
+        "Terminal tools",
+        "Diagnostics",
+    ]
+}
+
+fn addon_matches_filter(addon: &AddonChoice, search: &str, category: &str) -> bool {
+    let category_ok = category == "Show All" || addon.category == category;
+
+    if !category_ok {
+        return false;
+    }
+
+    let search = search.trim().to_ascii_lowercase();
+
+    if search.is_empty() {
+        return true;
+    }
+
+    let haystack = format!(
+        "{} {} {} {}",
+        addon.category, addon.name, addon.description, addon.package
+    )
+    .to_ascii_lowercase();
+
+    haystack.contains(&search)
 }
 
 fn addon_package_installed(package: &str) -> bool {
