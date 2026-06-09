@@ -177,6 +177,11 @@ All keybinds use the `Super` / Windows key.
 Use `dotctl center` to change wallpaper, colors, apps, and keybinds
 graphically.
 
+The `Keybinds` tab stores editable shortcuts in
+`~/.config/dotfiles/keybinds.json` and generates
+`~/.config/hypr/keybindings.conf`. You can add custom command shortcuts without
+writing Hyprland config by hand.
+
 The `Bar` tab in Dotfiles Center writes `~/.config/waybar/config` and
 `~/.config/waybar/style.css`. It can move the bar, round corners, change
 height/opacity, move workspaces and the clock, and reorder right-side modules.

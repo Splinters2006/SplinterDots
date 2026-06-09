@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
 DOTFILES_DIR = CONFIG_HOME / "dotfiles"
 LOCAL_CONF = DOTFILES_DIR / "local.conf"
+KEYBINDS_JSON = DOTFILES_DIR / "keybinds.json"
 DISABLED_FILE = DOTFILES_DIR / "welcome-disabled"
 HYPR_DIR = CONFIG_HOME / "hypr"
 HYPR_COLORS = HYPR_DIR / "colors.conf"
@@ -39,19 +40,21 @@ DEFAULTS = {
     "DOTFILES_BAR_RIGHT": "pulseaudio,network,battery,tray",
 }
 
-KEYBIND_ACTIONS = [
-    ("Terminal", "Return", "exec, $terminal"),
-    ("File manager", "E", "exec, $fileManager"),
-    ("App launcher", "D", "exec, $menu"),
-    ("Browser", "B", "exec, $browser"),
-    ("Close window", "C", "killactive"),
-    ("Exit Hyprland", "M", "exit"),
-    ("Fullscreen", "F", "fullscreen"),
-    ("Floating mode", "V", "togglefloating"),
-    ("Screenshot region", "S", "exec, dotfiles-screenshot region"),
-    ("Screenshot full screen", "SHIFT, S", "exec, dotfiles-screenshot full"),
-    ("Dotfiles Center", "W", "exec, dotctl welcome"),
-    ("Reload Hyprland", "SHIFT, R", "exec, hyprctl reload"),
+DEFAULT_KEYBINDS = [
+    {"name": "Terminal", "key": "Q", "type": "command", "value": "$terminal"},
+    {"name": "File manager", "key": "E", "type": "command", "value": "$fileManager"},
+    {"name": "App launcher", "key": "D", "type": "command", "value": "$menu"},
+    {"name": "Browser", "key": "B", "type": "command", "value": "$browser"},
+    {"name": "Close window", "key": "C", "type": "dispatcher", "value": "killactive"},
+    {"name": "Exit Hyprland", "key": "M", "type": "dispatcher", "value": "exit"},
+    {"name": "Fullscreen", "key": "F", "type": "dispatcher", "value": "fullscreen"},
+    {"name": "Floating mode", "key": "V", "type": "dispatcher", "value": "togglefloating"},
+    {"name": "Pseudo tile", "key": "P", "type": "dispatcher", "value": "pseudo"},
+    {"name": "Toggle split", "key": "J", "type": "dispatcher", "value": "layoutmsg, togglesplit"},
+    {"name": "Screenshot region", "key": "S", "type": "command", "value": "dotfiles-screenshot region"},
+    {"name": "Screenshot full screen", "key": "SHIFT, S", "type": "command", "value": "dotfiles-screenshot full"},
+    {"name": "Dotfiles Center", "key": "W", "type": "command", "value": "dotctl welcome"},
+    {"name": "Reload Hyprland", "key": "SHIFT, R", "type": "command", "value": "hyprctl reload"},
 ]
 
 
@@ -88,6 +91,44 @@ def write_local_conf(values: dict) -> None:
     LOCAL_CONF.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def default_keybinds() -> list[dict]:
+    return [keybind.copy() for keybind in DEFAULT_KEYBINDS]
+
+
+def load_keybinds() -> list[dict]:
+    if not KEYBINDS_JSON.exists():
+        return default_keybinds()
+
+    try:
+        raw = json.loads(KEYBINDS_JSON.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return default_keybinds()
+
+    keybinds = []
+    if not isinstance(raw, list):
+        return default_keybinds()
+
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).strip()
+        key = str(item.get("key", "")).strip()
+        kind = str(item.get("type", "command")).strip()
+        value = str(item.get("value", "")).strip()
+        if not name or not key or not value:
+            continue
+        if kind not in {"command", "dispatcher"}:
+            kind = "command"
+        keybinds.append({"name": name, "key": key, "type": kind, "value": value})
+
+    return keybinds or default_keybinds()
+
+
+def save_keybinds(keybinds: list[dict]) -> None:
+    DOTFILES_DIR.mkdir(parents=True, exist_ok=True)
+    KEYBINDS_JSON.write_text(json.dumps(keybinds, indent=2) + "\n", encoding="utf-8")
+
+
 def hex_to_hypr_rgba(hex_color: str) -> str:
     clean = hex_color.strip().lstrip("#")
     if len(clean) != 6 or not re.fullmatch(r"[0-9a-fA-F]{6}", clean):
@@ -103,7 +144,7 @@ def write_colors(accent: str) -> None:
     )
 
 
-def write_keybinds(values: dict, key_values: dict) -> None:
+def write_keybinds(values: dict, keybinds: list[dict]) -> None:
     HYPR_DIR.mkdir(parents=True, exist_ok=True)
     terminal = values.get("DOTFILES_TERMINAL", DEFAULTS["DOTFILES_TERMINAL"])
     file_manager = values.get("DOTFILES_FILE_MANAGER", DEFAULTS["DOTFILES_FILE_MANAGER"])
@@ -119,13 +160,18 @@ def write_keybinds(values: dict, key_values: dict) -> None:
         "",
     ]
 
-    for label, default_key, action in KEYBIND_ACTIONS:
-        key = key_values.get(label, default_key).strip() or default_key
+    for keybind in keybinds:
+        key = keybind.get("key", "").strip()
+        value = keybind.get("value", "").strip()
+        kind = keybind.get("type", "command").strip()
+        if not key or not value:
+            continue
         modifier = "$mainMod"
         key_name = key
         if key.startswith("SHIFT,"):
             modifier = "$mainMod SHIFT"
             key_name = key.split(",", 1)[1].strip()
+        action = f"exec, {value}" if kind == "command" else value
         lines.append(f"bind = {modifier}, {key_name}, {action}")
 
     lines.extend(
@@ -305,10 +351,8 @@ class DotfilesCenter(tk.Tk):
         self.configure(bg=self.bg)
 
         self.vars = {key: tk.StringVar(value=value) for key, value in self.values.items()}
-        self.key_vars = {
-            label: tk.StringVar(value=default_key)
-            for label, default_key, _action in KEYBIND_ACTIONS
-        }
+        self.keybinds = load_keybinds()
+        self.keybind_tree: ttk.Treeview | None = None
         self.no_show_var = tk.BooleanVar(value=DISABLED_FILE.exists())
 
         self._setup_style()
@@ -379,6 +423,22 @@ class DotfilesCenter(tk.Tk):
         )
         configure("TEntry", fieldbackground="#0f172a", foreground=self.text, padding=8)
         configure("TCombobox", fieldbackground="#0f172a", foreground=self.text, padding=8)
+        configure(
+            "Treeview",
+            background=self.card_soft,
+            fieldbackground=self.card_soft,
+            foreground=self.text,
+            rowheight=30,
+            borderwidth=0,
+        )
+        configure(
+            "Treeview.Heading",
+            background=self.card,
+            foreground=self.muted,
+            padding=(8, 8),
+            borderwidth=0,
+        )
+        map_style("Treeview", background=[("selected", self.accent_dark)], foreground=[("selected", "#ffffff")])
 
     def _card(self, parent: tk.Widget, padding: int = 16) -> ttk.Frame:
         card = ttk.Frame(parent, style="Card.TFrame", padding=padding)
@@ -491,33 +551,37 @@ class DotfilesCenter(tk.Tk):
         )
 
         table_card = self._card(frame)
-        table = ttk.Frame(table_card, style="Card.TFrame")
-        table.pack(fill="both", expand=True)
-        ttk.Label(table, text="Action", style="CardMuted.TLabel").grid(row=0, column=0, sticky="w", padx=6, pady=(0, 8))
-        ttk.Label(table, text="Key", style="CardMuted.TLabel").grid(row=0, column=1, sticky="w", padx=6, pady=(0, 8))
-        ttk.Label(table, text="Purpose", style="CardMuted.TLabel").grid(row=0, column=2, sticky="w", padx=6, pady=(0, 8))
+        self.keybind_tree = ttk.Treeview(
+            table_card,
+            columns=("key", "type", "value"),
+            show="tree headings",
+            height=13,
+        )
+        self.keybind_tree.heading("#0", text="Name")
+        self.keybind_tree.heading("key", text="Key")
+        self.keybind_tree.heading("type", text="Type")
+        self.keybind_tree.heading("value", text="Command / dispatcher")
+        self.keybind_tree.column("#0", width=170, stretch=True)
+        self.keybind_tree.column("key", width=110, stretch=False)
+        self.keybind_tree.column("type", width=100, stretch=False)
+        self.keybind_tree.column("value", width=390, stretch=True)
+        self.keybind_tree.pack(fill="both", expand=True)
+        self.keybind_tree.bind("<Double-1>", lambda _event: self.edit_keybind())
 
-        descriptions = {
-            "Terminal": "Open a terminal window",
-            "File manager": "Browse files graphically",
-            "App launcher": "Search and launch apps",
-            "Browser": "Open the web browser",
-            "Close window": "Close the focused app",
-            "Exit Hyprland": "Log out of Hyprland",
-            "Fullscreen": "Toggle fullscreen",
-            "Floating mode": "Toggle floating window mode",
-            "Screenshot region": "Select an area and copy it",
-            "Screenshot full screen": "Save a screenshot to Pictures",
-            "Dotfiles Center": "Open this app",
-            "Reload Hyprland": "Apply Hyprland config changes",
-        }
+        buttons = ttk.Frame(table_card, style="Card.TFrame")
+        buttons.pack(fill="x", pady=(12, 0))
+        ttk.Button(buttons, text="Add command", style="Accent.TButton", command=self.add_keybind).pack(side="left")
+        ttk.Button(buttons, text="Edit selected", command=self.edit_keybind).pack(side="left", padx=8)
+        ttk.Button(buttons, text="Remove selected", command=self.remove_keybind).pack(side="left", padx=8)
+        ttk.Button(buttons, text="Restore defaults", command=self.reset_keybinds).pack(side="left", padx=8)
 
-        for row, (label, _default_key, _action) in enumerate(KEYBIND_ACTIONS, start=1):
-            ttk.Label(table, text=label, style="Card.TLabel").grid(row=row, column=0, sticky="w", padx=6, pady=5)
-            ttk.Entry(table, textvariable=self.key_vars[label], width=16).grid(row=row, column=1, sticky="w", padx=6, pady=5)
-            ttk.Label(table, text=descriptions[label], style="CardMuted.TLabel").grid(row=row, column=2, sticky="w", padx=6, pady=5)
-
-        table.columnconfigure(2, weight=1)
+        hint = self._card(frame)
+        self._card_title(
+            hint,
+            "Custom commands",
+            "Use type Command for normal apps and scripts, like kitty, firefox, grimblast, or your own shell script. Use Dispatcher only for native Hyprland actions like fullscreen or killactive.",
+        )
+        self.refresh_keybind_tree()
 
     def _appearance_tab(self, notebook: ttk.Notebook) -> None:
         frame = ttk.Frame(notebook, style="Panel.TFrame", padding=18)
@@ -678,6 +742,133 @@ class DotfilesCenter(tk.Tk):
         ttk.Button(buttons, text="Show status", command=lambda: run_quiet(["kitty", "-e", "dotctl", "status"])).pack(side="left", padx=8)
         ttk.Button(buttons, text="Reload Hyprland", style="Accent.TButton", command=lambda: run_quiet(["hyprctl", "reload"])).pack(side="left", padx=8)
 
+    def refresh_keybind_tree(self) -> None:
+        if self.keybind_tree is None:
+            return
+        self.keybind_tree.delete(*self.keybind_tree.get_children())
+        for index, keybind in enumerate(self.keybinds):
+            self.keybind_tree.insert(
+                "",
+                "end",
+                iid=str(index),
+                text=keybind.get("name", ""),
+                values=(
+                    keybind.get("key", ""),
+                    keybind.get("type", "command"),
+                    keybind.get("value", ""),
+                ),
+            )
+
+    def selected_keybind_index(self) -> int | None:
+        if self.keybind_tree is None:
+            return None
+        selection = self.keybind_tree.selection()
+        if not selection:
+            return None
+        try:
+            return int(selection[0])
+        except ValueError:
+            return None
+
+    def keybind_dialog(self, title: str, initial: dict | None = None) -> dict | None:
+        initial = initial or {"name": "New shortcut", "key": "SHIFT, N", "type": "command", "value": "kitty"}
+        dialog = tk.Toplevel(self)
+        dialog.title(title)
+        dialog.configure(bg=self.bg)
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+
+        name_var = tk.StringVar(value=initial.get("name", ""))
+        key_var = tk.StringVar(value=initial.get("key", ""))
+        type_var = tk.StringVar(value=initial.get("type", "command"))
+        value_var = tk.StringVar(value=initial.get("value", ""))
+        result: dict | None = None
+
+        shell = ttk.Frame(dialog, style="Panel.TFrame", padding=18)
+        shell.pack(fill="both", expand=True)
+        card = ttk.Frame(shell, style="Card.TFrame", padding=16)
+        card.pack(fill="both", expand=True)
+
+        ttk.Label(card, text=title, style="Heading.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 12))
+
+        fields = [
+            ("Name", name_var),
+            ("Key", key_var),
+            ("Command / dispatcher", value_var),
+        ]
+        for row, (label, var) in enumerate(fields, start=1):
+            ttk.Label(card, text=label, style="Card.TLabel").grid(row=row, column=0, sticky="w", pady=8)
+            ttk.Entry(card, textvariable=var, width=42).grid(row=row, column=1, sticky="ew", padx=8, pady=8)
+
+        ttk.Label(card, text="Type", style="Card.TLabel").grid(row=4, column=0, sticky="w", pady=8)
+        ttk.Combobox(card, textvariable=type_var, values=["command", "dispatcher"], state="readonly", width=18).grid(row=4, column=1, sticky="w", padx=8, pady=8)
+
+        ttk.Label(
+            card,
+            text="Key examples: Q, Return, SHIFT, S. Commands are launched with exec. Dispatchers are raw Hyprland actions.",
+            style="CardMuted.TLabel",
+            wraplength=430,
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 12))
+
+        buttons = ttk.Frame(card, style="Card.TFrame")
+        buttons.grid(row=6, column=0, columnspan=2, sticky="e")
+
+        def save() -> None:
+            nonlocal result
+            name = name_var.get().strip()
+            key = key_var.get().strip()
+            value = value_var.get().strip()
+            kind = type_var.get().strip()
+            if not name or not key or not value:
+                messagebox.showwarning("Keybind", "Name, key, and command are required.", parent=dialog)
+                return
+            if kind not in {"command", "dispatcher"}:
+                kind = "command"
+            result = {"name": name, "key": key, "type": kind, "value": value}
+            dialog.destroy()
+
+        ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
+        ttk.Button(buttons, text="Save", style="Accent.TButton", command=save).pack(side="right")
+        card.columnconfigure(1, weight=1)
+        dialog.bind("<Return>", lambda _event: save())
+        dialog.wait_window()
+        return result
+
+    def add_keybind(self) -> None:
+        keybind = self.keybind_dialog("Add keybind")
+        if keybind is None:
+            return
+        self.keybinds.append(keybind)
+        self.refresh_keybind_tree()
+
+    def edit_keybind(self) -> None:
+        index = self.selected_keybind_index()
+        if index is None or index >= len(self.keybinds):
+            messagebox.showinfo("Keybinds", "Select a keybind first.")
+            return
+        updated = self.keybind_dialog("Edit keybind", self.keybinds[index])
+        if updated is None:
+            return
+        self.keybinds[index] = updated
+        self.refresh_keybind_tree()
+
+    def remove_keybind(self) -> None:
+        index = self.selected_keybind_index()
+        if index is None or index >= len(self.keybinds):
+            messagebox.showinfo("Keybinds", "Select a keybind first.")
+            return
+        if not messagebox.askyesno("Remove keybind", f"Remove {self.keybinds[index].get('name', 'this keybind')}?"):
+            return
+        del self.keybinds[index]
+        self.refresh_keybind_tree()
+
+    def reset_keybinds(self) -> None:
+        if not messagebox.askyesno("Restore defaults", "Replace all keybinds with the default set?"):
+            return
+        self.keybinds = default_keybinds()
+        self.refresh_keybind_tree()
+
     def choose_wallpaper(self) -> None:
         path = filedialog.askopenfilename(
             title="Choose wallpaper",
@@ -701,8 +892,9 @@ class DotfilesCenter(tk.Tk):
     def save_all(self) -> None:
         values = {key: var.get() for key, var in self.vars.items()}
         write_local_conf(values)
+        save_keybinds(self.keybinds)
         write_colors(values["DOTFILES_ACCENT"])
-        write_keybinds(values, {key: var.get() for key, var in self.key_vars.items()})
+        write_keybinds(values, self.keybinds)
         write_waybar(values)
         self.save_startup_choice()
         self.apply_wallpaper(show_errors=False)
