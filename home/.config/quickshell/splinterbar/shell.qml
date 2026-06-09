@@ -63,9 +63,9 @@ Variants {
       Rectangle {
         anchors.fill: parent
         radius: 28
-        color: "#e51e1e2e"
+        color: "#e5282828"
         border.width: 1
-        border.color: "#313244"
+        border.color: "#3c3836"
 
         RowLayout {
           anchors.fill: parent
@@ -84,13 +84,13 @@ Variants {
                 height: (index + 1) === root.activeWorkspace ? 30 : 18
                 anchors.verticalCenter: parent.verticalCenter
                 radius: 24
-                color: (index + 1) === root.activeWorkspace ? "#89b4fa" : "#313244"
+                color: (index + 1) === root.activeWorkspace ? "#89b4fa" : "#3c3836"
                 opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.72
 
                 Text {
                   anchors.centerIn: parent
                   text: index + 1
-                  color: (index + 1) === root.activeWorkspace ? "#11111b" : "#cdd6f4"
+                  color: (index + 1) === root.activeWorkspace ? "#1d2021" : "#ebdbb2"
                   font.bold: true
                   font.pixelSize: 11
                   font.family: "Symbols Nerd Font"
@@ -116,7 +116,7 @@ Variants {
           Text {
             id: clock
             Layout.alignment: Qt.AlignCenter
-            color: "#cdd6f4"
+            color: "#ebdbb2"
             font.bold: true
             font.pixelSize: 12
             font.family: "Symbols Nerd Font"
@@ -143,7 +143,7 @@ Variants {
           Text {
             id: status
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-            color: "#bac2de"
+            color: "#bdae93"
             font.pixelSize: 12
             font.family: "Symbols Nerd Font"
             text: ""

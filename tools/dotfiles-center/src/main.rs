@@ -322,11 +322,26 @@ impl DotfilesCenter {
     }
 
     fn app_theme(&self) -> AppTheme {
+        let selected = self.value("DOTFILES_THEME");
+        let fallback_accent = match selected.as_str() {
+            "midnight" => "#8b98ff",
+            "catppuccin" => "#cba6f7",
+            "nord" => "#88c0d0",
+            "gruvbox" => "#fabd2f",
+            "sakura" => "#f5a3c7",
+            "cyberpunk" => "#00e5ff",
+            "everforest" => "#a7c080",
+            "dracula" => "#bd93f9",
+            "light" => "#2563eb",
+            _ => "#89b4fa",
+        };
+
         let accent = parse_hex_color(&self.value("DOTFILES_ACCENT"))
+            .or_else(|| parse_hex_color(fallback_accent))
             .unwrap_or(Color32::from_rgb(137, 180, 250));
 
-        if self.value("DOTFILES_THEME") == "light" {
-            AppTheme {
+        match selected.as_str() {
+            "light" => AppTheme {
                 accent,
                 bg: Color32::from_rgb(238, 242, 248),
                 sidebar: Color32::from_rgb(248, 250, 252),
@@ -339,9 +354,92 @@ impl DotfilesCenter {
                 border: Color32::from_rgb(203, 213, 225),
                 success: Color32::from_rgb(22, 163, 74),
                 danger: Color32::from_rgb(220, 38, 38),
-            }
-        } else {
-            AppTheme {
+            },
+            "nord" => AppTheme {
+                accent,
+                bg: Color32::from_rgb(36, 41, 51),
+                sidebar: Color32::from_rgb(46, 52, 64),
+                panel: Color32::from_rgb(59, 66, 82),
+                panel_soft: Color32::from_rgb(67, 76, 94),
+                card: Color32::from_rgb(59, 66, 82),
+                card_hover: Color32::from_rgb(76, 86, 106),
+                text: Color32::from_rgb(236, 239, 244),
+                muted: Color32::from_rgb(216, 222, 233),
+                border: Color32::from_rgb(76, 86, 106),
+                success: Color32::from_rgb(163, 190, 140),
+                danger: Color32::from_rgb(191, 97, 106),
+            },
+            "gruvbox" => AppTheme {
+                accent,
+                bg: Color32::from_rgb(29, 32, 33),
+                sidebar: Color32::from_rgb(40, 40, 40),
+                panel: Color32::from_rgb(50, 48, 47),
+                panel_soft: Color32::from_rgb(60, 56, 54),
+                card: Color32::from_rgb(50, 48, 47),
+                card_hover: Color32::from_rgb(80, 73, 69),
+                text: Color32::from_rgb(235, 219, 178),
+                muted: Color32::from_rgb(189, 174, 147),
+                border: Color32::from_rgb(102, 92, 84),
+                success: Color32::from_rgb(184, 187, 38),
+                danger: Color32::from_rgb(251, 73, 52),
+            },
+            "sakura" => AppTheme {
+                accent,
+                bg: Color32::from_rgb(25, 20, 32),
+                sidebar: Color32::from_rgb(36, 27, 46),
+                panel: Color32::from_rgb(45, 34, 58),
+                panel_soft: Color32::from_rgb(57, 42, 73),
+                card: Color32::from_rgb(52, 38, 66),
+                card_hover: Color32::from_rgb(74, 52, 92),
+                text: Color32::from_rgb(255, 235, 246),
+                muted: Color32::from_rgb(221, 176, 205),
+                border: Color32::from_rgb(96, 64, 111),
+                success: Color32::from_rgb(164, 244, 207),
+                danger: Color32::from_rgb(255, 119, 164),
+            },
+            "cyberpunk" => AppTheme {
+                accent,
+                bg: Color32::from_rgb(4, 8, 20),
+                sidebar: Color32::from_rgb(8, 12, 30),
+                panel: Color32::from_rgb(12, 18, 42),
+                panel_soft: Color32::from_rgb(18, 26, 58),
+                card: Color32::from_rgb(16, 23, 52),
+                card_hover: Color32::from_rgb(26, 36, 78),
+                text: Color32::from_rgb(232, 252, 255),
+                muted: Color32::from_rgb(135, 205, 218),
+                border: Color32::from_rgb(37, 77, 102),
+                success: Color32::from_rgb(57, 255, 136),
+                danger: Color32::from_rgb(255, 52, 118),
+            },
+            "everforest" => AppTheme {
+                accent,
+                bg: Color32::from_rgb(35, 42, 46),
+                sidebar: Color32::from_rgb(45, 53, 59),
+                panel: Color32::from_rgb(52, 63, 68),
+                panel_soft: Color32::from_rgb(61, 72, 77),
+                card: Color32::from_rgb(52, 63, 68),
+                card_hover: Color32::from_rgb(75, 86, 89),
+                text: Color32::from_rgb(211, 198, 170),
+                muted: Color32::from_rgb(168, 153, 132),
+                border: Color32::from_rgb(88, 99, 99),
+                success: Color32::from_rgb(167, 192, 128),
+                danger: Color32::from_rgb(230, 126, 128),
+            },
+            "dracula" => AppTheme {
+                accent,
+                bg: Color32::from_rgb(40, 42, 54),
+                sidebar: Color32::from_rgb(33, 34, 44),
+                panel: Color32::from_rgb(49, 50, 68),
+                panel_soft: Color32::from_rgb(58, 59, 78),
+                card: Color32::from_rgb(49, 50, 68),
+                card_hover: Color32::from_rgb(68, 71, 90),
+                text: Color32::from_rgb(248, 248, 242),
+                muted: Color32::from_rgb(189, 147, 249),
+                border: Color32::from_rgb(98, 114, 164),
+                success: Color32::from_rgb(80, 250, 123),
+                danger: Color32::from_rgb(255, 85, 85),
+            },
+            _ => AppTheme {
                 accent,
                 bg: Color32::from_rgb(10, 12, 18),
                 sidebar: Color32::from_rgb(16, 19, 29),
@@ -354,7 +452,7 @@ impl DotfilesCenter {
                 border: Color32::from_rgb(51, 65, 85),
                 success: Color32::from_rgb(134, 239, 172),
                 danger: Color32::from_rgb(251, 113, 133),
-            }
+            },
         }
     }
 
@@ -399,7 +497,7 @@ impl DotfilesCenter {
 
     fn update_shortcut_dirty_status(&mut self) {
         if self.shortcut_changes_pending() {
-            self.update_shortcut_dirty_status();
+            self.status = "Unsaved shortcut changes".to_string();
         } else {
             self.status = "No shortcut changes".to_string();
         }
@@ -429,10 +527,15 @@ impl DotfilesCenter {
             Ok(())
         })();
 
-        self.status = match result {
-            Ok(()) => "Saved".to_string(),
-            Err(err) => format!("Save failed: {err}"),
-        };
+        match result {
+            Ok(()) => {
+                self.saved_shortcuts = self.shortcuts.clone();
+                self.status = "Saved".to_string();
+            }
+            Err(err) => {
+                self.status = format!("Save failed: {err}");
+            }
+        }
     }
 
     fn save_startup_choice(&self) -> Result<(), String> {
@@ -631,7 +734,7 @@ impl DotfilesCenter {
 
                         if let Some(texture) = texture {
                             let response = ui.add(
-                                egui::Image::new((texture.id(), Vec2::new(200.0, 120.0)))
+                                egui::Image::new((texture.id(), Vec2::new(210.0, 128.0)))
                                     .sense(egui::Sense::click()),
                             );
 
@@ -640,21 +743,9 @@ impl DotfilesCenter {
                             }
                         } else if ui
                             .add_sized(
-                                Vec2::new(200.0, 120.0),
+                                Vec2::new(210.0, 128.0),
                                 egui::Button::new("Could not preview"),
                             )
-                            .clicked()
-                        {
-                            clicked = Some(path.clone());
-                        }
-
-                        ui.add_space(6.0);
-
-                        let name = file_name_string(path);
-                        let display = shorten_text(&name, 26);
-
-                        if ui
-                            .selectable_label(selected, RichText::new(display).strong())
                             .clicked()
                         {
                             clicked = Some(path.clone());
@@ -1046,7 +1137,8 @@ impl DotfilesCenter {
 
             ui.add_space(12.0);
             ui.label(RichText::new("Search settings").color(theme.muted));
-            ui.add(
+            ui.add_sized(
+                [ui.available_width(), 42.0],
                 egui::TextEdit::singleline(&mut self.hypr_search)
                     .hint_text("Search by name, section, path, or type...")
                     .desired_width(f32::INFINITY),
@@ -2277,9 +2369,11 @@ struct Palette {
 }
 
 fn theme_palette(values: &HashMap<String, String>) -> Palette {
+    let selected = value_or(values, "DOTFILES_THEME");
     let accent = value_or(values, "DOTFILES_ACCENT");
-    if value_or(values, "DOTFILES_THEME") == "light" {
-        Palette {
+
+    match selected.as_str() {
+        "light" => Palette {
             accent,
             background: "#f8fafc".to_string(),
             surface: "#e2e8f0".to_string(),
@@ -2288,9 +2382,68 @@ fn theme_palette(values: &HashMap<String, String>) -> Palette {
             inactive_border: "#94a3b8".to_string(),
             bar_rgb: "f8fafc".to_string(),
             active_text: "#ffffff".to_string(),
-        }
-    } else {
-        Palette {
+        },
+        "nord" => Palette {
+            accent,
+            background: "#2e3440".to_string(),
+            surface: "#3b4252".to_string(),
+            text: "#eceff4".to_string(),
+            muted: "#d8dee9".to_string(),
+            inactive_border: "#4c566a".to_string(),
+            bar_rgb: "2e3440".to_string(),
+            active_text: "#2e3440".to_string(),
+        },
+        "gruvbox" => Palette {
+            accent,
+            background: "#282828".to_string(),
+            surface: "#3c3836".to_string(),
+            text: "#ebdbb2".to_string(),
+            muted: "#bdae93".to_string(),
+            inactive_border: "#665c54".to_string(),
+            bar_rgb: "282828".to_string(),
+            active_text: "#1d2021".to_string(),
+        },
+        "sakura" => Palette {
+            accent,
+            background: "#241b2e".to_string(),
+            surface: "#392a49".to_string(),
+            text: "#ffebf6".to_string(),
+            muted: "#ddb0cd".to_string(),
+            inactive_border: "#60406f".to_string(),
+            bar_rgb: "241b2e".to_string(),
+            active_text: "#191420".to_string(),
+        },
+        "cyberpunk" => Palette {
+            accent,
+            background: "#080c1e".to_string(),
+            surface: "#121a3a".to_string(),
+            text: "#e8fcff".to_string(),
+            muted: "#87cdda".to_string(),
+            inactive_border: "#254d66".to_string(),
+            bar_rgb: "080c1e".to_string(),
+            active_text: "#040814".to_string(),
+        },
+        "everforest" => Palette {
+            accent,
+            background: "#2d353b".to_string(),
+            surface: "#3d484d".to_string(),
+            text: "#d3c6aa".to_string(),
+            muted: "#a89984".to_string(),
+            inactive_border: "#586363".to_string(),
+            bar_rgb: "2d353b".to_string(),
+            active_text: "#232a2e".to_string(),
+        },
+        "dracula" => Palette {
+            accent,
+            background: "#282a36".to_string(),
+            surface: "#3a3b4e".to_string(),
+            text: "#f8f8f2".to_string(),
+            muted: "#bd93f9".to_string(),
+            inactive_border: "#6272a4".to_string(),
+            bar_rgb: "282a36".to_string(),
+            active_text: "#282a36".to_string(),
+        },
+        _ => Palette {
             accent,
             background: "#1e1e2e".to_string(),
             surface: "#313244".to_string(),
@@ -2299,7 +2452,7 @@ fn theme_palette(values: &HashMap<String, String>) -> Palette {
             inactive_border: "#45475a".to_string(),
             bar_rgb: "1e1e2e".to_string(),
             active_text: "#11111b".to_string(),
-        }
+        },
     }
 }
 
@@ -3078,15 +3231,7 @@ fn cursor_theme_choices() -> &'static [StyleChoice] {
 }
 
 fn is_package_installed(package: &str) -> bool {
-    Command::new("sh")
-        .arg("-c")
-        .arg(format!(
-            "pacman -Qi {} >/dev/null 2>&1",
-            shell_quote(package)
-        ))
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    package_installed_cached(package)
 }
 
 fn style_choice_grid(
@@ -3097,6 +3242,7 @@ fn style_choice_grid(
     choices: &[StyleChoice],
 ) -> Option<&'static str> {
     let mut package_to_install = None;
+    let is_font_picker = title.to_ascii_lowercase().contains("font");
 
     ui.label(RichText::new(title).strong().size(16.0));
     ui.add_space(8.0);
@@ -3155,9 +3301,36 @@ fn style_choice_grid(
                         });
                     });
 
+                    if is_font_picker {
+                        ui.add_space(8.0);
+                        Frame {
+                            fill: theme.card,
+                            corner_radius: CornerRadius::same(12),
+                            inner_margin: Margin::symmetric(10, 8),
+                            stroke: Stroke::new(1.0, theme.border),
+                            ..Default::default()
+                        }
+                        .show(ui, |ui| {
+                            ui.label(
+                                RichText::new(format!("{}  AaBbCc  123", choice.label))
+                                    .monospace()
+                                    .size(18.0)
+                                    .color(theme.text),
+                            );
+                        });
+
+                        if !installed {
+                            ui.label(
+                                RichText::new("Install this font for the exact preview.")
+                                    .color(theme.muted)
+                                    .size(11.0),
+                            );
+                        }
+                    }
+
                     if let Some(package) = choice.package {
                         if !installed {
-                            ui.add_space(4.0);
+                            ui.add_space(6.0);
                             ui.horizontal(|ui| {
                                 ui.label(
                                     RichText::new(package)
@@ -3313,15 +3486,29 @@ fn addon_choices() -> &'static [AddonChoice] {
 }
 
 fn addon_package_installed(package: &str) -> bool {
-    Command::new("sh")
-        .arg("-c")
-        .arg(format!(
-            "pacman -Qi {} >/dev/null 2>&1",
-            shell_quote(package)
-        ))
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    package_installed_cached(package)
+}
+
+fn package_installed_cached(package: &str) -> bool {
+    static INSTALLED_PACKAGES: std::sync::OnceLock<std::collections::HashSet<String>> =
+        std::sync::OnceLock::new();
+
+    let packages = INSTALLED_PACKAGES.get_or_init(|| {
+        Command::new("pacman")
+            .arg("-Qq")
+            .output()
+            .ok()
+            .map(|output| {
+                String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .map(|line| line.trim().to_string())
+                    .filter(|line| !line.is_empty())
+                    .collect::<std::collections::HashSet<String>>()
+            })
+            .unwrap_or_default()
+    });
+
+    packages.contains(package)
 }
 
 fn primary_button(ui: &mut egui::Ui, theme: &AppTheme, text: &str) -> egui::Response {

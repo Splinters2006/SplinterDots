@@ -115,6 +115,13 @@ install_packages() {
   fi
 
   mapfile -t packages < <(sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' "$ROOT_DIR/packages/arch.txt")
+
+  # Required for SplinterDots wallpaper support.
+  # Keep this forced here so wallpapers cannot silently break if the package list is edited.
+  if ! printf '%s\n' "${packages[@]}" | grep -qx 'swww'; then
+    packages+=("swww")
+  fi
+
   pacman_args=(-S --needed)
   if [ "$NOCONFIRM" -eq 1 ]; then
     pacman_args+=(--noconfirm)
