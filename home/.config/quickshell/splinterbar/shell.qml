@@ -11,29 +11,31 @@ Variants {
 
   delegate: Component {
     PanelWindow {
+      id: root
+      property int activeWorkspace: 1
       required property var modelData
       screen: modelData
 
       anchors {
-        top: false
-        bottom: true
+        top: true
+        bottom: false
         left: true
         right: true
       }
 
       margins {
-        top: 0
-        bottom: 8
+        top: 8
+        bottom: 0
         left: 10
         right: 10
       }
 
-      implicitHeight: 49
+      implicitHeight: 39
       color: "transparent"
 
       Rectangle {
         anchors.fill: parent
-        radius: 8
+        radius: 28
         color: "#e51e1e2e"
         border.width: 1
         border.color: "#313244"
@@ -46,27 +48,32 @@ Variants {
 
           Row {
             Layout.alignment: Qt.AlignVCenter
-            spacing: 8
+            spacing: 6
 
             Repeater {
               model: 9
               Rectangle {
-                width: 24
-                height: 24
-                radius: 7
-                color: index === 0 ? "#89b4fa" : "#313244"
+                width: (index + 1) === root.activeWorkspace ? 37 : 25
+                height: (index + 1) === root.activeWorkspace ? 37 : 25
+                anchors.verticalCenter: parent.verticalCenter
+                radius: 24
+                color: (index + 1) === root.activeWorkspace ? "#89b4fa" : "#313244"
+                opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.7
 
                 Text {
                   anchors.centerIn: parent
                   text: index + 1
-                  color: index === 0 ? "#11111b" : "#cdd6f4"
+                  color: (index + 1) === root.activeWorkspace ? "#11111b" : "#cdd6f4"
                   font.bold: true
-                  font.pixelSize: 12
+                  font.pixelSize: 11
                 }
 
                 MouseArea {
                   anchors.fill: parent
                   onClicked: switchWorkspace.running = true
+                  hoverEnabled: true
+                  onEntered: parent.opacity = 1.0
+                  onExited: parent.opacity = (index + 1) === root.activeWorkspace ? 1.0 : 0.7
                 }
 
                 Process {
@@ -76,7 +83,6 @@ Variants {
               }
             }
           }
-
           Item { Layout.fillWidth: true }
 
           Text {
@@ -84,7 +90,7 @@ Variants {
             Layout.alignment: Qt.AlignCenter
             color: "#cdd6f4"
             font.bold: true
-            font.pixelSize: 13
+            font.pixelSize: 12
             text: "Loading..."
 
             Process {
@@ -103,7 +109,6 @@ Variants {
               onTriggered: dateProc.running = true
             }
           }
-
           Item { Layout.fillWidth: true }
 
           Text {
@@ -111,14 +116,14 @@ Variants {
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             color: "#bac2de"
             font.pixelSize: 12
-            text: "VOL --  NET --"
+            text: ""
 
             Process {
               id: statusProc
-              command: ["sh", "-c", "printf 'VOL '; wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{print int($2*100)"%"}'; printf 'NET '; nmcli -t -f GENERAL.STATE device show 2>/dev/null | grep -q ':100' && echo on || echo off"]
+              command: ["sh", "-c", "printf 'VOL '; wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"MUTE\"; else print v\"%\"}'; printf '  NET '; nmcli -t -f GENERAL.STATE device show 2>/dev/null | grep -q ':100' && echo on || echo off; bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && printf '  BAT %s%%' \"$bat\""]
               running: true
               stdout: StdioCollector {
-                onStreamFinished: status.text = this.text.replace(/\n/g, "  ").trim()
+                onStreamFinished: status.text = this.text.replace(/\n/g, "").trim()
               }
             }
 
