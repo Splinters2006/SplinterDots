@@ -21,7 +21,7 @@ if command -v /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 >/dev/nu
 fi
 
 command -v mako >/dev/null 2>&1 && start_once mako mako
-command -v quickshell >/dev/null 2>&1 && start_once quickshell quickshell -c splinterbar
+command -v waybar >/dev/null 2>&1 && start_once waybar waybar
 
 if command -v swww-daemon >/dev/null 2>&1; then
   swww query >/dev/null 2>&1 || swww-daemon >/dev/null 2>&1 &
