@@ -5,6 +5,7 @@ ROOT_DIR="${DOTFILES_ROOT:-$HOME/dotfiles}"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 LOG_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/hyprland"
 LOG_FILE="$LOG_DIR/dotfiles-hyprland-$(date +%Y%m%d-%H%M%S).log"
+HYPRLAND_COMMAND="${DOTFILES_HYPRLAND_COMMAND:-Hyprland}"
 
 mkdir -p "$LOG_DIR"
 
@@ -41,9 +42,10 @@ fi
   printf 'Log file: %s\n' "$LOG_FILE"
   printf 'XDG_SESSION_TYPE=%s\n' "$XDG_SESSION_TYPE"
   printf 'XDG_CURRENT_DESKTOP=%s\n' "$XDG_CURRENT_DESKTOP"
+  printf 'Hyprland command: %s\n' "$HYPRLAND_COMMAND"
   printf 'GPU summary:\n'
   command -v lspci >/dev/null 2>&1 && lspci | grep -Ei 'vga|3d|display' || true
   printf '\n--- Hyprland output ---\n'
 } > "$LOG_FILE"
 
-exec Hyprland >> "$LOG_FILE" 2>&1
+exec $HYPRLAND_COMMAND >> "$LOG_FILE" 2>&1

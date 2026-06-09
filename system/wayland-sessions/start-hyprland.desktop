@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Start Hyprland
+Comment=Start Hyprland through the dotfiles wrapper
+Exec=start-hyprland
+Type=Application

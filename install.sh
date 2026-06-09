@@ -206,6 +206,7 @@ configure_system() {
 
   if [ "$DRY_RUN" -eq 1 ]; then
     log "[dry-run] sudo install -Dm644 $ROOT_DIR/system/greetd/config.toml /etc/greetd/config.toml"
+    log "[dry-run] sudo install -Dm644 $ROOT_DIR/system/wayland-sessions/start-hyprland.desktop /usr/share/wayland-sessions/start-hyprland.desktop"
     log "[dry-run] sudo install -Dm755 $ROOT_DIR/scripts/start-hyprland /usr/local/bin/start-hyprland"
     log "[dry-run] sudo install -Dm755 $ROOT_DIR/scripts/dotfiles-start-hyprland /usr/local/bin/dotfiles-start-hyprland"
     log "[dry-run] sudo systemctl enable NetworkManager bluetooth greetd"
@@ -213,6 +214,7 @@ configure_system() {
   fi
 
   sudo install -Dm644 "$ROOT_DIR/system/greetd/config.toml" /etc/greetd/config.toml
+  sudo install -Dm644 "$ROOT_DIR/system/wayland-sessions/start-hyprland.desktop" /usr/share/wayland-sessions/start-hyprland.desktop
   sudo install -Dm755 "$ROOT_DIR/scripts/start-hyprland" /usr/local/bin/start-hyprland
   sudo install -Dm755 "$ROOT_DIR/scripts/dotfiles-start-hyprland" /usr/local/bin/dotfiles-start-hyprland
   sudo systemctl enable NetworkManager bluetooth greetd
