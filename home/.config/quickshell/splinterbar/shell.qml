@@ -31,7 +31,7 @@ Variants {
         right: 10
       }
 
-      implicitHeight: 32
+      implicitHeight: 34
       color: "transparent"
 
       Process {
@@ -54,7 +54,7 @@ Variants {
       }
 
       Timer {
-        interval: 40
+        interval: 120
         running: true
         repeat: true
         onTriggered: stateProc.running = true
@@ -62,10 +62,10 @@ Variants {
 
       Rectangle {
         anchors.fill: parent
-        radius: 28
-        color: "#e5282828"
+        radius: 8
+        color: "#ea2d353b"
         border.width: 1
-        border.color: "#3c3836"
+        border.color: "#3d484d"
 
         RowLayout {
           anchors.fill: parent
@@ -80,17 +80,17 @@ Variants {
             Repeater {
               model: 5
               Rectangle {
-                width: (index + 1) === root.activeWorkspace ? 30 : 18
-                height: (index + 1) === root.activeWorkspace ? 30 : 18
+                width: (index + 1) === root.activeWorkspace ? 32 : 20
+                height: (index + 1) === root.activeWorkspace ? 32 : 20
                 anchors.verticalCenter: parent.verticalCenter
-                radius: 24
-                color: (index + 1) === root.activeWorkspace ? "#89b4fa" : "#3c3836"
+                radius: 4
+                color: (index + 1) === root.activeWorkspace ? "#89b4fa" : "#3d484d"
                 opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.72
 
                 Text {
                   anchors.centerIn: parent
                   text: index + 1
-                  color: (index + 1) === root.activeWorkspace ? "#1d2021" : "#ebdbb2"
+                  color: (index + 1) === root.activeWorkspace ? "#232a2e" : "#d3c6aa"
                   font.bold: true
                   font.pixelSize: 11
                   font.family: "Symbols Nerd Font"
@@ -116,7 +116,7 @@ Variants {
           Text {
             id: clock
             Layout.alignment: Qt.AlignCenter
-            color: "#ebdbb2"
+            color: "#d3c6aa"
             font.bold: true
             font.pixelSize: 12
             font.family: "Symbols Nerd Font"
@@ -143,14 +143,14 @@ Variants {
           Text {
             id: status
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-            color: "#bdae93"
+            color: "#a89984"
             font.pixelSize: 12
             font.family: "Symbols Nerd Font"
             text: ""
 
             Process {
               id: statusProc
-              command: ["sh", "-c", "printf ' '; wpctl get-volume \"@DEFAULT_AUDIO_SINK@\" 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"\"; else print v\"%\"}'; nmcli -t -f GENERAL.STATE device show 2>/dev/null | grep -q ':100' && printf '   on' || printf '   off'; bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && if [ \"$bat\" -le 20 ]; then printf '   %s%%!' \"$bat\"; else printf '   %s%%' \"$bat\"; fi; cpu=$(top -bn1 | awk -F'[, ]+' '/Cpu\\(s\\)/{print int($2+$4)}' 2>/dev/null); [ -n \"$cpu\" ] && printf '   CPU %s%%' \"$cpu\"; mem=$(free -m | awk '/^Mem/{printf \"%dMB\", $3}' 2>/dev/null); [ -n \"$mem\" ] && printf '   RAM %s' \"$mem\"; tmp=$(sensors 2>/dev/null | awk '/Package id 0|Tctl|temp1/{gsub(/[+°C]/, \"\", $2); print int($2)\"°C\"; exit}'); [ -n \"$tmp\" ] && printf '   %s' \"$tmp\"; disk=$(df -h \"/\" 2>/dev/null | awk 'NR==2{print $5}'); [ -n \"$disk\" ] && printf '   %s' \"$disk\"; bri=$(brightnessctl -m 2>/dev/null | awk -F, '{print $4}'); [ -n \"$bri\" ] && printf '   %s' \"$bri\"; bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf '   on' || printf '   off'; media=$(playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null | cut -c1-28); [ -n \"$media\" ] && printf '   %s' \"$media\"; upd=$(checkupdates 2>/dev/null | wc -l); [ -n \"$upd\" ] && [ \"$upd\" != \"0\" ] && printf '   %s' \"$upd\"; kb=$(hyprctl devices -j 2>/dev/null | grep -m1 -o '\"active_keymap\":\"[^\"]*' | cut -d'\"' -f4); [ -n \"$kb\" ] && printf '   KB %s' \"$kb\""]
+              command: ["sh", "-c", "printf ' '; wpctl get-volume \"@DEFAULT_AUDIO_SINK@\" 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"\"; else print v\"%\"}'; nmcli -t -f GENERAL.STATE device show 2>/dev/null | grep -q ':100' && printf '  󰤨 on' || printf '  󰤨 off'; bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && if [ \"$bat\" -le 20 ]; then printf '  󰁹 %s%%!' \"$bat\"; else printf '  󰁹 %s%%' \"$bat\"; fi"]
               running: true
               stdout: StdioCollector {
                 onStreamFinished: status.text = this.text.replace(/\n/g, "").trim()

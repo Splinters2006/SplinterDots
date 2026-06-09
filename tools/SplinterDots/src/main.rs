@@ -136,7 +136,7 @@ impl Tab {
         match self {
             Tab::Overview => "Your desktop at a glance",
             Tab::Hyprland => "Safe visual and behavior settings",
-            Tab::Shortcuts => "Keyboard and mouse controls",
+            Tab::Shortcuts => "",
             Tab::Appearance => "Theme, accent, and wallpaper",
             Tab::Addons => "Download optional fonts, icons, tools, and extras",
             Tab::Bar => "Bar layout, widgets, icons, and speed",
@@ -166,6 +166,7 @@ struct AppTheme {
     sidebar: Color32,
     panel: Color32,
     panel_soft: Color32,
+    input: Color32,
     card: Color32,
     card_hover: Color32,
     text: Color32,
@@ -206,6 +207,7 @@ struct SplinterDots {
     wallpaper_textures: HashMap<String, egui::TextureHandle>,
     fastfetch_output: String,
     addon_search: String,
+    addon_refresh_marker_seen: bool,
     addon_category_filter: String,
     status: String,
     no_show_on_startup: bool,
@@ -392,6 +394,7 @@ impl SplinterDots {
             wallpaper_textures: HashMap::new(),
             fastfetch_output,
             addon_search: String::new(),
+            addon_refresh_marker_seen: false,
             addon_category_filter: "Show All".to_string(),
             status: String::new(),
             no_show_on_startup,
@@ -443,6 +446,7 @@ impl SplinterDots {
                 sidebar: Color32::from_rgb(248, 250, 252),
                 panel: Color32::from_rgb(255, 255, 255),
                 panel_soft: Color32::from_rgb(241, 245, 249),
+                input: Color32::from_rgb(226, 232, 240),
                 card: Color32::from_rgb(255, 255, 255),
                 card_hover: Color32::from_rgb(239, 246, 255),
                 text: Color32::from_rgb(15, 23, 42),
@@ -457,6 +461,7 @@ impl SplinterDots {
                 sidebar: Color32::from_rgb(46, 52, 64),
                 panel: Color32::from_rgb(59, 66, 82),
                 panel_soft: Color32::from_rgb(67, 76, 94),
+                input: Color32::from_rgb(46, 52, 64),
                 card: Color32::from_rgb(59, 66, 82),
                 card_hover: Color32::from_rgb(76, 86, 106),
                 text: Color32::from_rgb(236, 239, 244),
@@ -471,6 +476,7 @@ impl SplinterDots {
                 sidebar: Color32::from_rgb(40, 40, 40),
                 panel: Color32::from_rgb(50, 48, 47),
                 panel_soft: Color32::from_rgb(60, 56, 54),
+            input: Color32::from_rgb(50, 48, 47),
                 card: Color32::from_rgb(50, 48, 47),
                 card_hover: Color32::from_rgb(80, 73, 69),
                 text: Color32::from_rgb(235, 219, 178),
@@ -485,6 +491,7 @@ impl SplinterDots {
                 sidebar: Color32::from_rgb(36, 27, 46),
                 panel: Color32::from_rgb(45, 34, 58),
                 panel_soft: Color32::from_rgb(57, 42, 73),
+                input: Color32::from_rgb(54, 43, 55),
                 card: Color32::from_rgb(52, 38, 66),
                 card_hover: Color32::from_rgb(74, 52, 92),
                 text: Color32::from_rgb(255, 235, 246),
@@ -499,6 +506,7 @@ impl SplinterDots {
                 sidebar: Color32::from_rgb(8, 12, 30),
                 panel: Color32::from_rgb(12, 18, 42),
                 panel_soft: Color32::from_rgb(18, 26, 58),
+                input: Color32::from_rgb(25, 32, 48),
                 card: Color32::from_rgb(16, 23, 52),
                 card_hover: Color32::from_rgb(26, 36, 78),
                 text: Color32::from_rgb(232, 252, 255),
@@ -513,6 +521,7 @@ impl SplinterDots {
                 sidebar: Color32::from_rgb(45, 53, 59),
                 panel: Color32::from_rgb(52, 63, 68),
                 panel_soft: Color32::from_rgb(61, 72, 77),
+                input: Color32::from_rgb(37, 45, 47),
                 card: Color32::from_rgb(52, 63, 68),
                 card_hover: Color32::from_rgb(75, 86, 89),
                 text: Color32::from_rgb(211, 198, 170),
@@ -527,6 +536,7 @@ impl SplinterDots {
                 sidebar: Color32::from_rgb(33, 34, 44),
                 panel: Color32::from_rgb(49, 50, 68),
                 panel_soft: Color32::from_rgb(58, 59, 78),
+            input: Color32::from_rgb(48, 49, 65),
                 card: Color32::from_rgb(49, 50, 68),
                 card_hover: Color32::from_rgb(68, 71, 90),
                 text: Color32::from_rgb(248, 248, 242),
@@ -541,6 +551,7 @@ impl SplinterDots {
                 sidebar: Color32::from_rgb(16, 19, 29),
                 panel: Color32::from_rgb(20, 24, 36),
                 panel_soft: Color32::from_rgb(27, 32, 48),
+                input: Color32::from_rgb(37, 38, 52),
                 card: Color32::from_rgb(30, 36, 54),
                 card_hover: Color32::from_rgb(38, 46, 68),
                 text: Color32::from_rgb(226, 232, 240),
@@ -562,6 +573,15 @@ impl SplinterDots {
         };
 
         visuals.override_text_color = Some(theme.text);
+
+    // Avoid hard black text fields. egui uses `extreme_bg_color` for many
+    // TextEdit backgrounds, so keep it theme-specific and softer.
+    visuals.extreme_bg_color = theme.input;
+
+    visuals.widgets.inactive.bg_fill = theme.input;
+    visuals.widgets.hovered.bg_fill = theme.panel_soft;
+    visuals.widgets.active.bg_fill = theme.panel_soft;
+    visuals.widgets.open.bg_fill = theme.panel_soft;
         visuals.panel_fill = theme.bg;
         visuals.window_fill = theme.panel;
         visuals.widgets.noninteractive.bg_fill = theme.panel_soft;
@@ -608,6 +628,29 @@ impl SplinterDots {
         self.save_all();
         self.saved_shortcuts = self.shortcuts.clone();
         self.status = "Shortcut changes saved".to_string();
+    }
+
+    fn refresh_addons_if_needed(&mut self) {
+        let marker = addons_refresh_marker();
+
+        if marker.exists() {
+            let _ = fs::remove_file(&marker);
+            self.refresh_after_addon_install();
+            self.addon_refresh_marker_seen = true;
+        }
+    }
+
+    fn refresh_after_addon_install(&mut self) {
+        self.values = read_settings(&self.paths);
+        self.shortcuts = load_shortcuts(&self.paths);
+
+        // Refresh visual/generated state that addons may affect.
+        if let Err(err) = write_quickshell_bar(&self.paths, &self.values) {
+            self.status = format!("Addon installed, but bar refresh failed: {err}");
+            return;
+        }
+
+        self.status = "Addon installed. Refreshed installed addons.".to_string();
     }
 
     fn save_all(&mut self) {
@@ -879,7 +922,10 @@ impl SplinterDots {
             .spawn();
 
         self.status = match result {
-            Ok(_) => format!("Opening installer for {package}"),
+            Ok(_) => {
+                self.configure_addon_after_install(package);
+                format!("Opening installer for {package}")
+            }
             Err(err) => format!("Could not open installer: {err}"),
         };
     }
@@ -921,6 +967,97 @@ impl SplinterDots {
             Ok(_) => format!("Opening remover for {package}"),
             Err(err) => format!("Could not open remover: {err}"),
         };
+    }
+
+    fn configure_addon_after_install(&mut self, package: &str) {
+        let packages = package.split_whitespace().collect::<Vec<_>>();
+
+        if packages.contains(&"vesktop-bin") {
+                let config_home = env::var_os("XDG_CONFIG_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| home_dir().join(".config"));
+
+                let theme_dir = config_home.join("vesktop").join("themes");
+                let plugin_dir = config_home.join("vesktop").join("plugins");
+
+                let _ = fs::create_dir_all(&theme_dir);
+                let _ = fs::create_dir_all(&plugin_dir);
+
+                let theme_file = theme_dir.join("SplinterDots.theme.css");
+                if !theme_file.exists() {
+                    let _ = fs::write(
+                        theme_file,
+                        r#":root {
+  --splinter-accent: #89b4fa;
+  --splinter-bg: #1e1e2e;
+  --splinter-card: #313244;
+}
+
+/* SplinterDots Vesktop theme placeholder.
+   Add your Vencord/Vesktop CSS here. */
+"#,
+                    );
+                }
+        }
+
+        if packages.contains(&"spicetify-cli") {
+                let config_home = env::var_os("XDG_CONFIG_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| home_dir().join(".config"));
+
+                let spicetify_dir = config_home.join("spicetify");
+                let theme_dir = spicetify_dir.join("Themes").join("SplinterDots");
+                let ext_dir = spicetify_dir.join("Extensions");
+
+                let _ = fs::create_dir_all(&theme_dir);
+                let _ = fs::create_dir_all(&ext_dir);
+
+                let color_file = theme_dir.join("color.ini");
+                if !color_file.exists() {
+                    let _ = fs::write(
+                        &color_file,
+                        r#"[SplinterDots]
+text               = cdd6f4
+subtext            = bac2de
+main               = 1e1e2e
+sidebar            = 181825
+player             = 181825
+card               = 313244
+shadow             = 11111b
+selected-row       = 45475a
+button             = 89b4fa
+button-active      = 89b4fa
+button-disabled    = 6c7086
+tab-active         = 313244
+notification       = 313244
+notification-error = f38ba8
+misc               = 313244
+"#,
+                    );
+                }
+
+                let user_css = theme_dir.join("user.css");
+                if !user_css.exists() {
+                    let _ = fs::write(
+                        &user_css,
+                        r#"/* SplinterDots Spicetify theme placeholder.
+   Customize Spotify CSS here. */
+"#,
+                    );
+                }
+
+                let _ = Command::new("spicetify")
+                    .args(["config", "current_theme", "SplinterDots"])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+
+                let _ = Command::new("spicetify")
+                    .args(["config", "color_scheme", "SplinterDots"])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+        }
     }
 
     fn install_addon_package(&mut self, package: &str) {
@@ -1493,7 +1630,7 @@ impl SplinterDots {
 
                         ui.add_space(10.0);
 
-                        ui.label(RichText::new("Key").color(theme.muted));
+                        
                         changed |= ui
                             .add_sized(
                                 [ui.available_width(), 34.0],
@@ -2247,7 +2384,7 @@ impl SplinterDots {
                 self.set_value("DOTFILES_WIDGET_UPDATES_COMMAND", updates_cmd);
 
                 let mut kb_label = self.value("DOTFILES_WIDGET_KEYBOARD_LABEL");
-                labeled_text(ui, "Keyboard label", &mut kb_label);
+                labeled_text(ui, "board label", &mut kb_label);
                 self.set_value("DOTFILES_WIDGET_KEYBOARD_LABEL", kb_label);
             });
         });
@@ -2306,7 +2443,7 @@ const WIDGET_TOGGLES: &[(&str, &str)] = &[
     ("Bluetooth", "DOTFILES_BAR_SHOW_BLUETOOTH"),
     ("Media", "DOTFILES_BAR_SHOW_MEDIA"),
     ("Updates", "DOTFILES_BAR_SHOW_UPDATES"),
-    ("Keyboard", "DOTFILES_BAR_SHOW_KEYBOARD"),
+    ("board", "DOTFILES_BAR_SHOW_KEYBOARD"),
 ];
 
 impl eframe::App for SplinterDots {
@@ -3356,6 +3493,47 @@ fn expand_home_path(value: &str) -> PathBuf {
     PathBuf::from(value)
 }
 
+
+
+fn load_wallpaper_texture(
+    ctx: &egui::Context,
+    path: &Path,
+) -> Option<egui::TextureHandle> {
+    let bytes = fs::read(path).ok()?;
+    let image = image::load_from_memory(&bytes).ok()?.to_rgba8();
+    let size = [image.width() as usize, image.height() as usize];
+    let pixels = image.into_raw();
+
+    let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
+
+    Some(ctx.load_texture(
+        path.to_string_lossy(),
+        color_image,
+        egui::TextureOptions::LINEAR,
+    ))
+}
+
+
+fn cover_uv(image_size: Vec2, target_size: Vec2) -> egui::Rect {
+    if image_size.x <= 0.0 || image_size.y <= 0.0 || target_size.x <= 0.0 || target_size.y <= 0.0 {
+        return egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+    }
+
+    let image_aspect = image_size.x / image_size.y;
+    let target_aspect = target_size.x / target_size.y;
+
+    if image_aspect > target_aspect {
+        let visible_width = target_aspect / image_aspect;
+        let crop = (1.0 - visible_width) / 2.0;
+        egui::Rect::from_min_max(egui::pos2(crop, 0.0), egui::pos2(1.0 - crop, 1.0))
+    } else {
+        let visible_height = image_aspect / target_aspect;
+        let crop = (1.0 - visible_height) / 2.0;
+        egui::Rect::from_min_max(egui::pos2(0.0, crop), egui::pos2(1.0, 1.0 - crop))
+    }
+}
+
+
 fn scan_wallpaper_dir(value: &str) -> Vec<PathBuf> {
     let dir = expand_home_path(value);
 
@@ -3747,80 +3925,8 @@ struct AddonChoice {
 fn addon_choices() -> &'static [AddonChoice] {
     &[
         // Fonts
-        AddonChoice {
-            category: "Fonts",
-            name: "CaskaydiaCove Nerd Font",
-            description: "Recommended SplinterDots UI font.",
-            package: "ttf-cascadia-code-nerd",
-        },
-        AddonChoice {
-            category: "Fonts",
-            name: "JetBrainsMono Nerd Font",
-            description: "Clean developer font with Nerd icons.",
-            package: "ttf-jetbrains-mono-nerd",
-        },
-        AddonChoice {
-            category: "Fonts",
-            name: "FiraCode Nerd Font",
-            description: "Programming font with ligatures.",
-            package: "ttf-firacode-nerd",
-        },
-        AddonChoice {
-            category: "Fonts",
-            name: "Hack Nerd Font",
-            description: "Readable terminal font.",
-            package: "ttf-hack-nerd",
-        },
-        AddonChoice {
-            category: "Fonts",
-            name: "Iosevka Nerd Font",
-            description: "Compact advanced terminal font.",
-            package: "ttf-iosevka-nerd",
-        },
         // Icons
-        AddonChoice {
-            category: "Icon packs",
-            name: "Papirus Icons",
-            description: "Modern icon pack for GTK apps.",
-            package: "papirus-icon-theme",
-        },
-        AddonChoice {
-            category: "Icon packs",
-            name: "Breeze Icons",
-            description: "KDE-style icon pack.",
-            package: "breeze-icons",
-        },
-        AddonChoice {
-            category: "Icon packs",
-            name: "Tela Icons",
-            description: "Colorful modern icon theme. May require AUR.",
-            package: "tela-icon-theme",
-        },
-        AddonChoice {
-            category: "Icon packs",
-            name: "Qogir Icons",
-            description: "Flat icon theme. May require AUR.",
-            package: "qogir-icon-theme",
-        },
-        AddonChoice {
-            category: "Icon packs",
-            name: "Vimix Icons",
-            description: "Material-style icon theme. May require AUR.",
-            package: "vimix-icon-theme",
-        },
         // Cursors
-        AddonChoice {
-            category: "Cursor themes",
-            name: "Bibata Cursor",
-            description: "Popular modern cursor theme. May require AUR.",
-            package: "bibata-cursor-theme",
-        },
-        AddonChoice {
-            category: "Cursor themes",
-            name: "Capitaine Cursor",
-            description: "macOS-like cursor theme. May require AUR.",
-            package: "capitaine-cursors",
-        },
         // Desktop utilities
         AddonChoice {
             category: "Desktop utilities",
@@ -3836,12 +3942,6 @@ fn addon_choices() -> &'static [AddonChoice] {
         },
         AddonChoice {
             category: "Desktop utilities",
-            name: "Bluetooth GUI",
-            description: "Bluetooth tray and device manager.",
-            package: "blueman",
-        },
-        AddonChoice {
-            category: "Desktop utilities",
             name: "Audio Control",
             description: "Simple PipeWire/PulseAudio volume GUI.",
             package: "pavucontrol",
@@ -3852,6 +3952,21 @@ fn addon_choices() -> &'static [AddonChoice] {
             description: "Audio effects and equalizer.",
             package: "easyeffects",
         },
+        // Apps and theming
+
+        AddonChoice {
+            category: "Apps and theming",
+            name: "Vesktop themed bundle",
+            description: "Installs Vesktop and creates SplinterDots-ready Vencord theme/plugin folders.",
+            package: "vesktop-bin",
+        },
+        AddonChoice {
+            category: "Apps and theming",
+            name: "Spotify themed bundle",
+            description: "Installs Spotify + Spicetify and creates a matching SplinterDots theme.",
+            package: "spotify spicetify-cli",
+        },
+
         // Terminal tools
         AddonChoice {
             category: "Terminal tools",
@@ -3912,6 +4027,7 @@ fn addon_categories() -> &'static [&'static str] {
         "Icon packs",
         "Cursor themes",
         "Desktop utilities",
+        "Apps and theming",
         "Terminal tools",
         "Diagnostics",
     ]
@@ -4041,7 +4157,7 @@ fn bar_widget_choices() -> &'static [BarWidgetChoice] {
         },
         BarWidgetChoice {
             id: "keyboard",
-            label: "Keyboard",
+            label: "board",
             setting: "DOTFILES_BAR_SHOW_KEYBOARD",
         },
     ]
@@ -4248,21 +4364,29 @@ fn friendly_kind(kind: &str) -> &'static str {
 }
 
 fn format_shortcut_key(key: &str) -> String {
-    let parts: Vec<String> = key
-        .split(',')
-        .map(|part| match part.trim().to_ascii_uppercase().as_str() {
-            "SHIFT" => "Shift".to_string(),
-            "CTRL" => "Ctrl".to_string(),
-            "ALT" => "Alt".to_string(),
-            _ => part.trim().to_string(),
-        })
+    let mut parts = key
+        .split('+')
+        .map(|part| part.trim())
         .filter(|part| !part.is_empty())
-        .collect();
+        .map(|part| {
+            let upper = part.to_uppercase();
+            match upper.as_str() {
+                "SUPER" | "META" | "WIN" => "SUPER".to_string(),
+                "SHIFT" => "SHIFT".to_string(),
+                "CTRL" | "CONTROL" => "CTRL".to_string(),
+                "ALT" => "ALT".to_string(),
+                "SPACE" => "SPACE".to_string(),
+                other => other.to_string(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    parts.retain(|part| part != "SUPER");
 
     if parts.is_empty() {
-        "Super".to_string()
+        "SUPER".to_string()
     } else {
-        format!("Super + {}", parts.join(" + "))
+        format!("SUPER + {}", parts.join(" + "))
     }
 }
 
@@ -4318,6 +4442,22 @@ fn hex_to_hypr_rgba(hex: &str) -> String {
     } else {
         "rgba(89b4faff)".to_string()
     }
+}
+
+
+fn addons_refresh_marker() -> PathBuf {
+    env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home_dir().join(".cache"))
+        .join("splinterdots")
+        .join("addons-refresh")
+}
+
+
+fn home_dir() -> PathBuf {
+    env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 fn ensure_dir(path: &Path) -> Result<(), String> {
