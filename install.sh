@@ -9,6 +9,7 @@ INSTALL_PACKAGES=0
 INSTALL_AUR=0
 UPDATE_DOTFILES=0
 CONFIGURE_SYSTEM=0
+NOCONFIRM=0
 DOTFILES_NAME="Arch User"
 DOTFILES_EMAIL=""
 
@@ -23,6 +24,7 @@ Options:
   --upd           Update this dotfiles repo, then apply dotfiles
   --system        Configure greetd and enable desktop services
   --all           Update repo, install pacman/AUR packages, configure system, and apply dotfiles
+  --noconfirm     Pass --noconfirm to pacman, makepkg, and yay
   -h, --help      Show this help
 EOF
 }
@@ -70,6 +72,9 @@ while [ "$#" -gt 0 ]; do
       INSTALL_AUR=1
       CONFIGURE_SYSTEM=1
       ;;
+    --noconfirm)
+      NOCONFIRM=1
+      ;;
     -h|--help)
       usage
       exit 0
@@ -105,13 +110,17 @@ install_packages() {
   fi
 
   mapfile -t packages < <(sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' "$ROOT_DIR/packages/arch.txt")
+  pacman_args=(-S --needed)
+  if [ "$NOCONFIRM" -eq 1 ]; then
+    pacman_args+=(--noconfirm)
+  fi
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    log "[dry-run] sudo pacman -S --needed ${packages[*]}"
+    log "[dry-run] sudo pacman ${pacman_args[*]} ${packages[*]}"
     return
   fi
 
-  sudo pacman -S --needed "${packages[@]}"
+  sudo pacman "${pacman_args[@]}" "${packages[@]}"
 }
 
 install_yay() {
@@ -126,18 +135,33 @@ install_yay() {
   fi
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    log "[dry-run] sudo pacman -S --needed base-devel git"
+    if [ "$NOCONFIRM" -eq 1 ]; then
+      log "[dry-run] sudo pacman -S --needed --noconfirm base-devel git"
+    else
+      log "[dry-run] sudo pacman -S --needed base-devel git"
+    fi
     log "[dry-run] git clone https://aur.archlinux.org/yay.git /tmp/dotfiles-yay"
-    log "[dry-run] cd /tmp/dotfiles-yay && makepkg -si --noconfirm"
+    if [ "$NOCONFIRM" -eq 1 ]; then
+      log "[dry-run] cd /tmp/dotfiles-yay && makepkg -si --noconfirm"
+    else
+      log "[dry-run] cd /tmp/dotfiles-yay && makepkg -si"
+    fi
     return
   fi
 
-  sudo pacman -S --needed base-devel git
+  pacman_args=(-S --needed)
+  makepkg_args=(-si)
+  if [ "$NOCONFIRM" -eq 1 ]; then
+    pacman_args+=(--noconfirm)
+    makepkg_args+=(--noconfirm)
+  fi
+
+  sudo pacman "${pacman_args[@]}" base-devel git
   rm -rf /tmp/dotfiles-yay
   git clone https://aur.archlinux.org/yay.git /tmp/dotfiles-yay
   (
     cd /tmp/dotfiles-yay
-    makepkg -si --noconfirm
+    makepkg "${makepkg_args[@]}"
   )
 }
 
@@ -156,12 +180,17 @@ install_aur_packages() {
     return
   fi
 
+  yay_args=(-S --needed)
+  if [ "$NOCONFIRM" -eq 1 ]; then
+    yay_args+=(--noconfirm)
+  fi
+
   if [ "$DRY_RUN" -eq 1 ]; then
-    log "[dry-run] yay -S --needed ${aur_packages[*]}"
+    log "[dry-run] yay ${yay_args[*]} ${aur_packages[*]}"
     return
   fi
 
-  yay -S --needed "${aur_packages[@]}"
+  yay "${yay_args[@]}" "${aur_packages[@]}"
 }
 
 configure_system() {
@@ -172,12 +201,12 @@ configure_system() {
 
   if [ "$DRY_RUN" -eq 1 ]; then
     log "[dry-run] sudo install -Dm644 $ROOT_DIR/system/greetd/config.toml /etc/greetd/config.toml"
-    log "[dry-run] sudo systemctl enable NetworkManager greetd"
+    log "[dry-run] sudo systemctl enable NetworkManager bluetooth greetd"
     return
   fi
 
   sudo install -Dm644 "$ROOT_DIR/system/greetd/config.toml" /etc/greetd/config.toml
-  sudo systemctl enable NetworkManager greetd
+  sudo systemctl enable NetworkManager bluetooth greetd
 }
 
 update_dotfiles() {

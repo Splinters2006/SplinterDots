@@ -41,12 +41,22 @@ Do everything in one run:
 ./install.sh --all
 ```
 
+Run the full setup with automatic package confirmations:
+
+```sh
+./install.sh --all --noconfirm
+```
+
 On a clean minimal Arch install, `--all` installs Hyprland, Waybar, Wofi,
 Mako, Kitty, Thunar, Firefox, PipeWire audio, NetworkManager, screenshot tools,
-clipboard tools, wallpaper support, portals, and a graphical login stack. It
+clipboard tools, wallpaper support, Bluetooth tools, EasyEffects audio presets,
+portals, and a graphical login stack. It
 also installs the greetd config from `system/greetd/config.toml` and enables
-NetworkManager plus greetd. It also installs `yay` if missing, then installs
-any AUR packages listed in `packages/aur.txt`.
+NetworkManager, Bluetooth, and greetd. It also installs `yay` if missing, then
+installs any AUR packages listed in `packages/aur.txt`.
+
+`--noconfirm` passes automatic confirmation flags to `pacman`, `makepkg`, and
+`yay`. It does not bypass sudo password prompts.
 
 Update the dotfiles repo and re-apply links:
 
@@ -116,6 +126,8 @@ The installer links files from `home/` into your home directory:
 | `home/.config/mako/config` | `~/.config/mako/config` |
 | `home/.config/starship.toml` | `~/.config/starship.toml` |
 | `home/.config/autostart/dotfiles-welcome.desktop` | `~/.config/autostart/dotfiles-welcome.desktop` |
+| `home/.local/share/easyeffects/output/Dotfiles Output.json` | `~/.local/share/easyeffects/output/Dotfiles Output.json` |
+| `home/.local/share/easyeffects/input/Dotfiles Mic.json` | `~/.local/share/easyeffects/input/Dotfiles Mic.json` |
 | `config/dotfiles/settings.conf` | `~/.config/dotfiles/settings.conf` |
 
 Existing files are moved into `.dotfiles-backup/<timestamp>/` before links are created.
@@ -162,6 +174,22 @@ All keybinds use the `Super` / Windows key.
 
 Use `dotctl center` to change wallpaper, colors, apps, and keybinds
 graphically.
+
+## Audio And Bluetooth
+
+`--all` installs and enables Bluetooth with `bluez`, `bluez-utils`, `blueman`,
+and the `bluetooth` service. Open Blueman from the launcher to pair devices.
+
+EasyEffects starts with Hyprland and includes two presets:
+
+| Preset | Location | Purpose |
+| --- | --- | --- |
+| `Dotfiles Output` | Output tab | Gentle EQ and limiter for clearer desktop audio |
+| `Dotfiles Mic` | Input tab | Noise gate, voice compression, voice EQ, and limiter |
+
+Open EasyEffects from the launcher, go to the Output and Input tabs, and select
+the matching preset. Presets are deliberately conservative because every mic,
+headset, and speaker is different.
 
 ## Layout
 

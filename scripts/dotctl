@@ -21,6 +21,8 @@ Commands:
   center      Open the graphical Dotfiles Center
   uninstall   Remove symlinks created by these dotfiles
   help        Show this help
+
+Installer commands accept install flags such as --dry-run and --noconfirm.
 EOF
 }
 
@@ -96,27 +98,27 @@ edit_settings() {
 }
 
 apply() {
-  "$ROOT_DIR/install.sh"
+  "$ROOT_DIR/install.sh" "$@"
 }
 
 packages() {
-  "$ROOT_DIR/install.sh" --packages
+  "$ROOT_DIR/install.sh" --packages "$@"
 }
 
 aur() {
-  "$ROOT_DIR/install.sh" --aur
+  "$ROOT_DIR/install.sh" --aur "$@"
 }
 
 system_setup() {
-  "$ROOT_DIR/install.sh" --system
+  "$ROOT_DIR/install.sh" --system "$@"
 }
 
 update_dotfiles() {
-  "$ROOT_DIR/install.sh" --upd
+  "$ROOT_DIR/install.sh" --upd "$@"
 }
 
 all() {
-  "$ROOT_DIR/install.sh" --all
+  "$ROOT_DIR/install.sh" --all "$@"
 }
 
 welcome() {
@@ -165,15 +167,18 @@ uninstall() {
 }
 
 cmd="${1:-help}"
+if [ "$#" -gt 0 ]; then
+  shift
+fi
 case "$cmd" in
   status) status ;;
   edit) edit_settings ;;
-  apply) apply ;;
-  update) update_dotfiles ;;
-  all) all ;;
-  packages) packages ;;
-  aur) aur ;;
-  system) system_setup ;;
+  apply) apply "$@" ;;
+  update) update_dotfiles "$@" ;;
+  all) all "$@" ;;
+  packages) packages "$@" ;;
+  aur) aur "$@" ;;
+  system) system_setup "$@" ;;
   welcome) welcome ;;
   center) center ;;
   uninstall) uninstall ;;
