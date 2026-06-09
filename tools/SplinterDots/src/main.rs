@@ -75,7 +75,7 @@ const EXCLUDED_HYPR_OPTIONS: &[&str] = &[
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-struct Shortcut {
+struct Keybind {
     name: String,
     key: String,
     kind: String,
@@ -110,7 +110,7 @@ struct HyprNode {
 enum Tab {
     Overview,
     Hyprland,
-    Shortcuts,
+    Keybinds,
     Appearance,
     Addons,
     Bar,
@@ -123,7 +123,7 @@ impl Tab {
         match self {
             Tab::Overview => "Overview",
             Tab::Hyprland => "Hyprland",
-            Tab::Shortcuts => "Shortcuts",
+            Tab::Keybinds => "Keybinds",
             Tab::Appearance => "Appearance",
             Tab::Addons => "Addons",
             Tab::Bar => "Bar & Widgets",
@@ -136,7 +136,7 @@ impl Tab {
         match self {
             Tab::Overview => "Your desktop at a glance",
             Tab::Hyprland => "Safe visual and behavior settings",
-            Tab::Shortcuts => "",
+            Tab::Keybinds => "",
             Tab::Appearance => "Theme, accent, and wallpaper",
             Tab::Addons => "Download optional fonts, icons, tools, and extras",
             Tab::Bar => "Bar layout, widgets, icons, and speed",
@@ -149,7 +149,7 @@ impl Tab {
         match self {
             Tab::Overview => "",
             Tab::Hyprland => "",
-            Tab::Shortcuts => "",
+            Tab::Keybinds => "",
             Tab::Appearance => "",
             Tab::Addons => "",
             Tab::Bar => "󰖰",
@@ -197,9 +197,9 @@ struct SplinterDots {
     paths: Paths,
     tab: Tab,
     values: HashMap<String, String>,
-    shortcuts: Vec<Shortcut>,
-    saved_shortcuts: Vec<Shortcut>,
-    selected_shortcut: Option<usize>,
+    keybinds: Vec<Keybind>,
+    saved_keybinds: Vec<Keybind>,
+    selected_keybind: Option<usize>,
     hypr_schema: Vec<HyprOption>,
     hypr_values: HashMap<String, String>,
     hypr_search: String,
@@ -209,8 +209,10 @@ struct SplinterDots {
     addon_search: String,
     addon_refresh_marker_seen: bool,
     addon_category_filter: String,
+    preview_font_families: HashMap<String, FontFamily>,
     status: String,
     no_show_on_startup: bool,
+    loaded_ui_font: String,
 }
 
 fn main() -> eframe::Result<()> {
@@ -372,8 +374,8 @@ impl SplinterDots {
     fn new() -> Self {
         let paths = Paths::new();
         let values = read_settings(&paths);
-        let shortcuts = load_shortcuts(&paths);
-        let saved_shortcuts = shortcuts.clone();
+        let keybinds = load_keybinds(&paths);
+        let saved_keybinds = keybinds.clone();
         let hypr_schema = load_hypr_schema(&paths);
         let hypr_values = load_hypr_values(&paths, &hypr_schema);
         let wallpaper_images = scan_wallpaper_dir(&value_or(&values, "DOTFILES_WALLPAPER_DIR"));
@@ -384,9 +386,9 @@ impl SplinterDots {
             paths,
             tab: Tab::Overview,
             values,
-            shortcuts,
-            saved_shortcuts,
-            selected_shortcut: None,
+            keybinds,
+            saved_keybinds,
+            selected_keybind: None,
             hypr_schema,
             hypr_values,
             hypr_search: String::new(),
@@ -398,7 +400,100 @@ impl SplinterDots {
             addon_category_filter: "Show All".to_string(),
             status: String::new(),
             no_show_on_startup,
+            loaded_ui_font: String::new(),
+            preview_font_families: HashMap::new(),
         }
+    }
+
+    fn sync_ui_font(&mut self, ctx: &egui::Context) {
+        let selected_font = self.value("DOTFILES_UI_FONT");
+
+        if self.loaded_ui_font == selected_font && !self.preview_font_families.is_empty() {
+            return;
+        }
+
+        let mut fonts = FontDefinitions::default();
+        self.preview_font_families.clear();
+
+        // 1. Icon font for sidebar/buttons.
+        let icon_candidates = [
+            "/usr/share/fonts/TTF/SymbolsNerdFont-Regular.ttf",
+            "/usr/share/fonts/TTF/SymbolsNerdFontMono-Regular.ttf",
+            "/usr/share/fonts/OTF/SymbolsNerdFont-Regular.otf",
+            "/usr/share/fonts/TTF/CaskaydiaCoveNerdFont-Regular.ttf",
+            "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf",
+        ];
+
+        for path in icon_candidates {
+            if let Ok(bytes) = fs::read(path) {
+                fonts.font_data.insert(
+                    "splinter-icons-data".to_string(),
+                    FontData::from_owned(bytes).into(),
+                );
+
+                fonts
+                    .families
+                    .entry(FontFamily::Name("splinter-icons".into()))
+                    .or_default()
+                    .push("splinter-icons-data".to_string());
+
+                break;
+            }
+        }
+
+        // 2. Selected global UI font.
+        if let Some(path) = font_file_candidates(&selected_font).first() {
+            if let Ok(bytes) = fs::read(path) {
+                fonts.font_data.insert(
+                    "splinter-ui-font".to_string(),
+                    FontData::from_owned(bytes).into(),
+                );
+
+                fonts
+                    .families
+                    .entry(FontFamily::Proportional)
+                    .or_default()
+                    .insert(0, "splinter-ui-font".to_string());
+
+                fonts
+                    .families
+                    .entry(FontFamily::Monospace)
+                    .or_default()
+                    .insert(0, "splinter-ui-font".to_string());
+            }
+        }
+
+        // 3. Separate preview font families for every font card.
+        for choice in font_choices() {
+            let candidates = font_file_candidates(choice.value);
+            let Some(path) = candidates.first() else {
+                continue;
+            };
+
+            let Ok(bytes) = fs::read(path) else {
+                continue;
+            };
+
+            let family_name = format!("preview-{}", normalize_font_name(choice.value));
+            let font_id = format!("{}-{}", family_name, path.display());
+
+            fonts.font_data.insert(
+                font_id.clone(),
+                FontData::from_owned(bytes).into(),
+            );
+
+            fonts
+                .families
+                .entry(FontFamily::Name(family_name.clone().into()))
+                .or_default()
+                .push(font_id);
+
+            self.preview_font_families
+                .insert(choice.value.to_string(), FontFamily::Name(family_name.into()));
+        }
+
+        ctx.set_fonts(fonts);
+        self.loaded_ui_font = selected_font;
     }
 
     fn value(&self, key: &str) -> String {
@@ -607,27 +702,27 @@ impl SplinterDots {
         ctx.set_style(style);
     }
 
-    fn shortcut_changes_pending(&self) -> bool {
-        self.shortcuts != self.saved_shortcuts
+    fn keybind_changes_pending(&self) -> bool {
+        self.keybinds != self.saved_keybinds
     }
 
-    fn update_shortcut_dirty_status(&mut self) {
-        if self.shortcut_changes_pending() {
-            self.status = "Unsaved shortcut changes".to_string();
+    fn update_keybind_dirty_status(&mut self) {
+        if self.keybind_changes_pending() {
+            self.status = "Unsaved keybind changes".to_string();
         } else {
-            self.status = "No shortcut changes".to_string();
+            self.status = "No keybind changes".to_string();
         }
     }
 
-    fn save_shortcut_changes(&mut self) {
-        if !self.shortcut_changes_pending() {
-            self.status = "No shortcut changes to save".to_string();
+    fn save_keybind_changes(&mut self) {
+        if !self.keybind_changes_pending() {
+            self.status = "No keybind changes to save".to_string();
             return;
         }
 
         self.save_all();
-        self.saved_shortcuts = self.shortcuts.clone();
-        self.status = "Shortcut changes saved".to_string();
+        self.saved_keybinds = self.keybinds.clone();
+        self.status = "Keybind changes saved".to_string();
     }
 
     fn refresh_addons_if_needed(&mut self) {
@@ -642,7 +737,7 @@ impl SplinterDots {
 
     fn refresh_after_addon_install(&mut self) {
         self.values = read_settings(&self.paths);
-        self.shortcuts = load_shortcuts(&self.paths);
+        self.keybinds = load_keybinds(&self.paths);
 
         // Refresh visual/generated state that addons may affect.
         if let Err(err) = write_quickshell_bar(&self.paths, &self.values) {
@@ -656,10 +751,10 @@ impl SplinterDots {
     fn save_all(&mut self) {
         let result = (|| -> Result<(), String> {
             write_local_conf(&self.paths, &self.values)?;
-            save_shortcuts(&self.paths, &self.shortcuts)?;
+            save_keybinds(&self.paths, &self.keybinds)?;
             save_hypr_values(&self.paths, &self.hypr_values)?;
             write_colors(&self.paths, &self.values)?;
-            write_keybinds(&self.paths, &self.values, &self.shortcuts)?;
+            write_keybinds(&self.paths, &self.values, &self.keybinds)?;
             write_hyprland_settings(&self.paths, &self.hypr_schema, &self.hypr_values)?;
             write_quickshell_bar(&self.paths, &self.values)?;
             self.save_startup_choice()?;
@@ -668,7 +763,7 @@ impl SplinterDots {
 
         match result {
             Ok(()) => {
-                self.saved_shortcuts = self.shortcuts.clone();
+                self.saved_keybinds = self.keybinds.clone();
                 self.status = "Saved".to_string();
             }
             Err(err) => {
@@ -813,18 +908,25 @@ impl SplinterDots {
         }
 
         let bytes = fs::read(path).ok()?;
-        let image = image::load_from_memory(&bytes).ok()?;
 
-        // Use a larger, aspect-correct, high-quality preview instead of a tiny stretched thumbnail.
-        // This keeps the wallpaper grid sharp even when the UI card is resized.
+        let image = image::load_from_memory(&bytes)
+            .or_else(|_| {
+                image::ImageReader::open(path)
+                    .map_err(image::ImageError::IoError)?
+                    .with_guessed_format()?
+                    .decode()
+            })
+            .ok()?;
+
+        // Cover/crop preview. This behaves like CSS object-fit: cover.
         let image = image
             .resize_to_fill(960, 540, image::imageops::FilterType::Lanczos3)
             .to_rgba8();
 
         let size = [image.width() as usize, image.height() as usize];
         let pixels = image.into_raw();
-
         let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
+
         let texture = ctx.load_texture(
             format!("wallpaper-preview-{key}"),
             color_image,
@@ -853,10 +955,10 @@ impl SplinterDots {
         let mut clicked: Option<PathBuf> = None;
 
         egui::Grid::new("wallpaper-preview-grid")
-            .num_columns(3)
+            .num_columns(1)
             .spacing([12.0, 12.0])
             .show(ui, |ui| {
-                for (index, path) in images.iter().enumerate() {
+                for (_index, path) in images.iter().enumerate() {
                     let selected = path == &current;
                     let texture = self.wallpaper_texture(ui.ctx(), path);
 
@@ -875,29 +977,43 @@ impl SplinterDots {
                         ..Default::default()
                     }
                     .show(ui, |ui| {
-                        let image_size = Vec2::new(240.0, 135.0);
+                        let image_size = Vec2::new(ui.available_width() - 18.0, 160.0);
                         ui.set_min_width(image_size.x + 12.0);
 
-                        if let Some(texture) = texture {
-                            let response = ui.add(
-                                egui::Image::new((texture.id(), image_size))
-                                    .sense(egui::Sense::click()),
-                            );
+                        let (rect, response) =
+                            ui.allocate_exact_size(image_size, egui::Sense::click());
 
-                            if response.clicked() {
-                                clicked = Some(path.clone());
-                            }
-                        } else if ui
-                            .add_sized(image_size, egui::Button::new("Could not preview"))
-                            .clicked()
-                        {
+                        if let Some(texture) = texture {
+                            ui.painter().image(
+                                texture.id(),
+                                rect,
+                                egui::Rect::from_min_max(
+                                    egui::pos2(0.0, 0.0),
+                                    egui::pos2(1.0, 1.0),
+                                ),
+                                Color32::WHITE,
+                            );
+                        } else {
+                            ui.painter().rect_filled(
+                                rect,
+                                CornerRadius::same(10),
+                                theme.input,
+                            );
+                            ui.painter().text(
+                                rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                "Could not preview",
+                                FontId::proportional(14.0),
+                                theme.muted,
+                            );
+                        }
+
+                        if response.clicked() {
                             clicked = Some(path.clone());
                         }
                     });
 
-                    if index % 3 == 2 {
-                        ui.end_row();
-                    }
+                    ui.end_row();
                 }
             });
 
@@ -1132,7 +1248,7 @@ misc               = 313244
         self.status = format!("Opening installer for {package}");
     }
 
-    fn shortcut_hint_rows(&self) -> Vec<(String, String)> {
+    fn keybind_hint_rows(&self) -> Vec<(String, String)> {
         let wanted = [
             ("App launcher", "Open apps"),
             ("Terminal", "Terminal"),
@@ -1143,11 +1259,11 @@ misc               = 313244
         let mut rows = Vec::new();
         for (name, label) in wanted {
             if let Some(sc) = self
-                .shortcuts
+                .keybinds
                 .iter()
                 .find(|sc| sc.name.eq_ignore_ascii_case(name))
             {
-                rows.push((format_shortcut_key(&sc.key), label.to_string()));
+                rows.push((format_keybind_key(&sc.key), label.to_string()));
             }
         }
 
@@ -1186,7 +1302,7 @@ misc               = 313244
                 for tab in [
                     Tab::Overview,
                     Tab::Hyprland,
-                    Tab::Shortcuts,
+                    Tab::Keybinds,
                     Tab::Appearance,
                     Tab::Addons,
                     Tab::Bar,
@@ -1245,7 +1361,10 @@ misc               = 313244
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 ui.heading(RichText::new(self.tab.title()).color(theme.text));
-                ui.label(RichText::new(self.tab.subtitle()).color(theme.muted));
+                let subtitle = self.tab.subtitle();
+                if !subtitle.trim().is_empty() {
+                    ui.label(RichText::new(subtitle).color(theme.muted));
+                }
             });
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -1511,8 +1630,17 @@ misc               = 313244
         ui.add_space(6.0);
     }
 
-    fn shortcuts_tab(&mut self, ui: &mut egui::Ui) {
+    fn keybinds_tab(&mut self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
+
+        ui.label(
+            RichText::new("Keybinds")
+                .strong()
+                .size(28.0)
+                .color(theme.text),
+        );
+        ui.add_space(14.0);
+
         let panel_height = 430.0;
 
         ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
@@ -1528,25 +1656,25 @@ misc               = 313244
                     ui.set_min_height(panel_height);
 
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("Current shortcuts").strong().size(18.0));
+                        ui.label(RichText::new("Current keybinds").strong().size(18.0));
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if ui.small_button("+ Add").clicked() {
-                                self.shortcuts.push(Shortcut {
-                                    name: "New shortcut".to_string(),
+                                self.keybinds.push(Keybind {
+                                    name: "New keybind".to_string(),
                                     key: "SUPER, N".to_string(),
                                     kind: "app".to_string(),
                                     value: self.value("DOTFILES_TERMINAL"),
                                 });
-                                self.selected_shortcut = Some(self.shortcuts.len().saturating_sub(1));
-                                self.update_shortcut_dirty_status();
+                                self.selected_keybind = Some(self.keybinds.len().saturating_sub(1));
+                                self.update_keybind_dirty_status();
                             }
                         });
                     });
 
                     ui.add_space(12.0);
 
-                    for (index, shortcut) in self.shortcuts.iter().enumerate() {
-                        let selected = self.selected_shortcut == Some(index);
+                    for (index, keybind) in self.keybinds.iter().enumerate() {
+                        let selected = self.selected_keybind == Some(index);
 
                         Frame {
                             fill: if selected { theme.card_hover } else { theme.panel_soft },
@@ -1564,12 +1692,12 @@ misc               = 313244
                                     [ui.available_width(), 28.0],
                                     egui::SelectableLabel::new(
                                         selected,
-                                        RichText::new(shortcut_display(shortcut)).size(14.0),
+                                        RichText::new(keybind_display(keybind)).size(14.0),
                                     ),
                                 );
 
                             if response.clicked() {
-                                self.selected_shortcut = Some(index);
+                                self.selected_keybind = Some(index);
                             }
                         });
 
@@ -1579,14 +1707,14 @@ misc               = 313244
                     ui.add_space(10.0);
 
                     ui.horizontal_wrapped(|ui| {
-                        if primary_button(ui, &theme, if self.shortcut_changes_pending() { "Save changes *" } else { "Saved" }).clicked() {
-                            self.save_shortcut_changes();
+                        if primary_button(ui, &theme, if self.keybind_changes_pending() { "Save changes *" } else { "Saved" }).clicked() {
+                            self.save_keybind_changes();
                         }
 
                         if ui.button("Reset").clicked() {
-                            self.shortcuts = default_shortcuts();
-                            self.selected_shortcut = None;
-                            self.update_shortcut_dirty_status();
+                            self.keybinds = default_keybinds();
+                            self.selected_keybind = None;
+                            self.update_keybind_dirty_status();
                         }
                     });
                 });
@@ -1604,13 +1732,13 @@ misc               = 313244
                     ui.label(RichText::new("Edit selected").strong().size(18.0));
                     ui.add_space(12.0);
 
-                    let Some(index) = self.selected_shortcut else {
-                        ui.label(RichText::new("Select a shortcut on the left to edit it.").color(theme.muted));
+                    let Some(index) = self.selected_keybind else {
+                        ui.label(RichText::new("Select a keybind on the left to edit it.").color(theme.muted));
                         return;
                     };
 
-                    if index >= self.shortcuts.len() {
-                        self.selected_shortcut = None;
+                    if index >= self.keybinds.len() {
+                        self.selected_keybind = None;
                         return;
                     }
 
@@ -1618,13 +1746,13 @@ misc               = 313244
                     let mut delete = false;
 
                     {
-                        let shortcut = &mut self.shortcuts[index];
+                        let keybind = &mut self.keybinds[index];
 
                         ui.label(RichText::new("Name").color(theme.muted));
                         changed |= ui
                             .add_sized(
                                 [ui.available_width(), 34.0],
-                                egui::TextEdit::singleline(&mut shortcut.name),
+                                egui::TextEdit::singleline(&mut keybind.name),
                             )
                             .changed();
 
@@ -1634,7 +1762,7 @@ misc               = 313244
                         changed |= ui
                             .add_sized(
                                 [ui.available_width(), 34.0],
-                                egui::TextEdit::singleline(&mut shortcut.key),
+                                egui::TextEdit::singleline(&mut keybind.key),
                             )
                             .changed();
 
@@ -1647,8 +1775,8 @@ misc               = 313244
                         ui.add_space(12.0);
 
                         ui.label(RichText::new("Type").color(theme.muted));
-                        egui::ComboBox::from_id_salt("shortcut-kind-editor")
-                            .selected_text(match shortcut.kind.as_str() {
+                        egui::ComboBox::from_id_salt("keybind-kind-editor")
+                            .selected_text(match keybind.kind.as_str() {
                                 "app" => "App / script",
                                 "command" => "Command",
                                 "hyprland" => "Hyprland action",
@@ -1656,13 +1784,13 @@ misc               = 313244
                             })
                             .show_ui(ui, |ui| {
                                 changed |= ui
-                                    .selectable_value(&mut shortcut.kind, "app".to_string(), "App / script")
+                                    .selectable_value(&mut keybind.kind, "app".to_string(), "App / script")
                                     .changed();
                                 changed |= ui
-                                    .selectable_value(&mut shortcut.kind, "command".to_string(), "Command")
+                                    .selectable_value(&mut keybind.kind, "command".to_string(), "Command")
                                     .changed();
                                 changed |= ui
-                                    .selectable_value(&mut shortcut.kind, "hyprland".to_string(), "Hyprland action")
+                                    .selectable_value(&mut keybind.kind, "hyprland".to_string(), "Hyprland action")
                                     .changed();
                             });
 
@@ -1672,29 +1800,29 @@ misc               = 313244
                         changed |= ui
                             .add_sized(
                                 [ui.available_width(), 34.0],
-                                egui::TextEdit::singleline(&mut shortcut.value),
+                                egui::TextEdit::singleline(&mut keybind.value),
                             )
                             .changed();
 
                         ui.add_space(18.0);
 
                         ui.horizontal(|ui| {
-                            if primary_button(ui, &theme, if self.shortcut_changes_pending() { "Save changes *" } else { "Saved" }).clicked() {
-                                self.save_shortcut_changes();
+                            if primary_button(ui, &theme, if self.keybind_changes_pending() { "Save changes *" } else { "Saved" }).clicked() {
+                                self.save_keybind_changes();
                             }
 
-                            if ui.button("Delete shortcut").clicked() {
+                            if ui.button("Delete keybind").clicked() {
                                 delete = true;
                             }
                         });
                     }
 
                     if delete {
-                        self.shortcuts.remove(index);
-                        self.selected_shortcut = None;
-                        self.update_shortcut_dirty_status();
+                        self.keybinds.remove(index);
+                        self.selected_keybind = None;
+                        self.update_keybind_dirty_status();
                     } else if changed {
-                        self.update_shortcut_dirty_status();
+                        self.update_keybind_dirty_status();
                     }
                 });
             });
@@ -1714,172 +1842,196 @@ misc               = 313244
     fn appearance_tab(&mut self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
 
-        ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            ui.label(RichText::new("Appearance").strong().size(28.0));
-            ui.label(
-                RichText::new("Themes, fonts, icons, cursor theme, and wallpapers.")
-                    .color(theme.muted),
-            );
-            ui.add_space(16.0);
+        ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.label(RichText::new("Appearance").strong().size(28.0));
+                ui.label(
+                    RichText::new("Themes, fonts, icons, cursor theme, and wallpapers.")
+                        .color(theme.muted),
+                );
+                ui.add_space(18.0);
 
-            ui.columns(2, |columns| {
-                // LEFT COLUMN
-                Self::card(&theme, &mut columns[0], |ui| {
-                    ui.label(RichText::new("Theme").strong().size(18.0));
-                    ui.label(
-                        RichText::new("Choose the overall SplinterDots look.")
-                            .color(theme.muted),
-                    );
-                    ui.add_space(12.0);
+                ui.columns(3, |columns| {
+                    // COLUMN 1: Theme
+                    Self::card(&theme, &mut columns[0], |ui| {
+                        ui.label(RichText::new("Theme").strong().size(18.0));
+                        ui.label(
+                            RichText::new("Choose the overall SplinterDots look.")
+                                .color(theme.muted),
+                        );
+                        ui.add_space(12.0);
 
-                    let mut theme_value = self.value("DOTFILES_THEME");
+                        let mut theme_value = self.value("DOTFILES_THEME");
 
-                    egui::Grid::new("theme-pill-grid")
-                        .num_columns(2)
-                        .spacing([10.0, 10.0])
-                        .show(ui, |ui| {
-                            for (i, choice) in [
-                                ("midnight", "Midnight"),
-                                ("catppuccin", "Catppuccin"),
-                                ("nord", "Nord"),
-                                ("gruvbox", "Gruvbox"),
-                                ("sakura", "Sakura"),
-                                ("cyberpunk", "Cyberpunk"),
-                                ("everforest", "Everforest"),
-                                ("dracula", "Dracula"),
-                            ]
-                            .iter()
-                            .enumerate()
-                            {
-                                selectable_pill(ui, &mut theme_value, choice.0, choice.1);
-                                if i % 2 == 1 {
-                                    ui.end_row();
+                        egui::Grid::new("theme-pill-grid")
+                            .num_columns(2)
+                            .spacing([10.0, 10.0])
+                            .show(ui, |ui| {
+                                for (i, choice) in [
+                                    ("midnight", "Midnight"),
+                                    ("catppuccin", "Catppuccin"),
+                                    ("nord", "Nord"),
+                                    ("gruvbox", "Gruvbox"),
+                                    ("sakura", "Sakura"),
+                                    ("cyberpunk", "Cyberpunk"),
+                                    ("everforest", "Everforest"),
+                                    ("dracula", "Dracula"),
+                                ]
+                                .iter()
+                                .enumerate()
+                                {
+                                    selectable_pill(ui, &mut theme_value, choice.0, choice.1);
+                                    if i % 2 == 1 {
+                                        ui.end_row();
+                                    }
                                 }
-                            }
-                        });
+                            });
 
-                    self.set_value("DOTFILES_THEME", theme_value);
+                        self.set_value("DOTFILES_THEME", theme_value);
 
-                    ui.add_space(16.0);
+                        ui.add_space(16.0);
 
-                    let mut accent = self.value("DOTFILES_ACCENT");
-                    labeled_text(ui, "Accent color", &mut accent);
-                    self.set_value("DOTFILES_ACCENT", accent);
+                        let mut accent = self.value("DOTFILES_ACCENT");
+                        labeled_text(ui, "Accent color", &mut accent);
+                        self.set_value("DOTFILES_ACCENT", accent);
 
-                    ui.add_space(12.0);
+                        ui.add_space(12.0);
 
-                    if primary_button(ui, &theme, "Apply theme").clicked() {
-                        self.save_all();
-                        self.status = "Theme updated".to_string();
-                    }
-                });
-
-                Self::card(&theme, &mut columns[0], |ui| {
-                    ui.label(RichText::new("Wallpaper").strong().size(18.0));
-                    ui.label(
-                        RichText::new("Choose a folder and click a wallpaper preview.")
-                            .color(theme.muted),
-                    );
-                    ui.add_space(10.0);
-
-                    let mut wallpaper_dir = self.value("DOTFILES_WALLPAPER_DIR");
-                    ui.label(RichText::new("Wallpaper folder").color(theme.muted));
-
-                    if ui
-                        .text_edit_singleline(&mut wallpaper_dir)
-                        .on_hover_text("Example: ~/Pictures/Wallpapers")
-                        .changed()
-                    {
-                        self.set_value("DOTFILES_WALLPAPER_DIR", wallpaper_dir);
-                        let _ = write_local_conf(&self.paths, &self.values);
-                    }
-
-                    ui.add_space(8.0);
-
-                    ui.horizontal_wrapped(|ui| {
-                        if primary_button(ui, &theme, "Scan folder").clicked() {
-                            self.refresh_wallpapers();
-                        }
-
-                        if ui.button("Choose folder").clicked() {
-                            self.choose_wallpaper_dir();
-                        }
-
-                        if ui.button("Use ~/Pictures/Wallpapers").clicked() {
-                            self.set_value(
-                                "DOTFILES_WALLPAPER_DIR",
-                                "~/Pictures/Wallpapers".to_string(),
-                            );
-                            let _ = write_local_conf(&self.paths, &self.values);
-                            self.refresh_wallpapers();
+                        if primary_button(ui, &theme, "Apply theme").clicked() {
+                            self.save_all();
+                            self.status = "Theme updated".to_string();
                         }
                     });
 
-                    ui.add_space(12.0);
-
-                    let current = self.value("DOTFILES_WALLPAPER");
-                    if !current.trim().is_empty() {
+                    // COLUMN 2: Wallpaper
+                    Self::card(&theme, &mut columns[1], |ui| {
+                        ui.label(RichText::new("Wallpaper").strong().size(18.0));
                         ui.label(
-                            RichText::new(format!("Current: {}", shorten_text(&current, 56)))
+                            RichText::new("Choose a folder and click a wallpaper preview.")
                                 .color(theme.muted),
                         );
+                        ui.add_space(10.0);
+
+                        let mut wallpaper_dir = self.value("DOTFILES_WALLPAPER_DIR");
+                        ui.label(RichText::new("Wallpaper folder").color(theme.muted));
+
+                        if ui
+                            .text_edit_singleline(&mut wallpaper_dir)
+                            .on_hover_text("Example: ~/Pictures/Wallpapers")
+                            .changed()
+                        {
+                            self.set_value("DOTFILES_WALLPAPER_DIR", wallpaper_dir);
+                            let _ = write_local_conf(&self.paths, &self.values);
+                        }
+
                         ui.add_space(8.0);
-                    }
 
-                    self.wallpaper_grid(ui, &theme);
-                });
+                        ui.horizontal_wrapped(|ui| {
+                            if primary_button(ui, &theme, "Scan folder").clicked() {
+                                self.refresh_wallpapers();
+                            }
 
-                // RIGHT COLUMN
-                Self::card(&theme, &mut columns[1], |ui| {
-                    ui.label(RichText::new("Fonts and icon packs").strong().size(18.0));
-                    ui.label(
-                        RichText::new("Items marked as requiring download need to be installed separately.")
-                            .color(theme.muted),
-                    );
-                    ui.add_space(14.0);
+                            if ui.button("Choose folder").clicked() {
+                                self.choose_wallpaper_dir();
+                            }
 
-                    let mut font = self.value("DOTFILES_UI_FONT");
-                    if let Some(package) = style_choice_grid(ui, &theme, "UI font", &mut font, font_choices()) {
-                        self.install_style_package(package);
-                    }
-                    self.set_value("DOTFILES_UI_FONT", font);
+                            if ui.button("Use ~/Pictures/Wallpapers").clicked() {
+                                self.set_value(
+                                    "DOTFILES_WALLPAPER_DIR",
+                                    "~/Pictures/Wallpapers".to_string(),
+                                );
+                                let _ = write_local_conf(&self.paths, &self.values);
+                                self.refresh_wallpapers();
+                            }
+                        });
 
-                    ui.add_space(18.0);
+                        ui.add_space(12.0);
 
-                    let mut icon_theme = self.value("DOTFILES_ICON_THEME");
-                    if let Some(package) = style_choice_grid(
-                        ui,
-                        &theme,
-                        "System icon theme",
-                        &mut icon_theme,
-                        icon_theme_choices(),
-                    ) {
-                        self.install_style_package(package);
-                    }
-                    self.set_value("DOTFILES_ICON_THEME", icon_theme);
+                        let current = self.value("DOTFILES_WALLPAPER");
+                        if !current.trim().is_empty() {
+                            ui.label(
+                                RichText::new(format!("Current: {}", shorten_text(&current, 48)))
+                                    .color(theme.muted),
+                            );
+                            ui.add_space(8.0);
+                        }
 
-                    ui.add_space(18.0);
+                        ScrollArea::vertical()
+                            .id_salt("appearance-wallpaper-scroll")
+                            .max_height(520.0)
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                self.wallpaper_grid(ui, &theme);
+                            });
+                    });
 
-                    let mut cursor_theme = self.value("DOTFILES_CURSOR_THEME");
-                    if let Some(package) = style_choice_grid(
-                        ui,
-                        &theme,
-                        "Cursor theme",
-                        &mut cursor_theme,
-                        cursor_theme_choices(),
-                    ) {
-                        self.install_style_package(package);
-                    }
-                    self.set_value("DOTFILES_CURSOR_THEME", cursor_theme);
+                    // COLUMN 3: Fonts
+                    Self::card(&theme, &mut columns[2], |ui| {
+                        ui.label(RichText::new("Fonts and icon packs").strong().size(18.0));
+                        ui.label(
+                            RichText::new("Items marked as requiring download need to be installed separately.")
+                                .color(theme.muted),
+                        );
+                        ui.add_space(14.0);
 
-                    ui.add_space(18.0);
+                        ScrollArea::vertical()
+                            .id_salt("appearance-fonts-scroll")
+                            .max_height(620.0)
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                let mut font = self.value("DOTFILES_UI_FONT");
+                                if let Some(package) = style_choice_grid(
+                                    ui,
+                                    &theme,
+                                    "UI font",
+                                    &mut font,
+                                    font_choices(),
+                                    &self.preview_font_families,
+                                ) {
+                                    self.install_style_package(package);
+                                }
+                                self.set_value("DOTFILES_UI_FONT", font);
 
-                    if primary_button(ui, &theme, "Apply font and icon settings").clicked() {
-                        self.apply_style_pack();
-                    }
+                                ui.add_space(18.0);
+
+                                let mut icon_theme = self.value("DOTFILES_ICON_THEME");
+                                if let Some(package) = style_choice_grid(
+                                    ui,
+                                    &theme,
+                                    "System icon theme",
+                                    &mut icon_theme,
+                                    icon_theme_choices(),
+                                    &self.preview_font_families,
+                                ) {
+                                    self.install_style_package(package);
+                                }
+                                self.set_value("DOTFILES_ICON_THEME", icon_theme);
+
+                                ui.add_space(18.0);
+
+                                let mut cursor_theme = self.value("DOTFILES_CURSOR_THEME");
+                                if let Some(package) = style_choice_grid(
+                                    ui,
+                                    &theme,
+                                    "Cursor theme",
+                                    &mut cursor_theme,
+                                    cursor_theme_choices(),
+                                    &self.preview_font_families,
+                                ) {
+                                    self.install_style_package(package);
+                                }
+                                self.set_value("DOTFILES_CURSOR_THEME", cursor_theme);
+
+                                ui.add_space(18.0);
+
+                                if primary_button(ui, &theme, "Apply font and icon settings").clicked() {
+                                    self.apply_style_pack();
+                                }
+                            });
+                    });
                 });
             });
-        });
     }
 
     fn addons_tab(&mut self, ui: &mut egui::Ui) {
@@ -2396,7 +2548,7 @@ misc               = 313244
         Self::card(&theme, ui, |ui| {
             ui.label(RichText::new("Default apps").strong().size(18.0));
             ui.label(
-                RichText::new("These are used by shortcuts and helper actions.").color(theme.muted),
+                RichText::new("These are used by keybinds and helper actions.").color(theme.muted),
             );
             ui.add_space(10.0);
 
@@ -2448,6 +2600,7 @@ const WIDGET_TOGGLES: &[(&str, &str)] = &[
 
 impl eframe::App for SplinterDots {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.sync_ui_font(ctx);
         self.apply_style(ctx);
         let theme = self.app_theme();
 
@@ -2468,7 +2621,7 @@ impl eframe::App for SplinterDots {
                         if primary_button(
                             ui,
                             &theme,
-                            if self.shortcut_changes_pending() {
+                            if self.keybind_changes_pending() {
                                 "Save changes *"
                             } else {
                                 "Saved"
@@ -2507,7 +2660,7 @@ impl eframe::App for SplinterDots {
                 match self.tab {
                     Tab::Overview => self.overview_tab(ui),
                     Tab::Hyprland => self.hyprland_tab(ui),
-                    Tab::Shortcuts => self.shortcuts_tab(ui),
+                    Tab::Keybinds => self.keybinds_tab(ui),
                     Tab::Appearance => self.appearance_tab(ui),
                     Tab::Addons => self.addons_tab(ui),
                     Tab::Bar => self.bar_tab(ui),
@@ -2594,7 +2747,7 @@ fn shell_quote(value: &str) -> String {
     format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-fn default_shortcuts() -> Vec<Shortcut> {
+fn default_keybinds() -> Vec<Keybind> {
     vec![
         sc("Terminal", "Return", "app", "$terminal"),
         sc("File manager", "E", "app", "$fileManager"),
@@ -2622,8 +2775,8 @@ fn default_shortcuts() -> Vec<Shortcut> {
     ]
 }
 
-fn sc(name: &str, key: &str, kind: &str, value: &str) -> Shortcut {
-    Shortcut {
+fn sc(name: &str, key: &str, kind: &str, value: &str) -> Keybind {
+    Keybind {
         name: name.to_string(),
         key: key.to_string(),
         kind: kind.to_string(),
@@ -2631,17 +2784,17 @@ fn sc(name: &str, key: &str, kind: &str, value: &str) -> Shortcut {
     }
 }
 
-fn load_shortcuts(paths: &Paths) -> Vec<Shortcut> {
+fn load_keybinds(paths: &Paths) -> Vec<Keybind> {
     let Ok(content) = fs::read_to_string(&paths.keybinds_json) else {
-        return default_shortcuts();
+        return default_keybinds();
     };
 
-    serde_json::from_str::<Vec<Shortcut>>(&content).unwrap_or_else(|_| default_shortcuts())
+    serde_json::from_str::<Vec<Keybind>>(&content).unwrap_or_else(|_| default_keybinds())
 }
 
-fn save_shortcuts(paths: &Paths, shortcuts: &[Shortcut]) -> Result<(), String> {
+fn save_keybinds(paths: &Paths, keybinds: &[Keybind]) -> Result<(), String> {
     ensure_dir(&paths.dotfiles_dir)?;
-    let text = serde_json::to_string_pretty(shortcuts).map_err(err_string)?;
+    let text = serde_json::to_string_pretty(keybinds).map_err(err_string)?;
     fs::write(&paths.keybinds_json, text + "\n").map_err(err_string)
 }
 
@@ -2694,7 +2847,7 @@ fn save_hypr_values(paths: &Paths, values: &HashMap<String, String>) -> Result<(
 fn write_keybinds(
     paths: &Paths,
     values: &HashMap<String, String>,
-    shortcuts: &[Shortcut],
+    keybinds: &[Keybind],
 ) -> Result<(), String> {
     ensure_dir(&paths.hypr_dir)?;
 
@@ -2715,15 +2868,15 @@ fn write_keybinds(
         String::new(),
     ];
 
-    for shortcut in shortcuts {
-        let (modifier, key) = hypr_key_parts(&shortcut.key);
-        if shortcut.kind == "app" {
+    for keybind in keybinds {
+        let (modifier, key) = hypr_key_parts(&keybind.key);
+        if keybind.kind == "app" {
             lines.push(format!(
                 "bind = {modifier}, {key}, exec, {}",
-                shortcut.value
+                keybind.value
             ));
         } else {
-            lines.push(format!("bind = {modifier}, {key}, {}", shortcut.value));
+            lines.push(format!("bind = {modifier}, {key}, {}", keybind.value));
         }
     }
 
@@ -3621,29 +3774,104 @@ fn theme_label(theme: &str) -> &'static str {
 fn install_global_egui_font(ctx: &egui::Context, preferred_font: &str) {
     let mut fonts = egui::FontDefinitions::default();
 
-    let mut families = vec![
-        preferred_font.to_string(),
-        "CaskaydiaCove Nerd Font".to_string(),
-        "JetBrainsMono Nerd Font".to_string(),
-        "Inter".to_string(),
-        "Sans".to_string(),
+    let candidates = font_file_candidates(preferred_font);
+
+    for path in candidates {
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
+
+        let font_id = format!("splinter-ui-font-{}", path.display());
+
+        fonts.font_data.insert(
+            font_id.clone(),
+            FontData::from_owned(bytes).into(),
+        );
+
+        fonts
+            .families
+            .entry(FontFamily::Proportional)
+            .or_default()
+            .insert(0, font_id.clone());
+
+        fonts
+            .families
+            .entry(FontFamily::Monospace)
+            .or_default()
+            .insert(0, font_id);
+
+        ctx.set_fonts(fonts);
+        return;
+    }
+}
+
+fn font_file_candidates(preferred_font: &str) -> Vec<PathBuf> {
+    let wanted = normalize_font_name(preferred_font);
+    let mut candidates = Vec::new();
+
+    for dir in font_search_dirs() {
+        collect_font_candidates(&dir, &wanted, &mut candidates);
+    }
+
+    candidates
+}
+
+fn font_search_dirs() -> Vec<PathBuf> {
+    let mut dirs = vec![
+        PathBuf::from("/usr/share/fonts"),
+        PathBuf::from("/usr/local/share/fonts"),
     ];
 
-    families.dedup();
+    if let Some(home) = env::var_os("HOME").map(PathBuf::from) {
+        dirs.push(home.join(".local/share/fonts"));
+        dirs.push(home.join(".fonts"));
+    }
 
-    fonts
-        .families
-        .entry(egui::FontFamily::Proportional)
-        .or_default()
-        .splice(0..0, families.clone());
+    dirs
+}
 
-    fonts
-        .families
-        .entry(egui::FontFamily::Monospace)
-        .or_default()
-        .splice(0..0, families);
+fn collect_font_candidates(dir: &Path, wanted: &str, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
 
-    ctx.set_fonts(fonts);
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        if path.is_dir() {
+            collect_font_candidates(&path, wanted, out);
+            continue;
+        }
+
+        let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
+            continue;
+        };
+
+        let ext = ext.to_ascii_lowercase();
+        if ext != "ttf" && ext != "otf" {
+            continue;
+        }
+
+        let name = normalize_font_name(
+            &path.file_stem()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default(),
+        );
+
+        if name.contains(wanted)
+            || wanted.contains(&name)
+            || name.contains(&wanted.replace("nerdfont", ""))
+        {
+            out.push(path);
+        }
+    }
+}
+
+fn normalize_font_name(name: &str) -> String {
+    name.to_ascii_lowercase()
+        .replace(" ", "")
+        .replace("-", "")
+        .replace("_", "")
 }
 
 #[derive(Clone, Copy)]
@@ -3803,6 +4031,7 @@ fn style_choice_grid(
     title: &str,
     current: &mut String,
     choices: &[StyleChoice],
+    preview_font_families: &HashMap<String, FontFamily>,
 ) -> Option<&'static str> {
     let mut package_to_install = None;
     let is_font_picker = title.to_ascii_lowercase().contains("font");
@@ -3811,7 +4040,7 @@ fn style_choice_grid(
         ui.label(RichText::new(title).strong().size(16.0));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.label(
-                RichText::new("Click an item to select it")
+                RichText::new("Click a card to select it")
                     .color(theme.muted)
                     .size(11.0),
             );
@@ -3821,21 +4050,21 @@ fn style_choice_grid(
     ui.add_space(8.0);
 
     egui::Grid::new(format!("style-choice-grid-{title}"))
-        .num_columns(2)
+        .num_columns(if is_font_picker { 1 } else { 2 })
         .spacing([8.0, 8.0])
         .show(ui, |ui| {
             for (index, choice) in choices.iter().enumerate() {
                 let selected = current == choice.value;
                 let installed = choice.package.map(is_package_installed).unwrap_or(true);
 
-                Frame {
+                let response = Frame {
                     fill: if selected {
                         theme.card_hover
                     } else {
                         theme.panel_soft
                     },
-                    corner_radius: CornerRadius::same(14),
-                    inner_margin: Margin::symmetric(10, 8),
+                    corner_radius: CornerRadius::same(16),
+                    inner_margin: Margin::symmetric(12, if is_font_picker { 16 } else { 10 }),
                     stroke: Stroke::new(
                         if selected { 2.0 } else { 1.0 },
                         if selected { theme.accent } else { theme.border },
@@ -3843,69 +4072,79 @@ fn style_choice_grid(
                     ..Default::default()
                 }
                 .show(ui, |ui| {
-                    ui.set_min_width(230.0);
-
-                    ui.horizontal(|ui| {
-                        if ui
-                            .selectable_label(selected, RichText::new(choice.label).strong())
-                            .clicked()
-                        {
-                            *current = choice.value.to_string();
-                        }
-
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            match choice.package {
-                                Some(package) if !installed => {
-                                    if ui.small_button("Download").clicked() {
-                                        package_to_install = Some(package);
-                                    }
-                                }
-                                Some(_) => {
-                                    ui.label(
-                                        RichText::new("Installed").color(theme.success).size(11.0),
-                                    );
-                                }
-                                None => {
-                                    ui.label(
-                                        RichText::new("Built in").color(theme.success).size(11.0),
-                                    );
-                                }
-                            }
-                        });
-                    });
-
                     if is_font_picker {
-                        ui.add_space(6.0);
-                        ui.label(
-                            RichText::new("AaBbCc 123 — The quick brown fox")
-                                .monospace()
-                                .size(15.0)
-                                .color(theme.text),
-                        );
+                        ui.set_min_width(ui.available_width() - 10.0);
+                        ui.set_min_height(92.0);
+                    } else {
+                        ui.set_min_width(200.0);
                     }
 
-                    if let Some(package) = choice.package {
-                        if !installed {
-                            ui.add_space(5.0);
-                            ui.horizontal(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.label(
+                                RichText::new(choice.label)
+                                    .strong()
+                                    .size(15.0)
+                                    .color(theme.text),
+                            );
+
+                            if is_font_picker {
+                                ui.add_space(5.0);
+                                let preview_family = preview_font_families
+                                    .get(choice.value)
+                                    .cloned()
+                                    .unwrap_or(FontFamily::Proportional);
+
+                                ui.label(
+                                    RichText::new("AaBbCc 123")
+                                        .font(FontId::new(17.0, preview_family))
+                                        .color(theme.text),
+                                );
+                            }
+
+                            if let Some(package) = choice.package {
+                                ui.add_space(5.0);
                                 ui.label(
                                     RichText::new(package)
                                         .color(theme.muted)
                                         .size(10.0)
                                         .monospace(),
                                 );
+                            }
+                        });
 
-                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    if ui.small_button("Install").clicked() {
-                                        package_to_install = Some(package);
-                                    }
-                                });
-                            });
-                        }
-                    }
-                });
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if selected {
+                                ui.label(
+                                    RichText::new("Selected")
+                                        .color(theme.accent)
+                                        .size(11.0)
+                                        .strong(),
+                                );
+                            } else if !installed {
+                                if ui.button("Install").clicked() {
+                                    package_to_install = choice.package;
+                                }
+                            } else {
+                                ui.label(
+                                    RichText::new("Installed")
+                                        .color(theme.success)
+                                        .size(11.0),
+                                );
+                            }
+                        });
+                    });
+                })
+                .response
+                .interact(egui::Sense::click());
 
-                if index % 2 == 1 {
+                if response.clicked() {
+                    *current = choice.value.to_string();
+                }
+
+                if !is_font_picker && index % 2 == 1 {
+                    ui.end_row();
+                } else if is_font_picker {
                     ui.end_row();
                 }
             }
@@ -4056,7 +4295,29 @@ fn addon_matches_filter(addon: &AddonChoice, search: &str, category: &str) -> bo
 }
 
 fn addon_package_installed(package: &str) -> bool {
-    package_installed_cached(package)
+    let packages = package.split_whitespace().collect::<Vec<_>>();
+
+    if packages.is_empty() {
+        return false;
+    }
+
+    packages.iter().all(|pkg| {
+        match *pkg {
+            // Vesktop can be installed from AUR as vesktop-bin or as vesktop.
+            "vesktop-bin" => {
+                package_installed_cached("vesktop-bin")
+                    || package_installed_cached("vesktop")
+            }
+
+            // Spotify bundle can involve AUR package names, but spicetify may be installed under either name.
+            "spicetify-cli" => {
+                package_installed_cached("spicetify-cli")
+                    || package_installed_cached("spicetify")
+            }
+
+            other => package_installed_cached(other),
+        }
+    })
 }
 
 fn package_installed_cached(package: &str) -> bool {
@@ -4208,14 +4469,8 @@ fn remove_widget_from_zones(values: &mut HashMap<String, String>, widget: &str) 
     }
 }
 
-fn shortcut_display(shortcut: &Shortcut) -> String {
-    let mut key = shortcut.key.replace(',', " + ");
-    key = key.replace("SUPER", "Super");
-    key = key.replace("SHIFT", "Shift");
-    key = key.replace("CTRL", "Ctrl");
-    key = key.replace("ALT", "Alt");
-
-    format!("{}  {}", key, shortcut.name)
+fn keybind_display(keybind: &Keybind) -> String {
+    format!("{}  {}", format_keybind_key(&keybind.key), keybind.name)
 }
 
 fn primary_button(ui: &mut egui::Ui, theme: &AppTheme, text: &str) -> egui::Response {
@@ -4363,18 +4618,23 @@ fn friendly_kind(kind: &str) -> &'static str {
     }
 }
 
-fn format_shortcut_key(key: &str) -> String {
-    let mut parts = key
+fn format_keybind_key(key: &str) -> String {
+    let normalized = key
+        .replace(',', "+")
+        .replace("  ", " ");
+
+    let mut parts = normalized
         .split('+')
         .map(|part| part.trim())
         .filter(|part| !part.is_empty())
         .map(|part| {
             let upper = part.to_uppercase();
             match upper.as_str() {
-                "SUPER" | "META" | "WIN" => "SUPER".to_string(),
+                "SUPER" | "META" | "WIN" | "$MOD" | "MOD" => "SUPER".to_string(),
                 "SHIFT" => "SHIFT".to_string(),
                 "CTRL" | "CONTROL" => "CTRL".to_string(),
                 "ALT" => "ALT".to_string(),
+                "RETURN" | "ENTER" => "ENTER".to_string(),
                 "SPACE" => "SPACE".to_string(),
                 other => other.to_string(),
             }
