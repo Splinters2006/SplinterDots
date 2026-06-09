@@ -198,6 +198,30 @@ install_aur_packages() {
   yay "${yay_args[@]}" "${aur_packages[@]}"
 }
 
+remove_managed_start_hyprland_shadow() {
+  local target="/usr/local/bin/start-hyprland"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] remove managed $target if it shadows /usr/bin/start-hyprland"
+    return
+  fi
+
+  if [ -L "$target" ]; then
+    local link_target
+    link_target="$(readlink "$target")"
+    if [ "$link_target" = "$ROOT_DIR/scripts/start-hyprland" ]; then
+      sudo rm -f "$target"
+      log "removed managed shadow: $target"
+    fi
+    return
+  fi
+
+  if [ -f "$target" ] && grep -q 'DOTFILES_HYPRLAND_COMMAND' "$target" 2>/dev/null; then
+    sudo rm -f "$target"
+    log "removed managed shadow: $target"
+  fi
+}
+
 configure_system() {
   if ! command -v systemctl >/dev/null 2>&1; then
     log "Skipping system setup: systemctl was not found."
@@ -207,16 +231,16 @@ configure_system() {
   if [ "$DRY_RUN" -eq 1 ]; then
     log "[dry-run] sudo install -Dm644 $ROOT_DIR/system/greetd/config.toml /etc/greetd/config.toml"
     log "[dry-run] sudo install -Dm644 $ROOT_DIR/system/wayland-sessions/start-hyprland.desktop /usr/share/wayland-sessions/start-hyprland.desktop"
-    log "[dry-run] sudo install -Dm755 $ROOT_DIR/scripts/start-hyprland /usr/local/bin/start-hyprland"
     log "[dry-run] sudo install -Dm755 $ROOT_DIR/scripts/dotfiles-start-hyprland /usr/local/bin/dotfiles-start-hyprland"
+    remove_managed_start_hyprland_shadow
     log "[dry-run] sudo systemctl enable NetworkManager bluetooth greetd"
     return
   fi
 
   sudo install -Dm644 "$ROOT_DIR/system/greetd/config.toml" /etc/greetd/config.toml
   sudo install -Dm644 "$ROOT_DIR/system/wayland-sessions/start-hyprland.desktop" /usr/share/wayland-sessions/start-hyprland.desktop
-  sudo install -Dm755 "$ROOT_DIR/scripts/start-hyprland" /usr/local/bin/start-hyprland
   sudo install -Dm755 "$ROOT_DIR/scripts/dotfiles-start-hyprland" /usr/local/bin/dotfiles-start-hyprland
+  remove_managed_start_hyprland_shadow
   sudo systemctl enable NetworkManager bluetooth greetd
 }
 
@@ -358,7 +382,10 @@ link_file "$ROOT_DIR/scripts/dotfiles-center" "$HOME_DIR/.local/bin/dotfiles-cen
 link_file "$ROOT_DIR/scripts/dotfiles-hypr-autostart" "$HOME_DIR/.local/bin/dotfiles-hypr-autostart"
 link_file "$ROOT_DIR/scripts/dotfiles-hypr-doctor" "$HOME_DIR/.local/bin/dotfiles-hypr-doctor"
 link_file "$ROOT_DIR/scripts/dotfiles-start-hyprland" "$HOME_DIR/.local/bin/dotfiles-start-hyprland"
-link_file "$ROOT_DIR/scripts/start-hyprland" "$HOME_DIR/.local/bin/start-hyprland"
+if [ -L "$HOME_DIR/.local/bin/start-hyprland" ] && [ "$(readlink "$HOME_DIR/.local/bin/start-hyprland")" = "$ROOT_DIR/scripts/start-hyprland" ]; then
+  run rm "$HOME_DIR/.local/bin/start-hyprland"
+  action_log "remove managed shadow: $HOME_DIR/.local/bin/start-hyprland"
+fi
 link_file "$ROOT_DIR/scripts/dotfiles-welcome" "$HOME_DIR/.local/bin/dotfiles-welcome"
 link_file "$ROOT_DIR/scripts/dotfiles-wallpaper" "$HOME_DIR/.local/bin/dotfiles-wallpaper"
 link_file "$ROOT_DIR/scripts/dotfiles-screenshot" "$HOME_DIR/.local/bin/dotfiles-screenshot"

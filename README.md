@@ -214,12 +214,14 @@ to a TTY with `Ctrl + Alt + F3`, log in, and run:
 dotctl doctor
 ```
 
-The graphical login starts Hyprland through `start-hyprland`, which calls the
-dotfiles wrapper, sets the Wayland session environment, and writes logs to:
+The graphical login starts Hyprland through the packaged
+`/usr/bin/start-hyprland`. Older versions of these dotfiles also installed a
+helper at `/usr/local/bin/start-hyprland` or `~/.local/bin/start-hyprland`;
+rerun `./install.sh --system` to remove those shadows if Hyprland still shows
+the startup warning.
 
-```sh
-~/.cache/hyprland/dotfiles-hyprland-*.log
-```
+The compatibility helper `dotfiles-start-hyprland` delegates to
+`/usr/bin/start-hyprland` when available.
 
 Aquamarine errors are usually graphics/session backend problems. This setup
 installs the common Mesa/Vulkan userspace packages for Intel and AMD graphics,

@@ -116,11 +116,11 @@ status() {
 
   short_start_dest="$HOME/.local/bin/start-hyprland"
   if [ -L "$short_start_dest" ] && [ "$(readlink "$short_start_dest")" = "$ROOT_DIR/scripts/start-hyprland" ]; then
-    printf 'linked  %s\n' "$short_start_dest"
+    printf 'remove  %s (shadows packaged /usr/bin/start-hyprland)\n' "$short_start_dest"
   elif [ -e "$short_start_dest" ] || [ -L "$short_start_dest" ]; then
-    printf 'custom  %s\n' "$short_start_dest"
+    printf 'custom  %s (check that it does not shadow /usr/bin/start-hyprland)\n' "$short_start_dest"
   else
-    printf 'missing %s\n' "$short_start_dest"
+    printf 'ok      %s is not shadowing /usr/bin/start-hyprland\n' "$short_start_dest"
   fi
 
   doctor_dest="$HOME/.local/bin/dotfiles-hypr-doctor"
