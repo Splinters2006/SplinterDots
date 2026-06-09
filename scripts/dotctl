@@ -78,8 +78,8 @@ status() {
     printf 'missing %s\n' "$center_dest"
   fi
 
-  wallpaper_dest="$HOME/.local/bin/dotfiles-wallpaper"
-  if [ -L "$wallpaper_dest" ] && [ "$(readlink "$wallpaper_dest")" = "$ROOT_DIR/scripts/dotfiles-wallpaper" ]; then
+  wallpaper_dest="$HOME/.local/bin/splinter-wallpaper"
+  if [ -L "$wallpaper_dest" ] && [ "$(readlink "$wallpaper_dest")" = "$ROOT_DIR/scripts/splinter-wallpaper" ]; then
     printf 'linked  %s\n' "$wallpaper_dest"
   elif [ -e "$wallpaper_dest" ] || [ -L "$wallpaper_dest" ]; then
     printf 'custom  %s\n' "$wallpaper_dest"
@@ -87,8 +87,8 @@ status() {
     printf 'missing %s\n' "$wallpaper_dest"
   fi
 
-  screenshot_dest="$HOME/.local/bin/dotfiles-screenshot"
-  if [ -L "$screenshot_dest" ] && [ "$(readlink "$screenshot_dest")" = "$ROOT_DIR/scripts/dotfiles-screenshot" ]; then
+  screenshot_dest="$HOME/.local/bin/splinter-screenshot"
+  if [ -L "$screenshot_dest" ] && [ "$(readlink "$screenshot_dest")" = "$ROOT_DIR/scripts/splinter-screenshot" ]; then
     printf 'linked  %s\n' "$screenshot_dest"
   elif [ -e "$screenshot_dest" ] || [ -L "$screenshot_dest" ]; then
     printf 'custom  %s\n' "$screenshot_dest"
@@ -96,8 +96,8 @@ status() {
     printf 'missing %s\n' "$screenshot_dest"
   fi
 
-  autostart_dest="$HOME/.local/bin/dotfiles-hypr-autostart"
-  if [ -L "$autostart_dest" ] && [ "$(readlink "$autostart_dest")" = "$ROOT_DIR/scripts/dotfiles-hypr-autostart" ]; then
+  autostart_dest="$HOME/.local/bin/splinter-autostart"
+  if [ -L "$autostart_dest" ] && [ "$(readlink "$autostart_dest")" = "$ROOT_DIR/scripts/splinter-autostart" ]; then
     printf 'linked  %s\n' "$autostart_dest"
   elif [ -e "$autostart_dest" ] || [ -L "$autostart_dest" ]; then
     printf 'custom  %s\n' "$autostart_dest"
@@ -105,8 +105,8 @@ status() {
     printf 'missing %s\n' "$autostart_dest"
   fi
 
-  start_dest="$HOME/.local/bin/dotfiles-start-hyprland"
-  if [ -L "$start_dest" ] && [ "$(readlink "$start_dest")" = "$ROOT_DIR/scripts/dotfiles-start-hyprland" ]; then
+  start_dest="$HOME/.local/bin/splinter-session"
+  if [ -L "$start_dest" ] && [ "$(readlink "$start_dest")" = "$ROOT_DIR/scripts/splinter-session" ]; then
     printf 'linked  %s\n' "$start_dest"
   elif [ -e "$start_dest" ] || [ -L "$start_dest" ]; then
     printf 'custom  %s\n' "$start_dest"
@@ -123,8 +123,8 @@ status() {
     printf 'ok      %s is not shadowing /usr/bin/start-hyprland\n' "$short_start_dest"
   fi
 
-  doctor_dest="$HOME/.local/bin/dotfiles-hypr-doctor"
-  if [ -L "$doctor_dest" ] && [ "$(readlink "$doctor_dest")" = "$ROOT_DIR/scripts/dotfiles-hypr-doctor" ]; then
+  doctor_dest="$HOME/.local/bin/splinter-doctor"
+  if [ -L "$doctor_dest" ] && [ "$(readlink "$doctor_dest")" = "$ROOT_DIR/scripts/splinter-doctor" ]; then
     printf 'linked  %s\n' "$doctor_dest"
   elif [ -e "$doctor_dest" ] || [ -L "$doctor_dest" ]; then
     printf 'custom  %s\n' "$doctor_dest"
@@ -176,7 +176,7 @@ center() {
 }
 
 doctor() {
-  "$ROOT_DIR/scripts/dotfiles-hypr-doctor"
+  "$ROOT_DIR/scripts/splinter-doctor"
 }
 
 uninstall() {
@@ -210,29 +210,29 @@ uninstall() {
     printf 'removed %s\n' "$HOME/.local/bin/SplinterDots"
   fi
 
-  if [ -L "$HOME/.local/bin/dotfiles-wallpaper" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-wallpaper")" = "$ROOT_DIR/scripts/dotfiles-wallpaper" ]; then
-    rm "$HOME/.local/bin/dotfiles-wallpaper"
-    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-wallpaper"
+  if [ -L "$HOME/.local/bin/splinter-wallpaper" ] && [ "$(readlink "$HOME/.local/bin/splinter-wallpaper")" = "$ROOT_DIR/scripts/splinter-wallpaper" ]; then
+    rm "$HOME/.local/bin/splinter-wallpaper"
+    printf 'removed %s\n' "$HOME/.local/bin/splinter-wallpaper"
   fi
 
-  if [ -L "$HOME/.local/bin/dotfiles-screenshot" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-screenshot")" = "$ROOT_DIR/scripts/dotfiles-screenshot" ]; then
-    rm "$HOME/.local/bin/dotfiles-screenshot"
-    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-screenshot"
+  if [ -L "$HOME/.local/bin/splinter-screenshot" ] && [ "$(readlink "$HOME/.local/bin/splinter-screenshot")" = "$ROOT_DIR/scripts/splinter-screenshot" ]; then
+    rm "$HOME/.local/bin/splinter-screenshot"
+    printf 'removed %s\n' "$HOME/.local/bin/splinter-screenshot"
   fi
 
-  if [ -L "$HOME/.local/bin/dotfiles-hypr-autostart" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-hypr-autostart")" = "$ROOT_DIR/scripts/dotfiles-hypr-autostart" ]; then
-    rm "$HOME/.local/bin/dotfiles-hypr-autostart"
-    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-hypr-autostart"
+  if [ -L "$HOME/.local/bin/splinter-autostart" ] && [ "$(readlink "$HOME/.local/bin/splinter-autostart")" = "$ROOT_DIR/scripts/splinter-autostart" ]; then
+    rm "$HOME/.local/bin/splinter-autostart"
+    printf 'removed %s\n' "$HOME/.local/bin/splinter-autostart"
   fi
 
-  if [ -L "$HOME/.local/bin/dotfiles-hypr-doctor" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-hypr-doctor")" = "$ROOT_DIR/scripts/dotfiles-hypr-doctor" ]; then
-    rm "$HOME/.local/bin/dotfiles-hypr-doctor"
-    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-hypr-doctor"
+  if [ -L "$HOME/.local/bin/splinter-doctor" ] && [ "$(readlink "$HOME/.local/bin/splinter-doctor")" = "$ROOT_DIR/scripts/splinter-doctor" ]; then
+    rm "$HOME/.local/bin/splinter-doctor"
+    printf 'removed %s\n' "$HOME/.local/bin/splinter-doctor"
   fi
 
-  if [ -L "$HOME/.local/bin/dotfiles-start-hyprland" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-start-hyprland")" = "$ROOT_DIR/scripts/dotfiles-start-hyprland" ]; then
-    rm "$HOME/.local/bin/dotfiles-start-hyprland"
-    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-start-hyprland"
+  if [ -L "$HOME/.local/bin/splinter-session" ] && [ "$(readlink "$HOME/.local/bin/splinter-session")" = "$ROOT_DIR/scripts/splinter-session" ]; then
+    rm "$HOME/.local/bin/splinter-session"
+    printf 'removed %s\n' "$HOME/.local/bin/splinter-session"
   fi
 
   if [ -L "$HOME/.local/bin/start-hyprland" ] && [ "$(readlink "$HOME/.local/bin/start-hyprland")" = "$ROOT_DIR/scripts/start-hyprland" ]; then

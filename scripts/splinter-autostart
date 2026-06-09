@@ -16,12 +16,14 @@ if command -v dbus-update-activation-environment >/dev/null 2>&1; then
   dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=Hyprland >/dev/null 2>&1 || true
 fi
 
-if command -v /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 >/dev/null 2>&1; then
-  start_once polkit-gnome-authentication-agent-1 /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
+POLKIT_AGENT="/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1"
+
+if [ -x "$POLKIT_AGENT" ]; then
+  start_once polkit-gnome-authentication-agent-1 "$POLKIT_AGENT"
 fi
 
 command -v mako >/dev/null 2>&1 && start_once mako mako
-command -v waybar >/dev/null 2>&1 && start_once waybar waybar
+command -v quickshell >/dev/null 2>&1 && start_once quickshell quickshell -c splinterbar
 
 if command -v swww-daemon >/dev/null 2>&1; then
   swww query >/dev/null 2>&1 || swww-daemon >/dev/null 2>&1 &
@@ -31,8 +33,8 @@ if command -v easyeffects >/dev/null 2>&1; then
   start_once easyeffects easyeffects --gapplication-service
 fi
 
-if command -v dotfiles-wallpaper >/dev/null 2>&1; then
-  dotfiles-wallpaper apply >/dev/null 2>&1 || true
+if command -v splinter-wallpaper >/dev/null 2>&1; then
+  splinter-wallpaper apply >/dev/null 2>&1 || true
 fi
 
 if command -v dotfiles-welcome >/dev/null 2>&1; then

@@ -52,9 +52,8 @@ greetd
 greetd-tuigreet
 
 # Required to build SplinterDots
-rust
-cargo
 
 # Required font/icon baseline
 noto-fonts
 ttf-nerd-fonts-symbols
+rustup

@@ -669,7 +669,7 @@ impl SplinterDots {
             return;
         }
 
-        let result = Command::new(self.paths.script("dotfiles-wallpaper"))
+        let result = Command::new(self.paths.script("splinter-wallpaper"))
             .arg("set")
             .arg(wallpaper_path.to_string_lossy().to_string())
             .output();
@@ -2472,13 +2472,13 @@ fn default_shortcuts() -> Vec<Shortcut> {
             "Screenshot region",
             "S",
             "app",
-            "dotfiles-screenshot region",
+            "splinter-screenshot region",
         ),
         sc(
             "Screenshot full screen",
             "SHIFT, S",
             "app",
-            "dotfiles-screenshot full",
+            "splinter-screenshot full",
         ),
         sc("SplinterDots", "W", "app", "dotctl center"),
         sc("Reload desktop", "SHIFT, R", "app", "hyprctl reload"),

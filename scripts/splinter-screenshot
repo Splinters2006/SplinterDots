@@ -53,7 +53,7 @@ case "$mode" in
     copy_full
     ;;
   *)
-    echo "Usage: dotfiles-screenshot [area|full]" >&2
+    echo "Usage: splinter-screenshot [area|full]" >&2
     exit 1
     ;;
 esac

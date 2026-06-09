@@ -238,7 +238,7 @@ configure_system() {
   if [ "$DRY_RUN" -eq 1 ]; then
     log "[dry-run] sudo install -Dm644 $ROOT_DIR/system/greetd/config.toml /etc/greetd/config.toml"
     log "[dry-run] sudo install -Dm644 $ROOT_DIR/system/wayland-sessions/start-hyprland.desktop /usr/share/wayland-sessions/start-hyprland.desktop"
-    log "[dry-run] sudo install -Dm755 $ROOT_DIR/scripts/dotfiles-start-hyprland /usr/local/bin/dotfiles-start-hyprland"
+    log "[dry-run] sudo install -Dm755 $ROOT_DIR/scripts/splinter-session /usr/local/bin/splinter-session"
     remove_managed_start_hyprland_shadow
     log "[dry-run] sudo systemctl enable NetworkManager bluetooth greetd"
     return
@@ -246,7 +246,7 @@ configure_system() {
 
   sudo install -Dm644 "$ROOT_DIR/system/greetd/config.toml" /etc/greetd/config.toml
   sudo install -Dm644 "$ROOT_DIR/system/wayland-sessions/start-hyprland.desktop" /usr/share/wayland-sessions/start-hyprland.desktop
-  sudo install -Dm755 "$ROOT_DIR/scripts/dotfiles-start-hyprland" /usr/local/bin/dotfiles-start-hyprland
+  sudo install -Dm755 "$ROOT_DIR/scripts/splinter-session" /usr/local/bin/splinter-session
   remove_managed_start_hyprland_shadow
   sudo systemctl enable NetworkManager bluetooth greetd
 }
@@ -420,16 +420,16 @@ reenable_welcome_after_update
 run mkdir -p "$HOME_DIR/.local/bin"
 link_file "$ROOT_DIR/scripts/dotctl" "$HOME_DIR/.local/bin/dotctl"
 link_file "$ROOT_DIR/scripts/SplinterDots" "$HOME_DIR/.local/bin/SplinterDots"
-link_file "$ROOT_DIR/scripts/dotfiles-hypr-autostart" "$HOME_DIR/.local/bin/dotfiles-hypr-autostart"
-link_file "$ROOT_DIR/scripts/dotfiles-hypr-doctor" "$HOME_DIR/.local/bin/dotfiles-hypr-doctor"
-link_file "$ROOT_DIR/scripts/dotfiles-start-hyprland" "$HOME_DIR/.local/bin/dotfiles-start-hyprland"
+link_file "$ROOT_DIR/scripts/splinter-autostart" "$HOME_DIR/.local/bin/splinter-autostart"
+link_file "$ROOT_DIR/scripts/splinter-doctor" "$HOME_DIR/.local/bin/splinter-doctor"
+link_file "$ROOT_DIR/scripts/splinter-session" "$HOME_DIR/.local/bin/splinter-session"
 if [ -L "$HOME_DIR/.local/bin/start-hyprland" ] && [ "$(readlink "$HOME_DIR/.local/bin/start-hyprland")" = "$ROOT_DIR/scripts/start-hyprland" ]; then
   run rm "$HOME_DIR/.local/bin/start-hyprland"
   action_log "remove managed shadow: $HOME_DIR/.local/bin/start-hyprland"
 fi
 link_file "$ROOT_DIR/scripts/dotfiles-welcome" "$HOME_DIR/.local/bin/dotfiles-welcome"
-link_file "$ROOT_DIR/scripts/dotfiles-wallpaper" "$HOME_DIR/.local/bin/dotfiles-wallpaper"
-link_file "$ROOT_DIR/scripts/dotfiles-screenshot" "$HOME_DIR/.local/bin/dotfiles-screenshot"
+link_file "$ROOT_DIR/scripts/splinter-wallpaper" "$HOME_DIR/.local/bin/splinter-wallpaper"
+link_file "$ROOT_DIR/scripts/splinter-screenshot" "$HOME_DIR/.local/bin/splinter-screenshot"
 
 log ""
 log "Done. Open a new shell or run: exec \"\$SHELL\""
