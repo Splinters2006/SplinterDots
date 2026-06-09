@@ -1,0 +1,2194 @@
+{
+  "version": 1,
+  "source": "Hyprland variables page, last checked 2026-06-09",
+  "options": [
+    {
+      "section": "General",
+      "path": "general:border_size",
+      "label": "Window border thickness",
+      "type": "int",
+      "default": "2",
+      "min": 0,
+      "max": 10
+    },
+    {
+      "section": "General",
+      "path": "general:gaps_in",
+      "label": "Gap between windows",
+      "type": "int",
+      "default": "5",
+      "min": 0,
+      "max": 60
+    },
+    {
+      "section": "General",
+      "path": "general:gaps_out",
+      "label": "Gap around screen edges",
+      "type": "int",
+      "default": "10",
+      "min": 0,
+      "max": 100
+    },
+    {
+      "section": "General",
+      "path": "general:float_gaps",
+      "label": "Gap around floating windows",
+      "type": "int",
+      "default": "0",
+      "min": -1,
+      "max": 100
+    },
+    {
+      "section": "General",
+      "path": "general:gaps_workspaces",
+      "label": "Gap between workspaces",
+      "type": "int",
+      "default": "0",
+      "min": 0,
+      "max": 100
+    },
+    {
+      "section": "General",
+      "path": "general:col.active_border",
+      "label": "Focused window border color",
+      "type": "text",
+      "default": "$accent"
+    },
+    {
+      "section": "General",
+      "path": "general:col.inactive_border",
+      "label": "Unfocused window border color",
+      "type": "text",
+      "default": "$inactive"
+    },
+    {
+      "section": "General",
+      "path": "general:col.nogroup_border",
+      "label": "Cannot-group border color",
+      "type": "text",
+      "default": "0xffffaaff"
+    },
+    {
+      "section": "General",
+      "path": "general:col.nogroup_border_active",
+      "label": "Focused cannot-group border color",
+      "type": "text",
+      "default": "0xffff00ff"
+    },
+    {
+      "section": "General",
+      "path": "general:layout",
+      "label": "Window layout style",
+      "type": "choice",
+      "default": "dwindle",
+      "choices": [
+        "dwindle",
+        "master",
+        "scrolling",
+        "monocle"
+      ]
+    },
+    {
+      "section": "General",
+      "path": "general:no_focus_fallback",
+      "label": "Do not pick another window when focus movement fails",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "General",
+      "path": "general:resize_on_border",
+      "label": "Resize windows by dragging their border",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "General",
+      "path": "general:extend_border_grab_area",
+      "label": "Extra resize grab area",
+      "type": "int",
+      "default": "15",
+      "min": 0,
+      "max": 80
+    },
+    {
+      "section": "General",
+      "path": "general:hover_icon_on_border",
+      "label": "Show resize cursor on borders",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "General",
+      "path": "general:allow_tearing",
+      "label": "Allow screen tearing for games",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "General",
+      "path": "general:resize_corner",
+      "label": "Forced floating resize corner",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4"
+      ]
+    },
+    {
+      "section": "General",
+      "path": "general:modal_parent_blocking",
+      "label": "Block parent window behind popups",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "General",
+      "path": "general:locale",
+      "label": "Override desktop language",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "General / Snapping",
+      "path": "general:snap:enabled",
+      "label": "Snap floating windows",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "General / Snapping",
+      "path": "general:snap:window_gap",
+      "label": "Snap distance between windows",
+      "type": "int",
+      "default": "10",
+      "min": 0,
+      "max": 80
+    },
+    {
+      "section": "General / Snapping",
+      "path": "general:snap:monitor_gap",
+      "label": "Snap distance to screen edge",
+      "type": "int",
+      "default": "10",
+      "min": 0,
+      "max": 80
+    },
+    {
+      "section": "General / Snapping",
+      "path": "general:snap:border_overlap",
+      "label": "Let snapped borders overlap",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "General / Snapping",
+      "path": "general:snap:respect_gaps",
+      "label": "Keep normal gaps while snapping",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:rounding",
+      "label": "Window corner rounding",
+      "type": "int",
+      "default": "8",
+      "min": 0,
+      "max": 40
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:rounding_power",
+      "label": "Corner curve shape",
+      "type": "float",
+      "default": "2.0",
+      "min": 1.0,
+      "max": 10.0
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:active_opacity",
+      "label": "Focused window opacity",
+      "type": "float",
+      "default": "1.0",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:inactive_opacity",
+      "label": "Unfocused window opacity",
+      "type": "float",
+      "default": "1.0",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:fullscreen_opacity",
+      "label": "Fullscreen window opacity",
+      "type": "float",
+      "default": "1.0",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:dim_modal",
+      "label": "Dim window behind popups",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:dim_inactive",
+      "label": "Dim unfocused windows",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:dim_strength",
+      "label": "Unfocused dim strength",
+      "type": "float",
+      "default": "0.5",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:dim_special",
+      "label": "Special workspace dim strength",
+      "type": "float",
+      "default": "0.2",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:dim_around",
+      "label": "Rule-based dim strength",
+      "type": "float",
+      "default": "0.4",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:screen_shader",
+      "label": "Screen shader file",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Appearance / Windows",
+      "path": "decoration:border_part_of_window",
+      "label": "Include border as part of the window",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:enabled",
+      "label": "Window background blur",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:size",
+      "label": "Blur size",
+      "type": "int",
+      "default": "4",
+      "min": 1,
+      "max": 30
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:passes",
+      "label": "Blur quality passes",
+      "type": "int",
+      "default": "2",
+      "min": 1,
+      "max": 8
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:ignore_opacity",
+      "label": "Blur ignores window transparency",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:new_optimizations",
+      "label": "Use faster blur optimizations",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:xray",
+      "label": "Make floating-window blur lighter",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:noise",
+      "label": "Blur noise amount",
+      "type": "float",
+      "default": "0.0117",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:contrast",
+      "label": "Blur contrast",
+      "type": "float",
+      "default": "0.8916",
+      "min": 0.0,
+      "max": 2.0
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:brightness",
+      "label": "Blur brightness",
+      "type": "float",
+      "default": "0.8172",
+      "min": 0.0,
+      "max": 2.0
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:vibrancy",
+      "label": "Blur color strength",
+      "type": "float",
+      "default": "0.1696",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:vibrancy_darkness",
+      "label": "Blur color strength on dark areas",
+      "type": "float",
+      "default": "0.0",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:special",
+      "label": "Blur behind special workspace",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:popups",
+      "label": "Blur pop-up menus",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:popups_ignorealpha",
+      "label": "Pop-up blur transparency cutoff",
+      "type": "float",
+      "default": "0.2",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:input_methods",
+      "label": "Blur input method windows",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Appearance / Blur",
+      "path": "decoration:blur:input_methods_ignorealpha",
+      "label": "Input method blur transparency cutoff",
+      "type": "float",
+      "default": "0.2",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Shadows",
+      "path": "decoration:shadow:enabled",
+      "label": "Window shadows",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Appearance / Shadows",
+      "path": "decoration:shadow:range",
+      "label": "Shadow size",
+      "type": "int",
+      "default": "4",
+      "min": 0,
+      "max": 80
+    },
+    {
+      "section": "Appearance / Shadows",
+      "path": "decoration:shadow:render_power",
+      "label": "Shadow falloff",
+      "type": "choice",
+      "default": "3",
+      "choices": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ]
+    },
+    {
+      "section": "Appearance / Shadows",
+      "path": "decoration:shadow:sharp",
+      "label": "Sharp shadow edges",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Appearance / Shadows",
+      "path": "decoration:shadow:color",
+      "label": "Shadow color",
+      "type": "text",
+      "default": "0xee1a1a1a"
+    },
+    {
+      "section": "Appearance / Shadows",
+      "path": "decoration:shadow:color_inactive",
+      "label": "Unfocused shadow color",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Appearance / Shadows",
+      "path": "decoration:shadow:offset",
+      "label": "Shadow offset",
+      "type": "text",
+      "default": "0 0"
+    },
+    {
+      "section": "Appearance / Shadows",
+      "path": "decoration:shadow:scale",
+      "label": "Shadow scale",
+      "type": "float",
+      "default": "1.0",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Appearance / Glow",
+      "path": "decoration:glow:enabled",
+      "label": "Inner window glow",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Appearance / Glow",
+      "path": "decoration:glow:range",
+      "label": "Glow size",
+      "type": "int",
+      "default": "10",
+      "min": 0,
+      "max": 80
+    },
+    {
+      "section": "Appearance / Glow",
+      "path": "decoration:glow:render_power",
+      "label": "Glow falloff",
+      "type": "choice",
+      "default": "3",
+      "choices": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ]
+    },
+    {
+      "section": "Appearance / Glow",
+      "path": "decoration:glow:color",
+      "label": "Glow color",
+      "type": "text",
+      "default": "0xee1a1a1a"
+    },
+    {
+      "section": "Appearance / Glow",
+      "path": "decoration:glow:color_inactive",
+      "label": "Unfocused glow color",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Animations",
+      "path": "animations:enabled",
+      "label": "Window animations",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Animations",
+      "path": "animations:workspace_wraparound",
+      "label": "Animate first and last workspaces as connected",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:kb_model",
+      "label": "Keyboard model",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:kb_layout",
+      "label": "Keyboard layout",
+      "type": "text",
+      "default": "us"
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:kb_variant",
+      "label": "Keyboard variant",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:kb_options",
+      "label": "Keyboard options",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:kb_rules",
+      "label": "Keyboard rules",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:kb_file",
+      "label": "Custom keyboard file",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:numlock_by_default",
+      "label": "Turn Num Lock on by default",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:resolve_binds_by_sym",
+      "label": "Use current keyboard layout for shortcuts",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:repeat_rate",
+      "label": "Key repeat speed",
+      "type": "int",
+      "default": "25",
+      "min": 1,
+      "max": 100
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:repeat_delay",
+      "label": "Key repeat delay",
+      "type": "int",
+      "default": "600",
+      "min": 100,
+      "max": 2000
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:sensitivity",
+      "label": "Mouse sensitivity",
+      "type": "float",
+      "default": "0.0",
+      "min": -1.0,
+      "max": 1.0
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:accel_profile",
+      "label": "Mouse acceleration style",
+      "type": "choice",
+      "default": "",
+      "choices": [
+        "",
+        "adaptive",
+        "flat",
+        "custom"
+      ]
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:force_no_accel",
+      "label": "Disable mouse acceleration completely",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:rotation",
+      "label": "Input rotation",
+      "type": "int",
+      "default": "0",
+      "min": 0,
+      "max": 359
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:left_handed",
+      "label": "Swap left and right mouse buttons",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:scroll_points",
+      "label": "Custom scroll curve",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:scroll_method",
+      "label": "Scroll method",
+      "type": "choice",
+      "default": "",
+      "choices": [
+        "",
+        "2fg",
+        "edge",
+        "on_button_down",
+        "no_scroll"
+      ]
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:scroll_button",
+      "label": "Scroll button number",
+      "type": "int",
+      "default": "0",
+      "min": 0,
+      "max": 999
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:scroll_button_lock",
+      "label": "Lock scroll button after pressing it",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:scroll_factor",
+      "label": "Mouse wheel scroll speed",
+      "type": "float",
+      "default": "1.0",
+      "min": 0.1,
+      "max": 10.0
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:natural_scroll",
+      "label": "Natural scrolling for mouse",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:follow_mouse",
+      "label": "Mouse focus behavior",
+      "type": "choice",
+      "default": "1",
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:follow_mouse_shrink",
+      "label": "Dead zone between windows",
+      "type": "int",
+      "default": "0",
+      "min": 0,
+      "max": 100
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:follow_mouse_threshold",
+      "label": "Mouse distance before focus changes",
+      "type": "float",
+      "default": "0.0",
+      "min": 0.0,
+      "max": 100.0
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:focus_on_close",
+      "label": "Focus after closing a window",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:mouse_refocus",
+      "label": "Refocus windows when crossing edges",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:float_switch_override_focus",
+      "label": "Focus behavior when switching floating mode",
+      "type": "choice",
+      "default": "1",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:special_fallthrough",
+      "label": "Click through empty special workspace",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:off_window_axis_events",
+      "label": "Scroll behavior outside focused window",
+      "type": "choice",
+      "default": "1",
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "section": "Keyboard and Mouse",
+      "path": "input:emulate_discrete_scroll",
+      "label": "Make high-resolution scrolling act normal",
+      "type": "choice",
+      "default": "1",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:disable_while_typing",
+      "label": "Disable touchpad while typing",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:natural_scroll",
+      "label": "Natural touchpad scrolling",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:scroll_factor",
+      "label": "Touchpad scroll speed",
+      "type": "float",
+      "default": "1.0",
+      "min": 0.1,
+      "max": 10.0
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:middle_button_emulation",
+      "label": "Two-button middle click",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:tap_button_map",
+      "label": "Tap button layout",
+      "type": "choice",
+      "default": "",
+      "choices": [
+        "",
+        "lrm",
+        "lmr"
+      ]
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:clickfinger_behavior",
+      "label": "Use finger count for click type",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:tap-to-click",
+      "label": "Tap to click",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:drag_lock",
+      "label": "Dragging lock mode",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:tap-and-drag",
+      "label": "Tap and drag",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:flip_x",
+      "label": "Reverse horizontal touchpad movement",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:flip_y",
+      "label": "Reverse vertical touchpad movement",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Touchpad",
+      "path": "input:touchpad:drag_3fg",
+      "label": "Three-finger drag",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:touchdevice:transform",
+      "label": "Touchscreen rotation",
+      "type": "int",
+      "default": "-1",
+      "min": -1,
+      "max": 7
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:touchdevice:output",
+      "label": "Touchscreen monitor",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:touchdevice:enabled",
+      "label": "Touchscreen input",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:virtualkeyboard:share_states",
+      "label": "Virtual keyboard shared key state",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:virtualkeyboard:release_pressed_on_close",
+      "label": "Release virtual keys when closed",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:tablet:transform",
+      "label": "Tablet rotation",
+      "type": "int",
+      "default": "-1",
+      "min": -1,
+      "max": 7
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:tablet:output",
+      "label": "Tablet monitor",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:tablet:region_position",
+      "label": "Tablet mapped area position",
+      "type": "text",
+      "default": "0 0"
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:tablet:absolute_region_position",
+      "label": "Use absolute tablet area position",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:tablet:region_size",
+      "label": "Tablet mapped area size",
+      "type": "text",
+      "default": "0 0"
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:tablet:relative_input",
+      "label": "Tablet relative movement",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:tablet:left_handed",
+      "label": "Left-handed tablet mode",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:tablet:active_area_size",
+      "label": "Tablet active area size",
+      "type": "text",
+      "default": "0 0"
+    },
+    {
+      "section": "Touchscreen and Tablet",
+      "path": "input:tablet:active_area_position",
+      "label": "Tablet active area position",
+      "type": "text",
+      "default": "0 0"
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_distance",
+      "label": "Workspace swipe distance",
+      "type": "int",
+      "default": "300",
+      "min": 10,
+      "max": 2000
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_touch",
+      "label": "Touchscreen workspace swipes",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_invert",
+      "label": "Reverse touchpad workspace swipe",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_touch_invert",
+      "label": "Reverse touchscreen workspace swipe",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_min_speed_to_force",
+      "label": "Swipe speed to force workspace change",
+      "type": "int",
+      "default": "30",
+      "min": 0,
+      "max": 1000
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_cancel_ratio",
+      "label": "Swipe distance needed to switch",
+      "type": "float",
+      "default": "0.5",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_create_new",
+      "label": "Swipe past last workspace creates a new one",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_direction_lock",
+      "label": "Lock swipe direction",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_direction_lock_threshold",
+      "label": "Distance before swipe direction locks",
+      "type": "int",
+      "default": "10",
+      "min": 0,
+      "max": 500
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_forever",
+      "label": "Keep swiping through far workspaces",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:workspace_swipe_use_r",
+      "label": "Use relative workspace numbers for swipes",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Gestures",
+      "path": "gestures:close_max_timeout",
+      "label": "Gesture close timeout",
+      "type": "int",
+      "default": "1000",
+      "min": 0,
+      "max": 5000
+    },
+    {
+      "section": "Window Groups",
+      "path": "group:auto_group",
+      "label": "Automatically group new windows",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Window Groups",
+      "path": "group:insert_after_current",
+      "label": "Add new group windows after current one",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Window Groups",
+      "path": "group:focus_removed_window",
+      "label": "Focus window after removing it from group",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Window Groups",
+      "path": "group:drag_into_group",
+      "label": "Drag windows into groups",
+      "type": "choice",
+      "default": "1",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Window Groups",
+      "path": "group:merge_groups_on_drag",
+      "label": "Merge groups by dragging",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Window Groups",
+      "path": "group:merge_groups_on_groupbar",
+      "label": "Merge groups through group bar",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Window Groups",
+      "path": "group:merge_floated_into_tiled_on_groupbar",
+      "label": "Let floating windows join tiled groups",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Window Groups",
+      "path": "group:group_on_movetoworkspace",
+      "label": "Group windows when moved to workspace",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Window Groups / Group Bar",
+      "path": "group:groupbar:enabled",
+      "label": "Show group bar",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Window Groups / Group Bar",
+      "path": "group:groupbar:font_family",
+      "label": "Group bar font",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Window Groups / Group Bar",
+      "path": "group:groupbar:font_size",
+      "label": "Group bar font size",
+      "type": "int",
+      "default": "8",
+      "min": 6,
+      "max": 40
+    },
+    {
+      "section": "Window Groups / Group Bar",
+      "path": "group:groupbar:gradients",
+      "label": "Use gradients in group bar",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Window Groups / Group Bar",
+      "path": "group:groupbar:height",
+      "label": "Group bar height",
+      "type": "int",
+      "default": "14",
+      "min": 4,
+      "max": 80
+    },
+    {
+      "section": "Window Groups / Group Bar",
+      "path": "group:groupbar:stacked",
+      "label": "Stack group bar vertically",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Window Groups / Group Bar",
+      "path": "group:groupbar:render_titles",
+      "label": "Show window titles in group bar",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Window Groups / Group Bar",
+      "path": "group:groupbar:scrolling",
+      "label": "Scroll to switch grouped windows",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Window Groups / Group Bar",
+      "path": "group:groupbar:rounding",
+      "label": "Group bar rounding",
+      "type": "int",
+      "default": "1",
+      "min": 0,
+      "max": 30
+    },
+    {
+      "section": "Window Groups / Group Bar",
+      "path": "group:groupbar:blur",
+      "label": "Blur group bar",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:disable_hyprland_logo",
+      "label": "Hide default Hyprland background",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:disable_splash_rendering",
+      "label": "Hide splash text",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:disable_scale_notification",
+      "label": "Hide scale warning popups",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:font_family",
+      "label": "Desktop message font",
+      "type": "text",
+      "default": "Sans"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:splash_font_family",
+      "label": "Splash text font",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:force_default_wallpaper",
+      "label": "Default wallpaper behavior",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "-1",
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:vrr",
+      "label": "Adaptive Sync / VRR",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:mouse_move_enables_dpms",
+      "label": "Mouse wakes sleeping screen",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:key_press_enables_dpms",
+      "label": "Keyboard wakes sleeping screen",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:name_vk_after_proc",
+      "label": "Name virtual keyboards after their app",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:always_follow_on_dnd",
+      "label": "Focus follows drag-and-drop",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:layers_hog_keyboard_focus",
+      "label": "Keep menu/search keyboard focus",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:animate_manual_resizes",
+      "label": "Animate manual resizes",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:animate_mouse_windowdragging",
+      "label": "Animate mouse window dragging",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:disable_autoreload",
+      "label": "Do not reload config automatically",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:enable_swallow",
+      "label": "Hide terminal when launched app opens",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:swallow_regex",
+      "label": "Terminal classes to hide",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:swallow_exception_regex",
+      "label": "Apps that should not hide terminal",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:focus_on_activate",
+      "label": "Focus apps that ask for attention",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:mouse_move_focuses_monitor",
+      "label": "Mouse moving to monitor focuses it",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:allow_session_lock_restore",
+      "label": "Recover lock screen if it crashes",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:session_lock_xray",
+      "label": "Keep windows visible behind lock screen",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:background_color",
+      "label": "Fallback background color",
+      "type": "text",
+      "default": "0x111111"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:close_special_on_empty",
+      "label": "Close special workspace when empty",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:on_focus_under_fullscreen",
+      "label": "Focus request under fullscreen",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:exit_window_retains_fullscreen",
+      "label": "Keep fullscreen after closing fullscreen window",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:initial_workspace_tracking",
+      "label": "Where child windows open",
+      "type": "choice",
+      "default": "1",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:middle_click_paste",
+      "label": "Middle-click paste",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:render_unfocused_fps",
+      "label": "FPS limit for background windows",
+      "type": "int",
+      "default": "15",
+      "min": 1,
+      "max": 240
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:disable_xdg_env_checks",
+      "label": "Hide environment variable warnings",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:lockdead_screen_delay",
+      "label": "Lock failure warning delay",
+      "type": "int",
+      "default": "1000",
+      "min": 0,
+      "max": 5000
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:enable_anr_dialog",
+      "label": "Show app-not-responding dialog",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:anr_missed_pings",
+      "label": "App-not-responding sensitivity",
+      "type": "int",
+      "default": "5",
+      "min": 1,
+      "max": 30
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:size_limits_tiled",
+      "label": "Apply size limits to tiled windows",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Desktop Behavior",
+      "path": "misc:disable_watchdog_warning",
+      "label": "Hide start warning",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Layout Details",
+      "path": "layout:single_window_aspect_ratio",
+      "label": "Single-window aspect ratio",
+      "type": "text",
+      "default": "0 0"
+    },
+    {
+      "section": "Layout Details",
+      "path": "layout:single_window_aspect_ratio_tolerance",
+      "label": "Single-window aspect tolerance",
+      "type": "float",
+      "default": "0.1",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:pass_mouse_when_bound",
+      "label": "Let apps also receive mouse shortcut clicks",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:scroll_event_delay",
+      "label": "Scroll shortcut delay",
+      "type": "int",
+      "default": "300",
+      "min": 0,
+      "max": 2000
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:workspace_back_and_forth",
+      "label": "Press workspace again to go back",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:hide_special_on_workspace_change",
+      "label": "Hide special workspace when switching",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:allow_workspace_cycles",
+      "label": "Allow workspace loops",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:workspace_center_on",
+      "label": "Cursor position after workspace switch",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:focus_preferred_method",
+      "label": "Directional focus preference",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:ignore_group_lock",
+      "label": "Ignore group locks when moving windows",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:movefocus_cycles_fullscreen",
+      "label": "Cycle focus inside fullscreen",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:movefocus_cycles_groupfirst",
+      "label": "Cycle grouped windows first",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:window_direction_monitor_fallback",
+      "label": "Directional movement can cross monitors",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:disable_keybind_grabbing",
+      "label": "Do not let apps block shortcuts",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:allow_pin_fullscreen",
+      "label": "Allow pinned fullscreen windows",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Shortcut Behavior",
+      "path": "binds:drag_threshold",
+      "label": "Mouse drag distance before action starts",
+      "type": "int",
+      "default": "10",
+      "min": 0,
+      "max": 100
+    },
+    {
+      "section": "Compatibility",
+      "path": "xwayland:enabled",
+      "label": "Run older X11 apps",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Compatibility",
+      "path": "xwayland:use_nearest_neighbor",
+      "label": "Pixelated scaling for X11 apps",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Compatibility",
+      "path": "xwayland:force_zero_scaling",
+      "label": "Force X11 apps to scale at 1x",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Compatibility",
+      "path": "xwayland:create_abstract_socket",
+      "label": "Create extra X11 socket",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Graphics",
+      "path": "opengl:nvidia_anti_flicker",
+      "label": "NVIDIA anti-flicker",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Graphics",
+      "path": "render:direct_scanout",
+      "label": "Low-lag fullscreen path",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Graphics",
+      "path": "render:expand_undersized_textures",
+      "label": "Fix undersized texture edges",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Graphics",
+      "path": "render:xp_mode",
+      "label": "Experimental performance mode",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Graphics",
+      "path": "render:ctm_animation",
+      "label": "Color temperature fade mode",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Graphics",
+      "path": "render:cm_enabled",
+      "label": "Color management",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Graphics",
+      "path": "render:send_content_type",
+      "label": "Send content type to monitor",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Graphics",
+      "path": "render:cm_auto_hdr",
+      "label": "Auto HDR mode",
+      "type": "choice",
+      "default": "1",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Graphics",
+      "path": "render:new_render_scheduling",
+      "label": "New render scheduling",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Graphics",
+      "path": "render:non_shader_cm",
+      "label": "Non-shader color mode",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "section": "Graphics",
+      "path": "render:non_shader_cm_interop",
+      "label": "Fullscreen color tool behavior",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Graphics",
+      "path": "render:cm_sdr_eotf",
+      "label": "SDR color curve",
+      "type": "choice",
+      "default": "default",
+      "choices": [
+        "default",
+        "gamma22",
+        "gamma22force",
+        "srgb"
+      ]
+    },
+    {
+      "section": "Graphics",
+      "path": "render:commit_timing_enabled",
+      "label": "Commit timing support",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Graphics",
+      "path": "render:use_fp16",
+      "label": "Internal color precision",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Graphics",
+      "path": "render:keep_unmodified_copy",
+      "label": "Keep clean copy for screen sharing",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Graphics",
+      "path": "render:use_shader_blur_blend",
+      "label": "Experimental shader blur blend",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:invisible",
+      "label": "Hide cursor completely",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:sync_gsettings_theme",
+      "label": "Sync cursor theme with apps",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:no_hardware_cursors",
+      "label": "Hardware cursor mode",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:no_break_fs_vrr",
+      "label": "Avoid cursor VRR spikes",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:min_refresh_rate",
+      "label": "Minimum cursor refresh rate",
+      "type": "int",
+      "default": "24",
+      "min": 1,
+      "max": 500
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:hotspot_padding",
+      "label": "Cursor edge padding",
+      "type": "int",
+      "default": "1",
+      "min": 0,
+      "max": 100
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:inactive_timeout",
+      "label": "Hide cursor after seconds",
+      "type": "float",
+      "default": "0",
+      "min": 0.0,
+      "max": 3600.0
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:no_warps",
+      "label": "Do not move cursor automatically",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:persistent_warps",
+      "label": "Remember cursor position inside windows",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:warp_on_change_workspace",
+      "label": "Move cursor when switching workspace",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:warp_on_toggle_special",
+      "label": "Move cursor for special workspace",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:default_monitor",
+      "label": "Default cursor monitor",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:zoom_factor",
+      "label": "Cursor zoom factor",
+      "type": "float",
+      "default": "1.0",
+      "min": 1.0,
+      "max": 20.0
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:zoom_rigid",
+      "label": "Keep zoom centered on cursor",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:zoom_detached_camera",
+      "label": "Detached zoom camera",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:enable_hyprcursor",
+      "label": "Use Hyprcursor themes",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:hide_on_key_press",
+      "label": "Hide cursor while typing",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:hide_on_touch",
+      "label": "Hide cursor after touch input",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:hide_on_tablet",
+      "label": "Hide cursor after tablet input",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:use_cpu_buffer",
+      "label": "Cursor CPU buffer mode",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:warp_back_after_non_mouse_input",
+      "label": "Return cursor after keyboard focus movement",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Cursor",
+      "path": "cursor:zoom_disable_aa",
+      "label": "Pixelated zoom",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "System Messages",
+      "path": "ecosystem:no_update_news",
+      "label": "Hide update news popup",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "System Messages",
+      "path": "ecosystem:no_donation_nag",
+      "label": "Hide donation reminder",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "System Messages",
+      "path": "ecosystem:enforce_permissions",
+      "label": "Use permission controls",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Compatibility",
+      "path": "quirks:prefer_hdr",
+      "label": "Prefer HDR before apps start",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:overlay",
+      "label": "Show performance overlay",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:damage_blink",
+      "label": "Flash updated screen areas",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:gl_debugging",
+      "label": "OpenGL error checking",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:vfr",
+      "label": "Lower refresh when idle",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:disable_logs",
+      "label": "Disable log files",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:disable_time",
+      "label": "Hide times in logs",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:damage_tracking",
+      "label": "Screen redraw mode",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:enable_stdout_logs",
+      "label": "Print logs to terminal",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:manual_crash",
+      "label": "Manual crash trigger",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:suppress_errors",
+      "label": "Hide config error popups",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:disable_scale_checks",
+      "label": "Disable screen scale checks",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:error_limit",
+      "label": "Maximum shown config errors",
+      "type": "int",
+      "default": "5",
+      "min": 1,
+      "max": 100
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:error_position",
+      "label": "Config error bar position",
+      "type": "choice",
+      "default": "0",
+      "choices": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:colored_stdout_logs",
+      "label": "Colored terminal logs",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:pass",
+      "label": "Render pass debugging",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:full_cm_proto",
+      "label": "Claim full color support",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "section": "Troubleshooting",
+      "path": "debug:invalidate_fp16",
+      "label": "FP16 invalidation mode",
+      "type": "choice",
+      "default": "2",
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    }
+  ]
+}

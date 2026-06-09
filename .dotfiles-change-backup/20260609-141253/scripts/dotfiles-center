@@ -25,14 +25,7 @@ HYPR_GENERATED = HYPR_DIR / "dotfiles-generated.conf"
 
 QUICKSHELL_DIR = CONFIG_HOME / "quickshell" / "splinterbar"
 QUICKSHELL_FILE = QUICKSHELL_DIR / "shell.qml"
-MAKO_CONFIG = CONFIG_HOME / "mako" / "config"
 HYPR_SCHEMA_FILE = ROOT / "config" / "dotfiles" / "hyprland-options.json"
-
-# Hidden from the beginner-friendly Hyprland page.
-EXCLUDED_HYPR_OPTIONS = {
-    "misc:disable_hyprland_qtutils_check",
-    "debug:watchdog_timeout",
-}
 
 
 DEFAULTS = {
@@ -176,19 +169,7 @@ def load_hypr_schema() -> list[dict]:
         messagebox.showerror("Hyprland settings", f"Could not read {HYPR_SCHEMA_FILE}:\n{exc}")
         return []
     options = data.get("options", [])
-    friendly_types = {"bool", "choice", "int", "float"}
-    cleaned: list[dict] = []
-    for option in options:
-        if not isinstance(option, dict):
-            continue
-        path = str(option.get("path", ""))
-        kind = str(option.get("type", "text"))
-        if not path or path in EXCLUDED_HYPR_OPTIONS:
-            continue
-        if kind not in friendly_types:
-            continue
-        cleaned.append(option)
-    return cleaned
+    return [option for option in options if isinstance(option, dict) and option.get("path")]
 
 
 def default_hypr_values(schema: list[dict]) -> dict[str, str]:
@@ -309,38 +290,12 @@ def hex_to_hypr_rgba(hex_color: str) -> str:
     return f"rgba({clean.lower()}ff)"
 
 
-def write_mako_config(values: dict[str, str]) -> None:
-    palette = theme_palette(values)
-    MAKO_CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    MAKO_CONFIG.write_text(
-        "\n".join([
-            f"background-color={palette['background']}",
-            f"text-color={palette['text']}",
-            f"border-color={palette['accent']}",
-            "border-size=2",
-            "border-radius=8",
-            "padding=12",
-            "default-timeout=5000",
-            "",
-        ]),
-        encoding="utf-8",
-    )
-
-
-def write_colors(values: dict[str, str]) -> None:
-    palette = theme_palette(values)
+def write_colors(accent: str) -> None:
     HYPR_DIR.mkdir(parents=True, exist_ok=True)
     HYPR_COLORS.write_text(
-        "\n".join([
-            f"$accent = {hex_to_hypr_rgba(palette['accent'])}",
-            f"$inactive = {hex_to_hypr_rgba(palette['inactive_border'])}",
-            f"$background = {hex_to_hypr_rgba(palette['background'])}",
-            f"$text = {hex_to_hypr_rgba(palette['text'])}",
-            "",
-        ]),
+        f"$accent = {hex_to_hypr_rgba(accent)}\n$inactive = rgba(45475aff)\n",
         encoding="utf-8",
     )
-    write_mako_config(values)
 
 
 def hypr_key_parts(key: str) -> tuple[str, str]:
@@ -429,8 +384,6 @@ def write_quickshell_bar(values: dict[str, str]) -> None:
     radius = clamp_int(values.get("DOTFILES_BAR_RADIUS", "8"), 8, 0, 28)
     opacity = clamp_float(values.get("DOTFILES_BAR_OPACITY", "0.92"), 0.92, 0.2, 1.0)
     accent = values.get("DOTFILES_ACCENT", "#89b4fa")
-    theme = values.get("DOTFILES_THEME", "dark")
-    palette = theme_palette(values)
     font_size = clamp_int(values.get("DOTFILES_BAR_FONT_SIZE", "12"), 12, 8, 24)
     spacing = clamp_int(values.get("DOTFILES_BAR_SPACING", "14"), 14, 4, 40)
     border_width = clamp_int(values.get("DOTFILES_BAR_BORDER_WIDTH", "1"), 1, 0, 4)
@@ -451,7 +404,7 @@ def write_quickshell_bar(values: dict[str, str]) -> None:
     accent_workspace = is_true(values.get("DOTFILES_BAR_ACCENT_WORKSPACE", "true"))
 
     bg_alpha = int(opacity * 255)
-    bg_color = f"#{bg_alpha:02x}{palette['bar_rgb']}"
+    bg_color = "#%02x1e1e2e" % bg_alpha
 
     # Build status command dynamically
     status_parts = []
@@ -483,17 +436,16 @@ def write_quickshell_bar(values: dict[str, str]) -> None:
             Repeater {{
               model: {workspace_count}
               Rectangle {{
-                width: (index + 1) === root.activeWorkspace ? {height - 2} : {height - 14}
-                height: (index + 1) === root.activeWorkspace ? {height - 2} : {height - 14}
-                anchors.verticalCenter: parent.verticalCenter
+                width: {height - 10}
+                height: {height - 10}
                 radius: {max(3, radius - 4)}
-                color: (index + 1) === root.activeWorkspace ? {ws_color} : "#313244"
-                opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.7
+                color: index === 0 ? {ws_color} : "#313244"
+                opacity: index === 0 ? 1.0 : 0.7
 
                 Text {{
                   anchors.centerIn: parent
                   text: index + 1
-                  color: (index + 1) === root.activeWorkspace ? "#11111b" : "#cdd6f4"
+                  color: index === 0 ? "#11111b" : "#cdd6f4"
                   font.bold: true
                   font.pixelSize: {font_size - 1}
                 }}
@@ -503,7 +455,7 @@ def write_quickshell_bar(values: dict[str, str]) -> None:
                   onClicked: switchWorkspace.running = true
                   hoverEnabled: true
                   onEntered: parent.opacity = 1.0
-                  onExited: parent.opacity = (index + 1) === root.activeWorkspace ? 1.0 : 0.7
+                  onExited: parent.opacity = index === 0 ? 1.0 : 0.7
                 }}
 
                 Process {{
@@ -596,8 +548,6 @@ Variants {{
 
   delegate: Component {{
     PanelWindow {{
-      id: root
-      property int activeWorkspace: 1
       required property var modelData
       screen: modelData
 
@@ -617,26 +567,6 @@ Variants {{
 
       implicitHeight: {height}
       color: "transparent"
-
-      Process {
-        id: activeWorkspaceProc
-        command: ["sh", "-c", "hyprctl activeworkspace -j 2>/dev/null | sed -n 's/.*\"id\"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p'"]
-        running: true
-        stdout: StdioCollector {
-          onStreamFinished: {
-            var value = parseInt(this.text.trim())
-            if (!isNaN(value)) root.activeWorkspace = value
-          }
-        }
-      }
-
-      Timer {
-        interval: 700
-        running: true
-        repeat: true
-        onTriggered: activeWorkspaceProc.running = true
-      }
-
 
       Rectangle {{
         anchors.fill: parent
@@ -661,16 +591,6 @@ Variants {{
   }}
 }}
 """
-    # QML theme replacements
-    if theme == "light":
-        qml = (qml
-            .replace("#cdd6f4", palette["text"])
-            .replace("#bac2de", palette["muted"])
-            .replace("#6c7086", palette["muted"])
-            .replace("#313244", palette["surface"])
-            .replace("#45475a", palette["surface_alt"])
-            .replace("#11111b", palette["active_text"])
-        )
     QUICKSHELL_FILE.write_text(qml, encoding="utf-8")
 
 
@@ -679,67 +599,6 @@ def run_quiet(command: list[str]) -> None:
         subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         pass
-
-
-
-def safe_info(master: tk.Misc, title: str, message: str) -> None:
-    try:
-        if master.winfo_exists():
-            messagebox.showinfo(title, message, parent=master)
-    except tk.TclError:
-        print(f"{title}: {message}")
-
-
-def safe_warning(master: tk.Misc, title: str, message: str) -> None:
-    try:
-        if master.winfo_exists():
-            messagebox.showwarning(title, message, parent=master)
-    except tk.TclError:
-        print(f"{title}: {message}", file=sys.stderr)
-
-
-def safe_ask_yes_no(master: tk.Misc, title: str, message: str) -> bool:
-    try:
-        if master.winfo_exists():
-            return bool(messagebox.askyesno(title, message, parent=master))
-    except tk.TclError:
-        pass
-    return False
-
-
-def script_command(name: str) -> str:
-    found = shutil.which(name)
-    if found:
-        return found
-    return str(ROOT / "scripts" / name)
-
-
-def theme_palette(values: dict[str, str]) -> dict[str, str]:
-    accent = values.get("DOTFILES_ACCENT", DEFAULTS["DOTFILES_ACCENT"])
-    if values.get("DOTFILES_THEME", "dark") == "light":
-        return {
-            "accent": accent,
-            "background": "#f8fafc",
-            "surface": "#e2e8f0",
-            "surface_alt": "#cbd5e1",
-            "text": "#0f172a",
-            "muted": "#475569",
-            "inactive_border": "#94a3b8",
-            "bar_rgb": "f8fafc",
-            "active_text": "#ffffff",
-        }
-    return {
-        "accent": accent,
-        "background": "#1e1e2e",
-        "surface": "#313244",
-        "surface_alt": "#45475a",
-        "text": "#cdd6f4",
-        "muted": "#bac2de",
-        "inactive_border": "#45475a",
-        "bar_rgb": "1e1e2e",
-        "active_text": "#11111b",
-    }
-
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -875,7 +734,6 @@ class DotfilesCenter(tk.Tk):
         self.bool_vars: dict[str, tk.BooleanVar] = {}
         self.shortcuts = load_shortcuts()
         self.shortcut_tree: ttk.Treeview | None = None
-        self.overview_grid: tk.Frame | None = None
         self.no_show_var = tk.BooleanVar(value=DISABLED_FILE.exists())
 
         self._setup_style()
@@ -942,8 +800,6 @@ class DotfilesCenter(tk.Tk):
         mp("TNotebook.Tab",
            background=[("selected", self.card)],
            foreground=[("selected", self.text), ("active", self.text)])
-        mp("TNotebook.Tab",
-           padding=[("selected", (16, 13)), ("!selected", (16, 9))])
 
         cfg("TEntry",    fieldbackground="#0d1117", foreground=self.text, padding=8,
             borderwidth=1, relief="flat", insertcolor=self.text)
@@ -1055,60 +911,6 @@ class DotfilesCenter(tk.Tk):
         ttk.Button(foot_row, text="Save changes", style="Accent.TButton",
                    command=self.save_all).pack(side="right")
 
-
-    def format_shortcut_key(self, key: str) -> str:
-        parts = [part.strip() for part in key.split(",") if part.strip()]
-        pretty = []
-        for part in parts:
-            upper = part.upper()
-            if upper == "SHIFT":
-                pretty.append("Shift")
-            elif upper == "CTRL":
-                pretty.append("Ctrl")
-            elif upper == "ALT":
-                pretty.append("Alt")
-            else:
-                pretty.append(part)
-        return "Super + " + " + ".join(pretty) if pretty else "Super"
-
-    def shortcut_by_name(self, name: str) -> dict | None:
-        wanted = name.lower()
-        for shortcut in self.shortcuts:
-            if shortcut.get("name", "").lower() == wanted:
-                return shortcut
-        return None
-
-    def overview_shortcuts_hint(self) -> list[tuple[str, str]]:
-        wanted = [
-            ("App launcher", "Open apps"),
-            ("Terminal", "Terminal"),
-            ("Dotfiles Center", "Dotfiles Center"),
-            ("Reload desktop", "Reload desktop"),
-        ]
-        rows: list[tuple[str, str]] = []
-        for shortcut_name, label in wanted:
-            shortcut = self.shortcut_by_name(shortcut_name)
-            if shortcut:
-                rows.append((self.format_shortcut_key(shortcut.get("key", "")), label))
-        rows.extend([
-            ("Super + Left Mouse", "Drag windows"),
-            ("Super + Right Mouse", "Resize windows"),
-        ])
-        return rows[:6]
-
-    def refresh_overview_shortcuts(self) -> None:
-        if self.overview_grid is None:
-            return
-        for child in self.overview_grid.winfo_children():
-            child.destroy()
-        for col, (key, label) in enumerate(self.overview_shortcuts_hint()):
-            cell = tk.Frame(self.overview_grid, bg=self.card_alt, padx=10, pady=8)
-            cell.grid(row=0, column=col, sticky="ew", padx=(0 if col == 0 else 6, 0))
-            tk.Label(cell, text=key,   bg=self.card_alt, fg=self.text,  font=("Sans", 10, "bold")).pack(anchor="w")
-            tk.Label(cell, text=label, bg=self.card_alt, fg=self.muted, font=("Sans", 9)).pack(anchor="w", pady=(2, 0))
-            self.overview_grid.columnconfigure(col, weight=1)
-
-
     # ── Overview tab ─────────────────────────────────────────────────────────
 
     def _overview_tab(self, nb: ttk.Notebook) -> None:
@@ -1122,9 +924,22 @@ class DotfilesCenter(tk.Tk):
                   text="Minimal Arch install → full Hyprland desktop. Use switches and dropdowns instead of config files.",
                   style="Body.TLabel", wraplength=840).pack(anchor="w", pady=(4, 14))
 
-        self.overview_grid = tk.Frame(hero, bg=self.card)
-        self.overview_grid.pack(fill="x")
-        self.refresh_overview_shortcuts()
+        grid = tk.Frame(hero, bg=self.card)
+        grid.pack(fill="x")
+        shortcuts_hint = [
+            ("Super + D",           "App launcher"),
+            ("Super + Return",      "Terminal"),
+            ("Super + Left Mouse",  "Drag window"),
+            ("Super + Right Mouse", "Resize window"),
+            ("Super + W",           "Dotfiles Center"),
+            ("Super + Shift + R",   "Reload Hyprland"),
+        ]
+        for col, (key, label) in enumerate(shortcuts_hint):
+            cell = tk.Frame(grid, bg=self.card_alt, padx=10, pady=8)
+            cell.grid(row=0, column=col, sticky="ew", padx=(0 if col == 0 else 6, 0))
+            tk.Label(cell, text=key,   bg=self.card_alt, fg=self.text,  font=("Sans", 10, "bold")).pack(anchor="w")
+            tk.Label(cell, text=label, bg=self.card_alt, fg=self.muted, font=("Sans", 9)).pack(anchor="w", pady=(2,0))
+            grid.columnconfigure(col, weight=1)
 
         info = self._card(frame)
         self._card_title(info, "Installed components")
@@ -1141,7 +956,7 @@ class DotfilesCenter(tk.Tk):
             tk.Label(row, text=item, bg=self.card, fg=self.muted, font=("Sans", 10)).pack(side="left")
 
         cmds = self._card(frame)
-        self._card_title(cmds, "Helpful terminal actions")
+        self._card_title(cmds, "Terminal commands")
         cmd_list = [
             ("dotctl all",     "Update repo, install packages, apply dotfiles"),
             ("dotctl status",  "Show linked files"),
@@ -1164,7 +979,7 @@ class DotfilesCenter(tk.Tk):
         self._card_title(
             intro,
             "Hyprland settings",
-            "Switches for on/off, dropdowns for choices, and simple number boxes for safe settings.",
+            "Toggles for on/off · dropdowns for multiple choices · text boxes for numbers, colors, and paths.",
         )
 
         scroll = ScrollFrame(outer, style="Panel.TFrame")
@@ -1295,8 +1110,6 @@ class DotfilesCenter(tk.Tk):
         btns.pack(anchor="w", pady=(12, 0))
         ttk.Button(btns, text="Apply wallpaper", style="Accent.TButton",
                    command=self.apply_wallpaper).pack(side="left")
-        ttk.Button(btns, text="Apply theme", style="Ghost.TButton",
-                   command=self.save_all).pack(side="left", padx=8)
 
     # ── Bar tab ──────────────────────────────────────────────────────────────
 
@@ -1554,34 +1367,30 @@ class DotfilesCenter(tk.Tk):
         if sc:
             self.shortcuts.append(sc)
             self.refresh_shortcut_tree()
-            self.refresh_overview_shortcuts()
 
     def edit_shortcut(self) -> None:
         idx = self.selected_shortcut_index()
         if idx is None or idx >= len(self.shortcuts):
-            safe_info(self, "Shortcuts", "Select a shortcut first.")
+            messagebox.showinfo("Shortcuts", "Select a shortcut first.")
             return
         updated = self.shortcut_dialog("Edit shortcut", self.shortcuts[idx])
         if updated:
             self.shortcuts[idx] = updated
             self.refresh_shortcut_tree()
-            self.refresh_overview_shortcuts()
 
     def remove_shortcut(self) -> None:
         idx = self.selected_shortcut_index()
         if idx is None or idx >= len(self.shortcuts):
-            safe_info(self, "Shortcuts", "Select a shortcut first.")
+            messagebox.showinfo("Shortcuts", "Select a shortcut first.")
             return
-        if safe_ask_yes_no(self, "Remove", f"Remove '{self.shortcuts[idx].get('name', 'this shortcut')}'?"):
+        if messagebox.askyesno("Remove", f"Remove '{self.shortcuts[idx].get('name', 'this shortcut')}'?"):
             del self.shortcuts[idx]
             self.refresh_shortcut_tree()
-            self.refresh_overview_shortcuts()
 
     def reset_shortcuts(self) -> None:
-        if safe_ask_yes_no(self, "Restore defaults", "Replace all shortcuts with defaults?"):
+        if messagebox.askyesno("Restore defaults", "Replace all shortcuts with defaults?"):
             self.shortcuts = default_shortcuts()
             self.refresh_shortcut_tree()
-            self.refresh_overview_shortcuts()
 
     # ── Wallpaper / color helpers ─────────────────────────────────────────────
 
@@ -1617,20 +1426,20 @@ class DotfilesCenter(tk.Tk):
         write_local_conf(values)
         save_shortcuts(self.shortcuts)
         save_hypr_values(hypr_values)
-        write_colors(values)
+        write_colors(values["DOTFILES_ACCENT"])
         write_keybinds(values, self.shortcuts)
         write_hyprland_settings(self.hypr_schema, hypr_values)
         write_quickshell_bar(values)
         self.save_startup_choice()
         self.apply_wallpaper(show_errors=False)
-        safe_info(self, "Saved", "Settings saved. Press Super + Shift + R or log back in to apply.")
+        messagebox.showinfo("Saved", "Settings saved. Press Super + Shift + R or log back in to apply.")
 
     def save_and_restart_bar(self) -> None:
         values = self.current_values()
         write_local_conf(values)
         write_quickshell_bar(values)
         self.restart_bar()
-        safe_info(self, "QML bar", "Bar settings saved and restarted.")
+        messagebox.showinfo("QML bar", "Bar settings saved and restarted.")
 
     def restart_bar(self) -> None:
         subprocess.run(["pkill", "-x", "quickshell"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -1639,10 +1448,10 @@ class DotfilesCenter(tk.Tk):
     def apply_wallpaper(self, show_errors: bool = True) -> None:
         wallpaper = self.vars["DOTFILES_WALLPAPER"].get()
         try:
-            subprocess.run([script_command("dotfiles-wallpaper"), "set", wallpaper], check=True)
+            subprocess.run(["dotfiles-wallpaper", "set", wallpaper], check=True)
         except (OSError, subprocess.CalledProcessError) as exc:
             if show_errors:
-                safe_warning(self, "Wallpaper", f"Could not apply wallpaper: {exc}")
+                messagebox.showwarning("Wallpaper", f"Could not apply wallpaper: {exc}")
 
 
 def main() -> int:
