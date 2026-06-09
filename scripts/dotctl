@@ -114,6 +114,15 @@ status() {
     printf 'missing %s\n' "$start_dest"
   fi
 
+  short_start_dest="$HOME/.local/bin/start-hyprland"
+  if [ -L "$short_start_dest" ] && [ "$(readlink "$short_start_dest")" = "$ROOT_DIR/scripts/start-hyprland" ]; then
+    printf 'linked  %s\n' "$short_start_dest"
+  elif [ -e "$short_start_dest" ] || [ -L "$short_start_dest" ]; then
+    printf 'custom  %s\n' "$short_start_dest"
+  else
+    printf 'missing %s\n' "$short_start_dest"
+  fi
+
   doctor_dest="$HOME/.local/bin/dotfiles-hypr-doctor"
   if [ -L "$doctor_dest" ] && [ "$(readlink "$doctor_dest")" = "$ROOT_DIR/scripts/dotfiles-hypr-doctor" ]; then
     printf 'linked  %s\n' "$doctor_dest"
@@ -224,6 +233,11 @@ uninstall() {
   if [ -L "$HOME/.local/bin/dotfiles-start-hyprland" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-start-hyprland")" = "$ROOT_DIR/scripts/dotfiles-start-hyprland" ]; then
     rm "$HOME/.local/bin/dotfiles-start-hyprland"
     printf 'removed %s\n' "$HOME/.local/bin/dotfiles-start-hyprland"
+  fi
+
+  if [ -L "$HOME/.local/bin/start-hyprland" ] && [ "$(readlink "$HOME/.local/bin/start-hyprland")" = "$ROOT_DIR/scripts/start-hyprland" ]; then
+    rm "$HOME/.local/bin/start-hyprland"
+    printf 'removed %s\n' "$HOME/.local/bin/start-hyprland"
   fi
 }
 

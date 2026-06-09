@@ -211,8 +211,8 @@ to a TTY with `Ctrl + Alt + F3`, log in, and run:
 dotctl doctor
 ```
 
-The graphical login starts Hyprland through `dotfiles-start-hyprland`, which
-sets the Wayland session environment and writes logs to:
+The graphical login starts Hyprland through `start-hyprland`, which calls the
+dotfiles wrapper, sets the Wayland session environment, and writes logs to:
 
 ```sh
 ~/.cache/hyprland/dotfiles-hyprland-*.log
