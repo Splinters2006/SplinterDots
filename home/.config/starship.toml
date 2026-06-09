@@ -1,17 +1,112 @@
-format = "$directory$git_branch$git_status$character"
+# SplinterDots Starship prompt
 
-[directory]
-style = "bold cyan"
-truncation_length = 3
+add_newline = true
+command_timeout = 1200
+palette = "splinter"
 
-[git_branch]
-style = "bold purple"
-format = "[$symbol$branch]($style) "
+format = """
+[╭─](fg:surface)$os$username$hostname$directory$git_branch$git_status$python$nodejs$rust$package$cmd_duration
+[╰─](fg:surface)$character"""
 
-[git_status]
-format = "[$all_status$ahead_behind]($style) "
-style = "bold yellow"
+[palettes.splinter]
+bg = "#1e2427"
+surface = "#3a494d"
+text = "#d3c6aa"
+muted = "#a89984"
+accent = "#89b4fa"
+green = "#a7c080"
+yellow = "#dbbc7f"
+red = "#e67e80"
+purple = "#d699b6"
+cyan = "#83c092"
 
 [character]
-success_symbol = "[>](bold green)"
-error_symbol = "[>](bold red)"
+success_symbol = "[❯](bold fg:green)"
+error_symbol = "[❯](bold fg:red)"
+vimcmd_symbol = "[❮](bold fg:purple)"
+
+[os]
+disabled = false
+style = "bold fg:accent"
+format = "[$symbol ]($style)"
+
+[os.symbols]
+Arch = ""
+Linux = ""
+Ubuntu = ""
+Debian = ""
+Fedora = ""
+
+[username]
+show_always = true
+style_user = "bold fg:text"
+style_root = "bold fg:red"
+format = "[$user]($style)"
+
+[hostname]
+ssh_only = true
+style = "fg:muted"
+format = "[@$hostname ]($style)"
+
+[directory]
+style = "bold fg:cyan"
+read_only = " locked"
+truncation_length = 4
+truncate_to_repo = false
+format = "[ in ](fg:muted)[$path]($style)[$read_only]($read_only_style) "
+
+[directory.substitutions]
+"~/SplinterDots" = "SplinterDots"
+"~" = "home"
+"Documents" = "Documents"
+"Downloads" = "Downloads"
+"Pictures" = "Pictures"
+"Music" = "Music"
+"Videos" = "Videos"
+
+[git_branch]
+symbol = "branch "
+style = "bold fg:purple"
+format = "[on ](fg:muted)[$symbol$branch]($style) "
+
+[git_status]
+style = "fg:yellow"
+format = "([$all_status$ahead_behind]($style) )"
+conflicted = "=${count} "
+ahead = "up${count} "
+behind = "down${count} "
+diverged = "diverged "
+untracked = "?${count} "
+stashed = "stash${count} "
+modified = "!${count} "
+staged = "+${count} "
+renamed = "renamed${count} "
+deleted = "x${count} "
+
+[python]
+symbol = "py "
+style = "fg:yellow"
+format = "[via ](fg:muted)[$symbol$version]($style) "
+
+[nodejs]
+symbol = "node "
+style = "fg:green"
+format = "[via ](fg:muted)[$symbol$version]($style) "
+
+[rust]
+symbol = "rust "
+style = "fg:red"
+format = "[via ](fg:muted)[$symbol$version]($style) "
+
+[package]
+symbol = "pkg "
+style = "fg:accent"
+format = "[pkg ](fg:muted)[$symbol$version]($style) "
+
+[cmd_duration]
+min_time = 800
+style = "fg:muted"
+format = "[took $duration]($style) "
+
+[line_break]
+disabled = false
