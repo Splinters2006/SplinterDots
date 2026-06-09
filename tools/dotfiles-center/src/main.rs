@@ -1316,152 +1316,201 @@ impl DotfilesCenter {
 
     fn shortcuts_tab(&mut self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
+        let panel_height = 430.0;
 
-        Self::card(&theme, ui, |ui| {
-            ui.label(RichText::new("Shortcut editor").size(18.0).strong());
-            ui.label(RichText::new("Every shortcut starts with Super. The list and overview update while you type.").color(theme.muted));
-            ui.add_space(10.0);
+        ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            ui.columns(2, |columns| {
+                Frame {
+                    fill: theme.card,
+                    corner_radius: CornerRadius::same(22),
+                    inner_margin: Margin::symmetric(20, 18),
+                    stroke: Stroke::new(1.0, theme.border),
+                    ..Default::default()
+                }
+                .show(&mut columns[0], |ui| {
+                    ui.set_min_height(panel_height);
 
-            ui.horizontal(|ui| {
-                if primary_button(ui, &theme, "Add shortcut").clicked() {
-                    self.shortcuts.push(Shortcut {
-                        name: "New shortcut".to_string(),
-                        key: "SHIFT, N".to_string(),
-                        kind: "app".to_string(),
-                        value: self.value("DOTFILES_TERMINAL"),
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("Current shortcuts").strong().size(18.0));
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.small_button("+ Add").clicked() {
+                                self.shortcuts.push(Shortcut {
+                                    name: "New shortcut".to_string(),
+                                    key: "SUPER, N".to_string(),
+                                    kind: "app".to_string(),
+                                    value: self.value("DOTFILES_TERMINAL"),
+                                });
+                                self.selected_shortcut = Some(self.shortcuts.len().saturating_sub(1));
+                                self.update_shortcut_dirty_status();
+                            }
+                        });
                     });
-                    self.selected_shortcut = Some(self.shortcuts.len() - 1);
-                    self.update_shortcut_dirty_status();
-                }
 
-                if ui.button("Remove selected").clicked() {
-                    if let Some(index) = self.selected_shortcut {
-                        if index < self.shortcuts.len() {
-                            self.shortcuts.remove(index);
-                            self.selected_shortcut = None;
-                            self.status =
-                                "Shortcut removed. Press Save changes to apply.".to_string();
-                        }
-                    }
-                }
+                    ui.add_space(12.0);
 
-                if ui.button("Restore defaults").clicked() {
-                    self.shortcuts = default_shortcuts();
-                    self.selected_shortcut = None;
-                    self.update_shortcut_dirty_status();
-                }
-            });
-        });
-
-        ui.columns(2, |columns| {
-            Self::card(&theme, &mut columns[0], |ui| {
-                ui.label(RichText::new("Current shortcuts").strong().size(16.0));
-                ui.add_space(8.0);
-
-                ScrollArea::vertical().max_height(430.0).show(ui, |ui| {
-                    for (index, sc) in self.shortcuts.iter().enumerate() {
+                    for (index, shortcut) in self.shortcuts.iter().enumerate() {
                         let selected = self.selected_shortcut == Some(index);
-                        let fill = if selected {
-                            theme.accent
-                        } else {
-                            theme.panel_soft
-                        };
-                        let text = if selected { Color32::WHITE } else { theme.text };
 
-                        let response = Frame {
-                            fill,
-                            corner_radius: CornerRadius::same(12),
-                            inner_margin: Margin::symmetric(12, 10),
+                        Frame {
+                            fill: if selected { theme.card_hover } else { theme.panel_soft },
+                            corner_radius: CornerRadius::same(16),
+                            inner_margin: Margin::symmetric(12, 9),
                             stroke: Stroke::new(
-                                1.0,
+                                if selected { 2.0 } else { 1.0 },
                                 if selected { theme.accent } else { theme.border },
                             ),
                             ..Default::default()
                         }
                         .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new(format_shortcut_key(&sc.key))
-                                        .color(text)
-                                        .strong(),
+                            let response = ui
+                                .add_sized(
+                                    [ui.available_width(), 28.0],
+                                    egui::SelectableLabel::new(
+                                        selected,
+                                        RichText::new(shortcut_display(shortcut)).size(14.0),
+                                    ),
                                 );
-                                ui.label(RichText::new(&sc.name).color(text));
-                            });
-                        })
-                        .response
-                        .interact(egui::Sense::click());
 
-                        if response.clicked() {
-                            self.selected_shortcut = Some(index);
+                            if response.clicked() {
+                                self.selected_shortcut = Some(index);
+                            }
+                        });
+
+                        ui.add_space(8.0);
+                    }
+
+                    ui.add_space(10.0);
+
+                    ui.horizontal_wrapped(|ui| {
+                        if primary_button(ui, &theme, if self.shortcut_changes_pending() { "Save changes *" } else { "Saved" }).clicked() {
+                            self.save_shortcut_changes();
                         }
 
-                        ui.add_space(6.0);
-                    }
+                        if ui.button("Reset").clicked() {
+                            self.shortcuts = default_shortcuts();
+                            self.selected_shortcut = None;
+                            self.update_shortcut_dirty_status();
+                        }
+                    });
                 });
-            });
 
-            Self::card(&theme, &mut columns[1], |ui| {
-                ui.label(RichText::new("Edit selected").strong().size(16.0));
-                ui.add_space(8.0);
+                Frame {
+                    fill: theme.card,
+                    corner_radius: CornerRadius::same(22),
+                    inner_margin: Margin::symmetric(20, 18),
+                    stroke: Stroke::new(1.0, theme.border),
+                    ..Default::default()
+                }
+                .show(&mut columns[1], |ui| {
+                    ui.set_min_height(panel_height);
 
-                if let Some(index) = self.selected_shortcut {
-                    if index < self.shortcuts.len() {
-                        let mut changed = false;
+                    ui.label(RichText::new("Edit selected").strong().size(18.0));
+                    ui.add_space(12.0);
+
+                    let Some(index) = self.selected_shortcut else {
+                        ui.label(RichText::new("Select a shortcut on the left to edit it.").color(theme.muted));
+                        return;
+                    };
+
+                    if index >= self.shortcuts.len() {
+                        self.selected_shortcut = None;
+                        return;
+                    }
+
+                    let mut changed = false;
+                    let mut delete = false;
+
+                    {
+                        let shortcut = &mut self.shortcuts[index];
 
                         ui.label(RichText::new("Name").color(theme.muted));
                         changed |= ui
-                            .text_edit_singleline(&mut self.shortcuts[index].name)
+                            .add_sized(
+                                [ui.available_width(), 34.0],
+                                egui::TextEdit::singleline(&mut shortcut.name),
+                            )
                             .changed();
+
+                        ui.add_space(10.0);
 
                         ui.label(RichText::new("Key").color(theme.muted));
                         changed |= ui
-                            .text_edit_singleline(&mut self.shortcuts[index].key)
+                            .add_sized(
+                                [ui.available_width(), 34.0],
+                                egui::TextEdit::singleline(&mut shortcut.key),
+                            )
                             .changed();
+
                         ui.label(
-                            RichText::new("Examples: Return · D · SHIFT, S · CTRL, ALT, T")
+                            RichText::new("Examples: RETURN · D · SHIFT, S · CTRL, ALT, T")
                                 .color(theme.muted)
                                 .size(11.0),
                         );
 
-                        ui.add_space(8.0);
+                        ui.add_space(12.0);
+
                         ui.label(RichText::new("Type").color(theme.muted));
-                        let mut kind = self.shortcuts[index].kind.clone();
-                        egui::ComboBox::from_id_salt("shortcut-kind")
-                            .selected_text(friendly_kind(&kind))
+                        egui::ComboBox::from_id_salt("shortcut-kind-editor")
+                            .selected_text(match shortcut.kind.as_str() {
+                                "app" => "App / script",
+                                "command" => "Command",
+                                "hyprland" => "Hyprland action",
+                                _ => "App / script",
+                            })
                             .show_ui(ui, |ui| {
-                                if ui.selectable_label(kind == "app", "App / script").clicked() {
-                                    kind = "app".to_string();
-                                }
-                                if ui
-                                    .selectable_label(kind == "desktop", "Desktop action")
-                                    .clicked()
-                                {
-                                    kind = "desktop".to_string();
-                                }
+                                changed |= ui
+                                    .selectable_value(&mut shortcut.kind, "app".to_string(), "App / script")
+                                    .changed();
+                                changed |= ui
+                                    .selectable_value(&mut shortcut.kind, "command".to_string(), "Command")
+                                    .changed();
+                                changed |= ui
+                                    .selectable_value(&mut shortcut.kind, "hyprland".to_string(), "Hyprland action")
+                                    .changed();
                             });
-                        if kind != self.shortcuts[index].kind {
-                            self.shortcuts[index].kind = kind;
-                            changed = true;
-                        }
+
+                        ui.add_space(12.0);
 
                         ui.label(RichText::new("What should happen").color(theme.muted));
                         changed |= ui
-                            .text_edit_singleline(&mut self.shortcuts[index].value)
+                            .add_sized(
+                                [ui.available_width(), 34.0],
+                                egui::TextEdit::singleline(&mut shortcut.value),
+                            )
                             .changed();
 
-                        if changed {
-                            self.update_shortcut_dirty_status();
-                        }
-                    }
-                } else {
-                    ui.label(RichText::new("Select a shortcut to edit it.").color(theme.muted));
-                }
-            });
-        });
+                        ui.add_space(18.0);
 
-        Self::card(&theme, ui, |ui| {
-            ui.label(RichText::new("Mouse controls").strong());
-            ui.label(RichText::new("Super + left mouse drag moves windows. Super + right mouse drag resizes windows.").color(theme.muted));
+                        ui.horizontal(|ui| {
+                            if primary_button(ui, &theme, if self.shortcut_changes_pending() { "Save changes *" } else { "Saved" }).clicked() {
+                                self.save_shortcut_changes();
+                            }
+
+                            if ui.button("Delete shortcut").clicked() {
+                                delete = true;
+                            }
+                        });
+                    }
+
+                    if delete {
+                        self.shortcuts.remove(index);
+                        self.selected_shortcut = None;
+                        self.update_shortcut_dirty_status();
+                    } else if changed {
+                        self.update_shortcut_dirty_status();
+                    }
+                });
+            });
+
+            ui.add_space(16.0);
+
+            Self::card(&theme, ui, |ui| {
+                ui.label(RichText::new("Mouse controls").strong());
+                ui.label(
+                    RichText::new("Super + left mouse drag moves windows. Super + right mouse drag resizes windows.")
+                        .color(theme.muted),
+                );
+            });
         });
     }
 
@@ -3981,6 +4030,16 @@ fn remove_widget_from_zones(values: &mut HashMap<String, String>, widget: &str) 
         list.retain(|item| item != widget);
         write_widget_zone(values, zone, &list);
     }
+}
+
+fn shortcut_display(shortcut: &Shortcut) -> String {
+    let mut key = shortcut.key.replace(',', " + ");
+    key = key.replace("SUPER", "Super");
+    key = key.replace("SHIFT", "Shift");
+    key = key.replace("CTRL", "Ctrl");
+    key = key.replace("ALT", "Alt");
+
+    format!("{}  {}", key, shortcut.name)
 }
 
 fn primary_button(ui: &mut egui::Ui, theme: &AppTheme, text: &str) -> egui::Response {

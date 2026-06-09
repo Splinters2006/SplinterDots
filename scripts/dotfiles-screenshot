@@ -2,6 +2,12 @@
 set -euo pipefail
 
 mode="${1:-area}"
+lock_file="${XDG_RUNTIME_DIR:-/tmp}/splinterdots-screenshot.lock"
+
+exec 9>"$lock_file"
+if ! flock -n 9; then
+  exit 0
+fi
 
 need() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -19,17 +25,32 @@ notify_done() {
   fi
 }
 
+copy_full() {
+  # Small delay so launcher/UI overlays have time to disappear.
+  sleep 0.15
+  grim - | wl-copy --type image/png
+  notify_done
+}
+
+copy_area() {
+  need slurp
+
+  geometry="$(slurp)"
+  [ -n "$geometry" ] || exit 0
+
+  # Important: let the slurp selection overlay disappear before grim captures.
+  sleep 0.18
+
+  grim -g "$geometry" - | wl-copy --type image/png
+  notify_done
+}
+
 case "$mode" in
   area|region|selection)
-    need slurp
-    geometry="$(slurp)"
-    [ -n "$geometry" ] || exit 0
-    grim -g "$geometry" - | wl-copy --type image/png
-    notify_done
+    copy_area
     ;;
   full|screen)
-    grim - | wl-copy --type image/png
-    notify_done
+    copy_full
     ;;
   *)
     echo "Usage: dotfiles-screenshot [area|full]" >&2
