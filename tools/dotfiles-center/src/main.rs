@@ -34,6 +34,9 @@ const SETTINGS_KEYS: &[(&str, &str)] = &[
     ("DOTFILES_BAR_STATUS_MS", "1500"),
     ("DOTFILES_BAR_ICON_PACK", "nerd"),
     ("DOTFILES_BAR_ICON_FONT", "Symbols Nerd Font"),
+    ("DOTFILES_BAR_LEFT_WIDGETS", "workspaces"),
+    ("DOTFILES_BAR_CENTER_WIDGETS", "clock"),
+    ("DOTFILES_BAR_RIGHT_WIDGETS", "volume,network,battery"),
     ("DOTFILES_BAR_SHOW_WORKSPACES", "true"),
     ("DOTFILES_BAR_SHOW_CLOCK", "true"),
     ("DOTFILES_BAR_SHOW_VOLUME", "true"),
@@ -125,7 +128,7 @@ impl Tab {
             Tab::Addons => "Addons",
             Tab::Bar => "Bar & Widgets",
             Tab::Widgets => "Widgets",
-            Tab::Setup => "Setup",
+            Tab::Setup => "Default Apps",
         }
     }
 
@@ -1725,10 +1728,187 @@ impl DotfilesCenter {
         });
     }
 
+    fn widget_zone_editor(&mut self, ui: &mut egui::Ui, theme: &AppTheme, title: &str, zone: &str) {
+        let key = zone_key(zone);
+        let mut widgets = parse_widget_zone(&self.value(key));
+
+        Self::soft_card(theme, ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(title).strong().size(16.0));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(
+                        RichText::new("Add widgets below")
+                            .color(theme.muted)
+                            .size(11.0),
+                    );
+                });
+            });
+
+            ui.add_space(8.0);
+
+            if widgets.is_empty() {
+                ui.label(RichText::new("No widgets here yet.").color(theme.muted));
+            }
+
+            let mut changed = false;
+            let mut remove_at: Option<usize> = None;
+            let mut move_up: Option<usize> = None;
+            let mut move_down: Option<usize> = None;
+
+            for (index, widget) in widgets.iter().enumerate() {
+                Frame {
+                    fill: theme.card,
+                    corner_radius: CornerRadius::same(12),
+                    inner_margin: Margin::symmetric(10, 7),
+                    stroke: Stroke::new(1.0, theme.border),
+                    ..Default::default()
+                }
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("☰").color(theme.muted));
+                        ui.label(RichText::new(widget_label(widget)).strong());
+
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.small_button("✕").clicked() {
+                                remove_at = Some(index);
+                            }
+                            if ui
+                                .small_button("→")
+                                .on_hover_text("Move to right")
+                                .clicked()
+                            {
+                                remove_at = Some(index);
+                                let mut right =
+                                    parse_widget_zone(&self.value("DOTFILES_BAR_RIGHT_WIDGETS"));
+                                if !right.contains(widget) {
+                                    right.push(widget.clone());
+                                }
+                                write_widget_zone(&mut self.values, "right", &right);
+                            }
+                            if ui
+                                .small_button("•")
+                                .on_hover_text("Move to center")
+                                .clicked()
+                            {
+                                remove_at = Some(index);
+                                let mut center =
+                                    parse_widget_zone(&self.value("DOTFILES_BAR_CENTER_WIDGETS"));
+                                if !center.contains(widget) {
+                                    center.push(widget.clone());
+                                }
+                                write_widget_zone(&mut self.values, "center", &center);
+                            }
+                            if ui.small_button("←").on_hover_text("Move to left").clicked() {
+                                remove_at = Some(index);
+                                let mut left =
+                                    parse_widget_zone(&self.value("DOTFILES_BAR_LEFT_WIDGETS"));
+                                if !left.contains(widget) {
+                                    left.push(widget.clone());
+                                }
+                                write_widget_zone(&mut self.values, "left", &left);
+                            }
+                            if ui.small_button("↓").clicked() {
+                                move_down = Some(index);
+                            }
+                            if ui.small_button("↑").clicked() {
+                                move_up = Some(index);
+                            }
+                        });
+                    });
+                });
+
+                ui.add_space(6.0);
+            }
+
+            if let Some(index) = move_up {
+                if index > 0 {
+                    widgets.swap(index, index - 1);
+                    changed = true;
+                }
+            }
+
+            if let Some(index) = move_down {
+                if index + 1 < widgets.len() {
+                    widgets.swap(index, index + 1);
+                    changed = true;
+                }
+            }
+
+            if let Some(index) = remove_at {
+                if index < widgets.len() {
+                    widgets.remove(index);
+                    changed = true;
+                }
+            }
+
+            ui.add_space(8.0);
+            egui::ComboBox::from_id_salt(format!("add-widget-{zone}"))
+                .selected_text("Add widget...")
+                .show_ui(ui, |ui| {
+                    for choice in bar_widget_choices() {
+                        if widgets.iter().any(|item| item == choice.id) {
+                            continue;
+                        }
+
+                        if ui.button(choice.label).clicked() {
+                            remove_widget_from_zones(&mut self.values, choice.id);
+                            widgets.push(choice.id.to_string());
+                            changed = true;
+                        }
+                    }
+                });
+
+            if changed {
+                write_widget_zone(&mut self.values, zone, &widgets);
+                self.sync_widget_toggles_from_layout();
+            }
+        });
+    }
+
+    fn sync_widget_toggles_from_layout(&mut self) {
+        let mut active: Vec<String> = Vec::new();
+
+        for zone in ["left", "center", "right"] {
+            active.extend(parse_widget_zone(&self.value(zone_key(zone))));
+        }
+
+        for choice in bar_widget_choices() {
+            self.set_bool_value(choice.setting, active.iter().any(|item| item == choice.id));
+        }
+    }
+
     fn bar_tab(&mut self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
 
-        ScrollArea::vertical().show(ui, |ui| {
+        ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            Self::card(&theme, ui, |ui| {
+                ui.label(RichText::new("Visual bar layout").strong().size(20.0));
+                ui.label(
+                    RichText::new("Build your bar by moving widgets between Left, Center, and Right. Use arrows to reorder.")
+                        .color(theme.muted),
+                );
+                ui.add_space(14.0);
+
+                ui.columns(3, |columns| {
+                    self.widget_zone_editor(&mut columns[0], &theme, "Left", "left");
+                    self.widget_zone_editor(&mut columns[1], &theme, "Center", "center");
+                    self.widget_zone_editor(&mut columns[2], &theme, "Right", "right");
+                });
+
+                ui.add_space(12.0);
+
+                ui.horizontal(|ui| {
+                    if primary_button(ui, &theme, "Save and restart bar").clicked() {
+                        self.sync_widget_toggles_from_layout();
+                        self.save_and_restart_bar();
+                    }
+
+                    if ui.button("Restart bar only").clicked() {
+                        self.restart_bar();
+                    }
+                });
+            });
+
             Self::card(&theme, ui, |ui| {
                 ui.label(RichText::new("Layout and speed").strong().size(18.0));
                 combo_value(ui, &mut self.values, "DOTFILES_BAR_POSITION", &["top", "bottom"]);
@@ -1740,7 +1920,6 @@ impl DotfilesCenter {
                 );
                 slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_REACTIVE_MS", 40.0, 1000.0);
                 slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_STATUS_MS", 500.0, 6000.0);
-                ui.label(RichText::new("Lower reactive value = faster monitor/workspace updates. 80-150 ms feels instant.").color(theme.muted).size(12.0));
             });
 
             Self::card(&theme, ui, |ui| {
@@ -1757,7 +1936,6 @@ impl DotfilesCenter {
                 if primary_button(ui, &theme, "Install selected icon font").clicked() {
                     self.install_selected_icon_font();
                 }
-                ui.label(RichText::new("Uses pacman first, then paru/yay when available.").color(theme.muted).size(12.0));
             });
 
             Self::card(&theme, ui, |ui| {
@@ -1768,32 +1946,38 @@ impl DotfilesCenter {
                 slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_FONT_SIZE", 8.0, 24.0);
                 slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_SPACING", 4.0, 40.0);
                 slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_BORDER_WIDTH", 0.0, 4.0);
+            });
 
+            Self::card(&theme, ui, |ui| {
+                ui.label(RichText::new("Widget details").strong().size(18.0));
+                ui.label(RichText::new("These only apply when the matching widget is placed in the visual layout above.").color(theme.muted));
                 ui.add_space(10.0);
-                ui.horizontal(|ui| {
-                    if primary_button(ui, &theme, "Save and restart bar").clicked() {
-                        self.save_and_restart_bar();
-                    }
-                    if ui.button("Restart bar only").clicked() {
-                        self.restart_bar();
-                    }
-                });
+
+                let mut fmt = self.value("DOTFILES_WIDGET_CLOCK_FORMAT");
+                labeled_text(ui, "Clock format", &mut fmt);
+                self.set_value("DOTFILES_WIDGET_CLOCK_FORMAT", fmt);
+
+                let mut seconds = self.bool_value("DOTFILES_WIDGET_CLOCK_SECONDS");
+                if ui.checkbox(&mut seconds, "Clock: show seconds").changed() {
+                    self.set_bool_value("DOTFILES_WIDGET_CLOCK_SECONDS", seconds);
+                }
+
+                combo_value(
+                    ui,
+                    &mut self.values,
+                    "DOTFILES_WIDGET_NETWORK_STYLE",
+                    &["short", "name"],
+                );
+
+                let mut media_len = self.value("DOTFILES_WIDGET_MEDIA_LENGTH");
+                labeled_text(ui, "Media title length", &mut media_len);
+                self.set_value("DOTFILES_WIDGET_MEDIA_LENGTH", media_len);
+
+                let mut updates_cmd = self.value("DOTFILES_WIDGET_UPDATES_COMMAND");
+                labeled_text(ui, "Updates check command", &mut updates_cmd);
+                self.set_value("DOTFILES_WIDGET_UPDATES_COMMAND", updates_cmd);
             });
         });
-
-        ui.add_space(18.0);
-        ui.separator();
-        ui.add_space(14.0);
-
-        Self::card(&self.app_theme(), ui, |ui| {
-            ui.label(RichText::new("Widgets").strong().size(18.0));
-            ui.label(
-                RichText::new("Widget controls are now part of Bar & Widgets.")
-                    .color(self.app_theme().muted),
-            );
-        });
-
-        self.widgets_tab(ui);
     }
 
     fn widgets_tab(&mut self, ui: &mut egui::Ui) {
@@ -3576,6 +3760,133 @@ fn package_installed_cached(package: &str) -> bool {
     });
 
     packages.contains(package)
+}
+
+#[derive(Clone, Copy)]
+struct BarWidgetChoice {
+    id: &'static str,
+    label: &'static str,
+    setting: &'static str,
+}
+
+fn bar_widget_choices() -> &'static [BarWidgetChoice] {
+    &[
+        BarWidgetChoice {
+            id: "workspaces",
+            label: "Workspaces",
+            setting: "DOTFILES_BAR_SHOW_WORKSPACES",
+        },
+        BarWidgetChoice {
+            id: "clock",
+            label: "Clock",
+            setting: "DOTFILES_BAR_SHOW_CLOCK",
+        },
+        BarWidgetChoice {
+            id: "volume",
+            label: "Volume",
+            setting: "DOTFILES_BAR_SHOW_VOLUME",
+        },
+        BarWidgetChoice {
+            id: "network",
+            label: "Network",
+            setting: "DOTFILES_BAR_SHOW_NETWORK",
+        },
+        BarWidgetChoice {
+            id: "battery",
+            label: "Battery",
+            setting: "DOTFILES_BAR_SHOW_BATTERY",
+        },
+        BarWidgetChoice {
+            id: "cpu",
+            label: "CPU",
+            setting: "DOTFILES_BAR_SHOW_CPU",
+        },
+        BarWidgetChoice {
+            id: "memory",
+            label: "Memory",
+            setting: "DOTFILES_BAR_SHOW_MEMORY",
+        },
+        BarWidgetChoice {
+            id: "temp",
+            label: "Temperature",
+            setting: "DOTFILES_BAR_SHOW_TEMP",
+        },
+        BarWidgetChoice {
+            id: "disk",
+            label: "Disk",
+            setting: "DOTFILES_BAR_SHOW_DISK",
+        },
+        BarWidgetChoice {
+            id: "brightness",
+            label: "Brightness",
+            setting: "DOTFILES_BAR_SHOW_BRIGHTNESS",
+        },
+        BarWidgetChoice {
+            id: "bluetooth",
+            label: "Bluetooth",
+            setting: "DOTFILES_BAR_SHOW_BLUETOOTH",
+        },
+        BarWidgetChoice {
+            id: "media",
+            label: "Media",
+            setting: "DOTFILES_BAR_SHOW_MEDIA",
+        },
+        BarWidgetChoice {
+            id: "updates",
+            label: "Updates",
+            setting: "DOTFILES_BAR_SHOW_UPDATES",
+        },
+        BarWidgetChoice {
+            id: "keyboard",
+            label: "Keyboard",
+            setting: "DOTFILES_BAR_SHOW_KEYBOARD",
+        },
+    ]
+}
+
+fn parse_widget_zone(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn widget_label(id: &str) -> String {
+    bar_widget_choices()
+        .iter()
+        .find(|widget| widget.id == id)
+        .map(|widget| widget.label.to_string())
+        .unwrap_or_else(|| id.to_string())
+}
+
+fn widget_setting(id: &str) -> Option<&'static str> {
+    bar_widget_choices()
+        .iter()
+        .find(|widget| widget.id == id)
+        .map(|widget| widget.setting)
+}
+
+fn zone_key(zone: &str) -> &'static str {
+    match zone {
+        "left" => "DOTFILES_BAR_LEFT_WIDGETS",
+        "center" => "DOTFILES_BAR_CENTER_WIDGETS",
+        _ => "DOTFILES_BAR_RIGHT_WIDGETS",
+    }
+}
+
+fn write_widget_zone(values: &mut HashMap<String, String>, zone: &str, widgets: &[String]) {
+    values.insert(zone_key(zone).to_string(), widgets.join(","));
+}
+
+fn remove_widget_from_zones(values: &mut HashMap<String, String>, widget: &str) {
+    for zone in ["left", "center", "right"] {
+        let key = zone_key(zone);
+        let mut list = parse_widget_zone(&value_or(values, key));
+        list.retain(|item| item != widget);
+        write_widget_zone(values, zone, &list);
+    }
 }
 
 fn primary_button(ui: &mut egui::Ui, theme: &AppTheme, text: &str) -> egui::Response {

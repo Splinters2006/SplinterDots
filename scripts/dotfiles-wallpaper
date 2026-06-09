@@ -10,6 +10,34 @@ if [ -f "$LOCAL_CONF" ]; then
   . "$LOCAL_CONF"
 fi
 
+wallpaper_bin() {
+  if command -v awww >/dev/null 2>&1; then
+    echo "awww"
+    return 0
+  fi
+
+  if command -v swww >/dev/null 2>&1; then
+    echo "swww"
+    return 0
+  fi
+
+  return 1
+}
+
+wallpaper_daemon_bin() {
+  if command -v awww-daemon >/dev/null 2>&1; then
+    echo "awww-daemon"
+    return 0
+  fi
+
+  if command -v swww-daemon >/dev/null 2>&1; then
+    echo "swww-daemon"
+    return 0
+  fi
+
+  return 1
+}
+
 save_wallpaper_path() {
   local image="$1"
   local tmp quoted
@@ -26,26 +54,33 @@ save_wallpaper_path() {
   mv "$tmp" "$LOCAL_CONF"
 }
 
-ensure_swww() {
-  if ! command -v swww >/dev/null 2>&1; then
-    printf 'swww is not installed. Install it with: sudo pacman -S swww\n' >&2
-    return 1
-  fi
+ensure_wallpaper_daemon() {
+  local bin daemon
 
-  if swww query >/dev/null 2>&1; then
+  bin="$(wallpaper_bin)" || {
+    printf 'awww is not installed. Install it with: sudo pacman -S awww\n' >&2
+    return 1
+  }
+
+  if "$bin" query >/dev/null 2>&1; then
     return 0
   fi
 
-  swww-daemon >/dev/null 2>&1 &
+  daemon="$(wallpaper_daemon_bin)" || {
+    printf 'Wallpaper daemon not found. Expected awww-daemon or swww-daemon.\n' >&2
+    return 1
+  }
+
+  "$daemon" >/dev/null 2>&1 &
 
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     sleep 0.2
-    if swww query >/dev/null 2>&1; then
+    if "$bin" query >/dev/null 2>&1; then
       return 0
     fi
   done
 
-  printf 'swww-daemon did not start. Try running: swww-daemon\n' >&2
+  printf 'Wallpaper daemon did not start. Try running: %s\n' "$daemon" >&2
   return 1
 }
 
@@ -73,6 +108,8 @@ set_wallpaper() {
 }
 
 apply_wallpaper() {
+  local bin
+
   if [ "${DOTFILES_WALLPAPER#~/}" != "$DOTFILES_WALLPAPER" ]; then
     DOTFILES_WALLPAPER="$HOME/${DOTFILES_WALLPAPER#~/}"
   fi
@@ -87,9 +124,11 @@ apply_wallpaper() {
     return 1
   fi
 
-  ensure_swww || return 1
+  ensure_wallpaper_daemon || return 1
 
-  swww img "$DOTFILES_WALLPAPER" \
+  bin="$(wallpaper_bin)" || return 1
+
+  "$bin" img "$DOTFILES_WALLPAPER" \
     --transition-type wipe \
     --transition-duration 0.8
 }

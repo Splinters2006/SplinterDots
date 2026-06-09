@@ -24,7 +24,7 @@ qt5-wayland
 qt6-wayland
 wofi
 mako
-swww
+awww
 
 # Required default apps
 kitty
