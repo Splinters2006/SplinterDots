@@ -1,0 +1,63 @@
+{
+  "input": {
+    "blocklist": [],
+    "plugins_order": [
+      "rnnoise",
+      "gate",
+      "compressor",
+      "limiter"
+    ],
+    "rnnoise": {
+      "state": true,
+      "input-gain": 0.0,
+      "output-gain": 0.0,
+      "enable-vad": false,
+      "vad-thres": 50.0,
+      "release": 20.0
+    },
+    "gate": {
+      "state": true,
+      "detection": "RMS",
+      "stereo-link": "Average",
+      "range": -24.0,
+      "threshold": -42.0,
+      "attack": 4.0,
+      "release": 180.0,
+      "makeup": 0.0,
+      "knee": 2.0,
+      "ratio": 2.0,
+      "input-gain": 0.0,
+      "output-gain": 0.0
+    },
+    "compressor": {
+      "state": true,
+      "mode": "Downward",
+      "threshold": -20.0,
+      "ratio": 3.0,
+      "attack": 8.0,
+      "release": 160.0,
+      "makeup": 3.0,
+      "knee": 5.0,
+      "input-gain": 0.0,
+      "output-gain": 0.0,
+      "sidechain": {
+        "type": "Feed-forward",
+        "mode": "RMS",
+        "source": "Middle",
+        "lookahead": 0.0,
+        "preamp": 0.0,
+        "reactivity": 10.0
+      }
+    },
+    "limiter": {
+      "state": true,
+      "input-gain": 0.0,
+      "limit": -2.0,
+      "lookahead": 5.0,
+      "release": 80.0,
+      "oversampling": "None",
+      "asc": false,
+      "asc-level": 0.5
+    }
+  }
+}

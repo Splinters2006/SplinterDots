@@ -210,6 +210,7 @@ struct SplinterDots {
     addon_refresh_marker_seen: bool,
     addon_category_filter: String,
     preview_font_families: HashMap<String, FontFamily>,
+    dragged_bar_widget: Option<(String, usize)>,
     status: String,
     no_show_on_startup: bool,
     loaded_ui_font: String,
@@ -402,6 +403,7 @@ impl SplinterDots {
             no_show_on_startup,
             loaded_ui_font: String::new(),
             preview_font_families: HashMap::new(),
+            dragged_bar_widget: None,
         }
     }
 
@@ -1071,18 +1073,49 @@ impl SplinterDots {
         }
     }
 
+
     fn install_style_package(&mut self, package: &str) {
         let terminal = self.value("DOTFILES_TERMINAL");
         let helper = self.paths.script("splinterdots-style");
+        let spicetify_setup = self.paths.script("splinter-setup-spicetify");
+
+        let package_list = package
+            .split_whitespace()
+            .filter(|pkg| !pkg.trim().is_empty())
+            .collect::<Vec<_>>();
+
+        if package_list.is_empty() {
+            self.status = "No package selected".to_string();
+            return;
+        }
+
+        let mut commands = package_list
+            .iter()
+            .map(|pkg| {
+                format!(
+                    "{} install {}",
+                    shell_quote(&helper.to_string_lossy()),
+                    shell_quote(pkg),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        if package_list.contains(&"spicetify-cli") || package_list.contains(&"spicetify") {
+            commands.push(shell_quote(&spicetify_setup.to_string_lossy()).to_string());
+        }
+
         let command = format!(
-            "{} install {}; echo; read -rp 'Press enter to close...'",
-            shell_quote(&helper.to_string_lossy()),
-            shell_quote(package)
+            "{}; mkdir -p \"${{XDG_CACHE_HOME:-$HOME/.cache}}/splinterdots\"; touch \"${{XDG_CACHE_HOME:-$HOME/.cache}}/splinterdots/addons-refresh\"; echo; read -rp 'Press enter to close...'",
+            commands.join(" && "),
         );
 
         let result = Command::new("sh")
             .arg("-c")
-            .arg(format!("{} -e sh -c {}", terminal, shell_quote(&command)))
+            .arg(format!(
+                "{} -e sh -c {}",
+                shell_quote(&terminal),
+                shell_quote(&command),
+            ))
             .spawn();
 
         self.status = match result {
@@ -2243,141 +2276,183 @@ misc               = 313244
     }
 
     fn widget_zone_editor(&mut self, ui: &mut egui::Ui, theme: &AppTheme, title: &str, zone: &str) {
-        let key = zone_key(zone);
-        let mut widgets = parse_widget_zone(&self.value(key));
+        let key = format!("DOTFILES_BAR_{}", zone.to_uppercase());
+        let mut widgets = split_csv(&self.value(&key));
+        let mut drop_index: Option<usize> = None;
 
-        Self::soft_card(theme, ui, |ui| {
+        Self::card(theme, ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(title).strong().size(16.0));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.label(
-                        RichText::new("Add widgets below")
+                        RichText::new("drop zone")
                             .color(theme.muted)
                             .size(11.0),
                     );
                 });
             });
 
-            ui.add_space(8.0);
+            ui.add_space(10.0);
 
-            if widgets.is_empty() {
-                ui.label(RichText::new("No widgets here yet.").color(theme.muted));
+            let zone_response = Frame {
+                fill: theme.panel_soft,
+                corner_radius: CornerRadius::same(18),
+                inner_margin: Margin::same(10),
+                stroke: Stroke::new(
+                    if self.dragged_bar_widget.is_some() { 2.0 } else { 1.0 },
+                    if self.dragged_bar_widget.is_some() { theme.accent } else { theme.border },
+                ),
+                ..Default::default()
             }
+            .show(ui, |ui| {
+                ui.set_min_height(120.0);
 
-            let mut changed = false;
-            let mut remove_at: Option<usize> = None;
-            let mut move_up: Option<usize> = None;
-            let mut move_down: Option<usize> = None;
-
-            for (index, widget) in widgets.iter().enumerate() {
-                Frame {
-                    fill: theme.card,
-                    corner_radius: CornerRadius::same(12),
-                    inner_margin: Margin::symmetric(10, 7),
-                    stroke: Stroke::new(1.0, theme.border),
-                    ..Default::default()
-                }
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("☰").color(theme.muted));
-                        ui.label(RichText::new(widget_label(widget)).strong());
-
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if ui.small_button("✕").clicked() {
-                                remove_at = Some(index);
-                            }
-                            if ui
-                                .small_button("→")
-                                .on_hover_text("Move to right")
-                                .clicked()
-                            {
-                                remove_at = Some(index);
-                                let mut right =
-                                    parse_widget_zone(&self.value("DOTFILES_BAR_RIGHT_WIDGETS"));
-                                if !right.contains(widget) {
-                                    right.push(widget.clone());
-                                }
-                                write_widget_zone(&mut self.values, "right", &right);
-                            }
-                            if ui
-                                .small_button("•")
-                                .on_hover_text("Move to center")
-                                .clicked()
-                            {
-                                remove_at = Some(index);
-                                let mut center =
-                                    parse_widget_zone(&self.value("DOTFILES_BAR_CENTER_WIDGETS"));
-                                if !center.contains(widget) {
-                                    center.push(widget.clone());
-                                }
-                                write_widget_zone(&mut self.values, "center", &center);
-                            }
-                            if ui.small_button("←").on_hover_text("Move to left").clicked() {
-                                remove_at = Some(index);
-                                let mut left =
-                                    parse_widget_zone(&self.value("DOTFILES_BAR_LEFT_WIDGETS"));
-                                if !left.contains(widget) {
-                                    left.push(widget.clone());
-                                }
-                                write_widget_zone(&mut self.values, "left", &left);
-                            }
-                            if ui.small_button("↓").clicked() {
-                                move_down = Some(index);
-                            }
-                            if ui.small_button("↑").clicked() {
-                                move_up = Some(index);
-                            }
-                        });
+                if widgets.is_empty() {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(22.0);
+                        ui.label(
+                            RichText::new("Drop widgets here")
+                                .color(theme.muted)
+                                .size(13.0),
+                        );
+                        ui.add_space(22.0);
                     });
-                });
-
-                ui.add_space(6.0);
-            }
-
-            if let Some(index) = move_up {
-                if index > 0 {
-                    widgets.swap(index, index - 1);
-                    changed = true;
                 }
-            }
 
-            if let Some(index) = move_down {
-                if index + 1 < widgets.len() {
-                    widgets.swap(index, index + 1);
-                    changed = true;
+                let mut remove_index: Option<usize> = None;
+
+                for (index, widget) in widgets.clone().iter().enumerate() {
+                    let is_dragged = self
+                        .dragged_bar_widget
+                        .as_ref()
+                        .map(|(from_zone, from_index)| from_zone == zone && *from_index == index)
+                        .unwrap_or(false);
+
+                    let card_response = Frame {
+                        fill: if is_dragged {
+                            theme.card_hover
+                        } else {
+                            theme.card
+                        },
+                        corner_radius: CornerRadius::same(14),
+                        inner_margin: Margin::symmetric(10, 8),
+                        stroke: Stroke::new(
+                            if is_dragged { 2.0 } else { 1.0 },
+                            if is_dragged { theme.accent } else { theme.border },
+                        ),
+                        ..Default::default()
+                    }
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("󰍢").color(theme.muted));
+                            ui.label(
+                                RichText::new(widget_label(widget))
+                                    .color(theme.text)
+                                    .strong(),
+                            );
+
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                if ui.small_button("×").clicked() {
+                                    remove_index = Some(index);
+                                }
+                            });
+                        });
+                    })
+                    .response
+                    .interact(egui::Sense::click_and_drag());
+
+                    if card_response.drag_started() {
+                        self.dragged_bar_widget = Some((zone.to_string(), index));
+                    }
+
+                    if self.dragged_bar_widget.is_some() && card_response.hovered() {
+                        drop_index = Some(index);
+
+                        let marker_y = card_response.rect.top();
+                        ui.painter().line_segment(
+                            [
+                                egui::pos2(card_response.rect.left(), marker_y),
+                                egui::pos2(card_response.rect.right(), marker_y),
+                            ],
+                            Stroke::new(2.0, theme.accent),
+                        );
+                    }
+
+                    ui.add_space(6.0);
                 }
-            }
 
-            if let Some(index) = remove_at {
-                if index < widgets.len() {
-                    widgets.remove(index);
-                    changed = true;
+                if let Some(index) = remove_index {
+                    if index < widgets.len() {
+                        widgets.remove(index);
+                        self.set_value(&key, widgets.join(","));
+                    }
                 }
-            }
 
-            ui.add_space(8.0);
-            egui::ComboBox::from_id_salt(format!("add-widget-{zone}"))
-                .selected_text("Add widget...")
-                .show_ui(ui, |ui| {
+                ui.add_space(8.0);
+
+                ui.menu_button("Add widget...", |ui| {
+                    ui.set_min_width(260.0);
+
                     for choice in bar_widget_choices() {
-                        if widgets.iter().any(|item| item == choice.id) {
-                            continue;
-                        }
+                        let already_added = widgets.iter().any(|item| item == choice.id);
+                        let label = if already_added {
+                            format!("✓ {}", choice.label)
+                        } else {
+                            choice.label.to_string()
+                        };
 
-                        if ui.button(choice.label).clicked() {
-                            remove_widget_from_zones(&mut self.values, choice.id);
+                        if ui
+                            .add_enabled(!already_added, egui::Button::new(label))
+                            .clicked()
+                        {
                             widgets.push(choice.id.to_string());
-                            changed = true;
+                            self.set_value(&key, widgets.join(","));
+                            self.set_bool_value(choice.setting, true);
+                            self.status = format!("Added {} widget", choice.label);
+                            ui.close();
                         }
                     }
                 });
+            })
+            .response;
 
-            if changed {
-                write_widget_zone(&mut self.values, zone, &widgets);
-                self.sync_widget_toggles_from_layout();
+            let mouse_released = ui.input(|input| input.pointer.any_released());
+
+            if mouse_released {
+                if zone_response.hovered() {
+                    if let Some((from_zone, from_index)) = self.dragged_bar_widget.take() {
+                        let from_key = format!("DOTFILES_BAR_{}", from_zone.to_uppercase());
+                        let mut from_widgets = split_csv(&self.value(&from_key));
+                        let mut to_widgets = split_csv(&self.value(&key));
+
+                        if from_index < from_widgets.len() {
+                            let moved = from_widgets.remove(from_index);
+
+                            let mut insert_at = drop_index.unwrap_or(to_widgets.len());
+
+                            if from_zone == zone {
+                                to_widgets = from_widgets.clone();
+
+                                if from_index < insert_at {
+                                    insert_at = insert_at.saturating_sub(1);
+                                }
+                            }
+
+                            insert_at = insert_at.min(to_widgets.len());
+                            to_widgets.insert(insert_at, moved);
+
+                            self.set_value(&from_key, from_widgets.join(","));
+                            self.set_value(&key, to_widgets.join(","));
+                            self.status = "Bar widget moved".to_string();
+                        }
+                    }
+                } else {
+                    self.dragged_bar_widget = None;
+                }
             }
         });
     }
+
 
     fn sync_widget_toggles_from_layout(&mut self) {
         let mut active: Vec<String> = Vec::new();
@@ -2391,6 +2466,7 @@ misc               = 313244
         }
     }
 
+
     fn bar_tab(&mut self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
 
@@ -2398,8 +2474,10 @@ misc               = 313244
             Self::card(&theme, ui, |ui| {
                 ui.label(RichText::new("Visual bar layout").strong().size(20.0));
                 ui.label(
-                    RichText::new("Build your bar by moving widgets between Left, Center, and Right. Use arrows to reorder.")
-                        .color(theme.muted),
+                    RichText::new(
+                        "Drag widgets between the Left, Center, and Right bubbles. Drag inside a bubble to reorder them.",
+                    )
+                    .color(theme.muted),
                 );
                 ui.add_space(14.0);
 
@@ -2425,6 +2503,7 @@ misc               = 313244
 
             Self::card(&theme, ui, |ui| {
                 ui.label(RichText::new("Layout and speed").strong().size(18.0));
+
                 combo_value(ui, &mut self.values, "DOTFILES_BAR_POSITION", &["top", "bottom"]);
                 combo_value(
                     ui,
@@ -2432,12 +2511,16 @@ misc               = 313244
                     "DOTFILES_BAR_WORKSPACE_COUNT",
                     &["5", "6", "7", "8", "9", "10", "12", "15", "20"],
                 );
+
                 slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_REACTIVE_MS", 40.0, 1000.0);
                 slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_STATUS_MS", 500.0, 6000.0);
-            });
+                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_HEIGHT", 24.0, 72.0);
+                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_RADIUS", 0.0, 28.0);
+                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_OPACITY", 0.2, 1.0);
+                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_FONT_SIZE", 8.0, 24.0);
+                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_SPACING", 4.0, 40.0);
+                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_BORDER_WIDTH", 0.0, 4.0);
 
-            Self::card(&theme, ui, |ui| {
-                ui.label(RichText::new("Icon pack").strong().size(18.0));
                 combo_value(ui, &mut self.values, "DOTFILES_BAR_ICON_PACK", &["nerd", "fontawesome", "text"]);
                 combo_value(
                     ui,
@@ -2445,157 +2528,12 @@ misc               = 313244
                     "DOTFILES_BAR_ICON_FONT",
                     &["Symbols Nerd Font", "Font Awesome 6 Free", "Font Awesome 6 Brands", "Sans"],
                 );
-
-                ui.add_space(8.0);
-                if primary_button(ui, &theme, "Install selected icon font").clicked() {
-                    self.install_selected_icon_font();
-                }
-            });
-
-            Self::card(&theme, ui, |ui| {
-                ui.label(RichText::new("Sizing and style").strong().size(18.0));
-                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_HEIGHT", 24.0, 72.0);
-                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_RADIUS", 0.0, 28.0);
-                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_OPACITY", 0.2, 1.0);
-                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_FONT_SIZE", 8.0, 24.0);
-                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_SPACING", 4.0, 40.0);
-                slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_BORDER_WIDTH", 0.0, 4.0);
-            });
-
-            Self::card(&theme, ui, |ui| {
-                ui.label(RichText::new("Widget details").strong().size(18.0));
-                ui.label(RichText::new("These only apply when the matching widget is placed in the visual layout above.").color(theme.muted));
-                ui.add_space(6.0);
-
-                let mut fmt = self.value("DOTFILES_WIDGET_CLOCK_FORMAT");
-                labeled_text(ui, "Clock format", &mut fmt);
-                self.set_value("DOTFILES_WIDGET_CLOCK_FORMAT", fmt);
-
-                let mut seconds = self.bool_value("DOTFILES_WIDGET_CLOCK_SECONDS");
-                if ui.checkbox(&mut seconds, "Clock: show seconds").changed() {
-                    self.set_bool_value("DOTFILES_WIDGET_CLOCK_SECONDS", seconds);
-                }
-
-                combo_value(
-                    ui,
-                    &mut self.values,
-                    "DOTFILES_WIDGET_NETWORK_STYLE",
-                    &["short", "name"],
-                );
-
-                let mut media_len = self.value("DOTFILES_WIDGET_MEDIA_LENGTH");
-                labeled_text(ui, "Media title length", &mut media_len);
-                self.set_value("DOTFILES_WIDGET_MEDIA_LENGTH", media_len);
-
-                let mut updates_cmd = self.value("DOTFILES_WIDGET_UPDATES_COMMAND");
-                labeled_text(ui, "Updates check command", &mut updates_cmd);
-                self.set_value("DOTFILES_WIDGET_UPDATES_COMMAND", updates_cmd);
             });
         });
     }
 
     fn widgets_tab(&mut self, ui: &mut egui::Ui) {
-        let theme = self.app_theme();
-
-        ScrollArea::vertical().show(ui, |ui| {
-            Self::card(&theme, ui, |ui| {
-                ui.label(RichText::new("Enable widgets").strong().size(18.0));
-                ui.label(
-                    RichText::new(
-                        "Every widget can be enabled or disabled. Configuration is below.",
-                    )
-                    .color(theme.muted),
-                );
-                ui.add_space(6.0);
-
-                egui::Grid::new("widget_enable_grid")
-                    .num_columns(2)
-                    .spacing([34.0, 8.0])
-                    .show(ui, |ui| {
-                        for (index, (label, key)) in WIDGET_TOGGLES.iter().enumerate() {
-                            let mut checked = self.bool_value(key);
-                            if ui.checkbox(&mut checked, *label).changed() {
-                                self.set_bool_value(key, checked);
-                            }
-                            if index % 2 == 1 {
-                                ui.end_row();
-                            }
-                        }
-                    });
-            });
-
-            Self::card(&theme, ui, |ui| {
-                ui.label(RichText::new("Clock").strong().size(18.0));
-                let mut fmt = self.value("DOTFILES_WIDGET_CLOCK_FORMAT");
-                labeled_text(ui, "Format", &mut fmt);
-                self.set_value("DOTFILES_WIDGET_CLOCK_FORMAT", fmt);
-                let mut seconds = self.bool_value("DOTFILES_WIDGET_CLOCK_SECONDS");
-                if ui.checkbox(&mut seconds, "Show seconds").changed() {
-                    self.set_bool_value("DOTFILES_WIDGET_CLOCK_SECONDS", seconds);
-                }
-            });
-
-            Self::card(&theme, ui, |ui| {
-                ui.label(
-                    RichText::new("Volume, network, and battery")
-                        .strong()
-                        .size(18.0),
-                );
-                let mut device = self.value("DOTFILES_WIDGET_VOLUME_DEVICE");
-                labeled_text(ui, "Volume device", &mut device);
-                self.set_value("DOTFILES_WIDGET_VOLUME_DEVICE", device);
-
-                combo_value(
-                    ui,
-                    &mut self.values,
-                    "DOTFILES_WIDGET_NETWORK_STYLE",
-                    &["short", "name"],
-                );
-
-                let mut low = self.value("DOTFILES_WIDGET_BATTERY_LOW");
-                labeled_text(ui, "Battery low percentage", &mut low);
-                self.set_value("DOTFILES_WIDGET_BATTERY_LOW", low);
-            });
-
-            Self::card(&theme, ui, |ui| {
-                ui.label(RichText::new("Performance widgets").strong().size(18.0));
-                let mut cpu = self.value("DOTFILES_WIDGET_CPU_LABEL");
-                labeled_text(ui, "CPU label", &mut cpu);
-                self.set_value("DOTFILES_WIDGET_CPU_LABEL", cpu);
-
-                let mut mem = self.value("DOTFILES_WIDGET_MEMORY_LABEL");
-                labeled_text(ui, "Memory label", &mut mem);
-                self.set_value("DOTFILES_WIDGET_MEMORY_LABEL", mem);
-
-                let mut temp = self.value("DOTFILES_WIDGET_TEMP_SENSOR");
-                labeled_text(ui, "Temperature sensor name, optional", &mut temp);
-                self.set_value("DOTFILES_WIDGET_TEMP_SENSOR", temp);
-
-                let mut disk = self.value("DOTFILES_WIDGET_DISK_PATH");
-                labeled_text(ui, "Disk path", &mut disk);
-                self.set_value("DOTFILES_WIDGET_DISK_PATH", disk);
-            });
-
-            Self::card(&theme, ui, |ui| {
-                ui.label(RichText::new("Extra widgets").strong().size(18.0));
-
-                let mut brightness = self.value("DOTFILES_WIDGET_BRIGHTNESS_DEVICE");
-                labeled_text(ui, "Brightness device, optional", &mut brightness);
-                self.set_value("DOTFILES_WIDGET_BRIGHTNESS_DEVICE", brightness);
-
-                let mut media_len = self.value("DOTFILES_WIDGET_MEDIA_LENGTH");
-                labeled_text(ui, "Media title length", &mut media_len);
-                self.set_value("DOTFILES_WIDGET_MEDIA_LENGTH", media_len);
-
-                let mut updates_cmd = self.value("DOTFILES_WIDGET_UPDATES_COMMAND");
-                labeled_text(ui, "Updates check", &mut updates_cmd);
-                self.set_value("DOTFILES_WIDGET_UPDATES_COMMAND", updates_cmd);
-
-                let mut kb_label = self.value("DOTFILES_WIDGET_KEYBOARD_LABEL");
-                labeled_text(ui, "board label", &mut kb_label);
-                self.set_value("DOTFILES_WIDGET_KEYBOARD_LABEL", kb_label);
-            });
-        });
+        self.bar_tab(ui);
     }
 
     fn setup_tab(&mut self, ui: &mut egui::Ui) {
@@ -3216,12 +3154,9 @@ fn write_quickshell_bar(paths: &Paths, values: &HashMap<String, String>) -> Resu
     let palette = theme_palette(values);
     let icons = icons_for(&value_or(values, "DOTFILES_BAR_ICON_PACK"));
     let position = value_or(values, "DOTFILES_BAR_POSITION");
+
     let top = if position == "top" { "true" } else { "false" };
-    let bottom = if position == "bottom" {
-        "true"
-    } else {
-        "false"
-    };
+    let bottom = if position == "bottom" { "true" } else { "false" };
 
     let height = clamp_i(value_or(values, "DOTFILES_BAR_HEIGHT"), 34, 24, 72);
     let radius = clamp_i(value_or(values, "DOTFILES_BAR_RADIUS"), 10, 0, 28);
@@ -3234,146 +3169,47 @@ fn write_quickshell_bar(paths: &Paths, values: &HashMap<String, String>) -> Resu
     let status_ms = clamp_i(value_or(values, "DOTFILES_BAR_STATUS_MS"), 1500, 500, 6000);
     let icon_font = value_or(values, "DOTFILES_BAR_ICON_FONT");
 
-    let mut clock_format = value_or(values, "DOTFILES_WIDGET_CLOCK_FORMAT");
-    if is_true(&value_or(values, "DOTFILES_WIDGET_CLOCK_SECONDS")) && !clock_format.contains("%S") {
-        clock_format.push_str(":%S");
-    }
-
     let bg_alpha = (opacity * 255.0) as i32;
     let bg_color = format!("#{:02x}{}", bg_alpha, palette.bar_rgb);
 
-    let left_section = if is_true(&value_or(values, "DOTFILES_BAR_SHOW_WORKSPACES")) {
-        format!(
-            r#"
-          Row {{
-            Layout.alignment: Qt.AlignVCenter
-            spacing: 6
+    let left_section = build_bar_zone_qml(
+        "left",
+        values,
+        &palette,
+        &icons,
+        height.into(),
+        radius.into(),
+        font_size.into(),
+        workspace_count.into(),
+        status_ms.into(),
+        &icon_font,
+    );
 
-            Repeater {{
-              model: {workspace_count}
-              Rectangle {{
-                width: (index + 1) === root.activeWorkspace ? {active_w} : {inactive_w}
-                height: (index + 1) === root.activeWorkspace ? {active_h} : {inactive_h}
-                anchors.verticalCenter: parent.verticalCenter
-                radius: {button_radius}
-                color: (index + 1) === root.activeWorkspace ? "{accent}" : "{surface}"
-                opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.72
+    let center_section = build_bar_zone_qml(
+        "center",
+        values,
+        &palette,
+        &icons,
+        height.into(),
+        radius.into(),
+        font_size.into(),
+        workspace_count.into(),
+        status_ms.into(),
+        &icon_font,
+    );
 
-                Text {{
-                  anchors.centerIn: parent
-                  text: index + 1
-                  color: (index + 1) === root.activeWorkspace ? "{active_text}" : "{text}"
-                  font.bold: true
-                  font.pixelSize: {workspace_font}
-                  font.family: "{icon_font}"
-                }}
-
-                MouseArea {{
-                  anchors.fill: parent
-                  onClicked: switchWorkspace.running = true
-                  hoverEnabled: true
-                  onEntered: parent.opacity = 1.0
-                  onExited: parent.opacity = (index + 1) === root.activeWorkspace ? 1.0 : 0.72
-                }}
-
-                Process {{
-                  id: switchWorkspace
-                  command: ["hyprctl", "dispatch", "workspace", String(index + 1)]
-                }}
-              }}
-            }}
-          }}"#,
-            active_w = height - 2,
-            inactive_w = height - 14,
-            active_h = height - 2,
-            inactive_h = height - 14,
-            button_radius = (radius - 4).max(3),
-            accent = palette.accent,
-            surface = palette.surface,
-            active_text = palette.active_text,
-            text = palette.text,
-            workspace_font = font_size - 1,
-            icon_font = icon_font,
-        )
-    } else {
-        String::new()
-    };
-
-    let center_section = if is_true(&value_or(values, "DOTFILES_BAR_SHOW_CLOCK")) {
-        format!(
-            r#"
-          Text {{
-            id: clock
-            Layout.alignment: Qt.AlignCenter
-            color: "{text}"
-            font.bold: true
-            font.pixelSize: {font_size}
-            font.family: "{icon_font}"
-            text: "..."
-
-            Process {{
-              id: dateProc
-              command: ["date", {clock_arg}]
-              running: true
-              stdout: StdioCollector {{
-                onStreamFinished: clock.text = "{clock_icon} " + this.text.trim()
-              }}
-            }}
-
-            Timer {{
-              interval: 1000
-              running: true
-              repeat: true
-              onTriggered: dateProc.running = true
-            }}
-          }}"#,
-            text = palette.text,
-            font_size = font_size,
-            icon_font = icon_font,
-            clock_arg = json_string(&format!("+{clock_format}")),
-            clock_icon = icons.clock,
-        )
-    } else {
-        String::new()
-    };
-
-    let status_cmd = build_status_command(values, &icons);
-    let right_section = if status_cmd.trim().is_empty() {
-        String::new()
-    } else {
-        format!(
-            r#"
-          Text {{
-            id: status
-            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-            color: "{muted}"
-            font.pixelSize: {font_size}
-            font.family: "{icon_font}"
-            text: ""
-
-            Process {{
-              id: statusProc
-              command: ["sh", "-c", {status_cmd}]
-              running: true
-              stdout: StdioCollector {{
-                onStreamFinished: status.text = this.text.replace(/\n/g, "").trim()
-              }}
-            }}
-
-            Timer {{
-              interval: {status_ms}
-              running: true
-              repeat: true
-              onTriggered: statusProc.running = true
-            }}
-          }}"#,
-            muted = palette.muted,
-            font_size = font_size,
-            icon_font = icon_font,
-            status_cmd = json_string(&status_cmd),
-            status_ms = status_ms,
-        )
-    };
+    let right_section = build_bar_zone_qml(
+        "right",
+        values,
+        &palette,
+        &icons,
+        height.into(),
+        radius.into(),
+        font_size.into(),
+        workspace_count.into(),
+        status_ms.into(),
+        &icon_font,
+    );
 
     let template = r#"// SplinterDots Quickshell bar.
 // Generated by SplinterDots.
@@ -3434,7 +3270,7 @@ Variants {
         interval: __REACTIVE_MS__
         running: true
         repeat: true
-        onTriggered: stateProc.running = true
+        onTriggered: { stateProc.running = false; stateProc.running = true }
       }
 
       Rectangle {
@@ -3449,11 +3285,28 @@ Variants {
           anchors.leftMargin: __SPACING__
           anchors.rightMargin: __SPACING__
           spacing: __SPACING__
+
+          Row {
+            Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+            spacing: 7
 __LEFT_SECTION__
+          }
+
           Item { Layout.fillWidth: true }
+
+          Row {
+            Layout.alignment: Qt.AlignCenter
+            spacing: 7
 __CENTER_SECTION__
+          }
+
           Item { Layout.fillWidth: true }
+
+          Row {
+            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+            spacing: 7
 __RIGHT_SECTION__
+          }
         }
       }
     }
@@ -3465,10 +3318,7 @@ __RIGHT_SECTION__
         .replace("__TOP__", top)
         .replace("__BOTTOM__", bottom)
         .replace("__TOP_MARGIN__", if position == "top" { "8" } else { "0" })
-        .replace(
-            "__BOTTOM_MARGIN__",
-            if position == "bottom" { "8" } else { "0" },
-        )
+        .replace("__BOTTOM_MARGIN__", if position == "bottom" { "8" } else { "0" })
         .replace("__HEIGHT__", &height.to_string())
         .replace("__REACTIVE_MS__", &reactive_ms.to_string())
         .replace("__RADIUS__", &radius.to_string())
@@ -3481,6 +3331,340 @@ __RIGHT_SECTION__
         .replace("__RIGHT_SECTION__", &right_section);
 
     fs::write(&paths.quickshell_file, qml).map_err(err_string)
+}
+
+fn build_bar_zone_qml(
+    zone: &str,
+    values: &HashMap<String, String>,
+    palette: &Palette,
+    icons: &IconSet,
+    height: i64,
+    radius: i64,
+    font_size: i64,
+    workspace_count: i64,
+    status_ms: i64,
+    icon_font: &str,
+) -> String {
+    let key = format!("DOTFILES_BAR_{}", zone.to_uppercase());
+    let raw = value_or(values, &key);
+
+    let widgets = if raw.trim().is_empty() {
+        match zone {
+            "left" => vec!["workspaces".to_string()],
+            "center" => vec!["clock".to_string()],
+            _ => vec!["volume".to_string(), "network".to_string(), "battery".to_string()],
+        }
+    } else {
+        split_csv(&raw)
+    };
+
+    widgets
+        .iter()
+        .enumerate()
+        .map(|(index, widget)| {
+            bar_widget_qml(
+                widget,
+                &format!("{}_{}", zone, index),
+                values,
+                palette,
+                icons,
+                height,
+                radius,
+                font_size,
+                workspace_count,
+                status_ms,
+                icon_font,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("
+")
+}
+
+fn bar_widget_qml(
+    widget: &str,
+    id: &str,
+    values: &HashMap<String, String>,
+    palette: &Palette,
+    icons: &IconSet,
+    height: i64,
+    radius: i64,
+    font_size: i64,
+    workspace_count: i64,
+    status_ms: i64,
+    icon_font: &str,
+) -> String {
+    match widget {
+        "workspaces" => workspaces_qml(id, palette, height, radius, font_size, workspace_count, icon_font),
+        "clock" => {
+            let mut clock_format = value_or(values, "DOTFILES_WIDGET_CLOCK_FORMAT");
+            if is_true(&value_or(values, "DOTFILES_WIDGET_CLOCK_SECONDS")) && !clock_format.contains("%S") {
+                clock_format.push_str(":%S");
+            }
+            command_text_qml(
+                id,
+                palette,
+                font_size,
+                icon_font,
+                &format!("date +{}", shell_escape(&clock_format)),
+                1000,
+                Some(icons.clock),
+            )
+        }
+        "date" => command_text_qml(id, palette, font_size, icon_font, "date '+%a %d %b'", 60_000, Some(icons.clock)),
+        "window-title" => command_text_qml(id, palette, font_size, icon_font, "hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' | cut -c1-60", status_ms, None),
+        "submap" => command_text_qml(id, palette, font_size, icon_font, "hyprctl submap 2>/dev/null | grep -v '^$' | sed 's/^/󰌌 /'", status_ms, None),
+
+        "easyeffects" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰓃", "pgrep -x easyeffects >/dev/null && pkill easyeffects || easyeffects --gapplication-service"),
+        "volume" => command_text_qml(id, palette, font_size, icon_font, "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'", status_ms, None),
+        "mic" => command_text_qml(id, palette, font_size, icon_font, "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \" muted\"; else print \" \" v \"%\"}'", status_ms, None),
+        "network" => command_text_qml(id, palette, font_size, icon_font, "nmcli -t -f DEVICE,STATE device 2>/dev/null | awk -F: '$2==\"connected\"{print \"󰤨 \" $1; exit}'", status_ms, None),
+        "bluetooth" => command_text_qml(id, palette, font_size, icon_font, "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf ' on' || printf ' off'", status_ms, None),
+        "battery" => command_text_qml(id, palette, font_size, icon_font, "bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && printf '󰁹 %s%%' \"$bat\"", status_ms, None),
+        "brightness" => command_text_qml(id, palette, font_size, icon_font, "brightnessctl -m 2>/dev/null | awk -F, '{print \"󰃠 \" $4}'", status_ms, None),
+        "updates" => {
+            let command = value_or(values, "DOTFILES_WIDGET_UPDATES_COMMAND");
+            command_text_qml(id, palette, font_size, icon_font, &format!("upd=$({}); [ -n \"$upd\" ] && [ \"$upd\" != \"0\" ] && printf '󰚰 %s' \"$upd\"", command), status_ms * 4, None)
+        }
+
+        "cpu" => command_text_qml(id, palette, font_size, icon_font, r#"top -bn1 | awk -F'[, ]+' '/Cpu\(s\)/{print " " int($2+$4) "%"}'"#, status_ms, None),
+        "memory" => command_text_qml(id, palette, font_size, icon_font, "free -m | awk '/^Mem/{printf \" %dMB\", $3}'", status_ms, None),
+        "temp" => command_text_qml(id, palette, font_size, icon_font, "sensors 2>/dev/null | awk '/Package id 0|Tctl|temp1/{gsub(/[+°C]/, \"\", $2); print \" \" int($2) \"°C\"; exit}'", status_ms, None),
+        "disk" => command_text_qml(id, palette, font_size, icon_font, "df -h / 2>/dev/null | awk 'NR==2{print \"󰋊 \" $5}'", status_ms, None),
+        "gpu" => command_text_qml(id, palette, font_size, icon_font, "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | awk '{print \"󰢮 \" $1 \"%\"}'", status_ms, None),
+
+        "media" => {
+            let max_len = clamp_i(value_or(values, "DOTFILES_WIDGET_MEDIA_LENGTH"), 28, 8, 80);
+            command_text_qml(id, palette, font_size, icon_font, &format!("playerctl metadata --format '{{{{artist}}}} - {{{{title}}}}' 2>/dev/null | cut -c1-{max_len} | sed 's/^/ /'"), status_ms, None)
+        }
+        "media-prev" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "playerctl previous"),
+        "media-play" => command_button_qml(id, palette, height, radius, font_size, icon_font, " ", "playerctl play-pause"),
+        "media-next" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "playerctl next"),
+        "media_controller" => media_controller_qml(id, palette, height, radius, font_size, icon_font),
+
+        "launcher" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰀻", "wofi --show drun"),
+        "power" => command_button_qml(id, palette, height, radius, font_size, icon_font, "⏻", "wlogout || systemctl poweroff"),
+        "lock" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "hyprlock || loginctl lock-session"),
+        "screenshot" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰄀", "splinter-screenshot area"),
+        "wallpaper" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "dir=\"$HOME/Pictures/Wallpapers\"; file=$(find \"$dir\" -maxdepth 1 -type f | shuf -n1); [ -n \"$file\" ] && splinter-wallpaper \"$file\""),
+        "color-picker" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "hyprpicker -a"),
+        "night-light" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰖔", "pkill wlsunset || wlsunset -t 3400 -T 6500 &"),
+
+        "weather" => command_text_qml(id, palette, font_size, icon_font, "curl -fsS 'wttr.in/?format=1' 2>/dev/null", 900_000, None),
+        "notes" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰎞", "xdg-open \"$HOME/Notes\""),
+        "todo" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰄬", "xdg-open \"$HOME/todo.txt\""),
+        "keyboard" => command_text_qml(id, palette, font_size, icon_font, "hyprctl devices -j 2>/dev/null | grep -m1 -o '\"active_keymap\":\"[^\"]*' | cut -d'\"' -f4 | sed 's/^/ /'", status_ms, None),
+
+        _ => command_text_qml(id, palette, font_size, icon_font, &format!("printf {}", shell_escape(widget)), status_ms, None),
+    }
+}
+
+fn command_text_qml(
+    id: &str,
+    palette: &Palette,
+    font_size: i64,
+    icon_font: &str,
+    command: &str,
+    interval: i64,
+    prefix_icon: Option<&str>,
+) -> String {
+    let prefix = prefix_icon.map(|icon| format!("{icon} ")).unwrap_or_default();
+
+    r#"
+            Text {
+              id: __ID__
+              anchors.verticalCenter: parent.verticalCenter
+              color: "__TEXT__"
+              font.pixelSize: __FONT_SIZE__
+              font.family: "__ICON_FONT__"
+              text: ""
+
+              Process {
+                id: __PROC_ID__
+                command: ["sh", "-c", __COMMAND__]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: __ID__.text = "__PREFIX__" + this.text.split("\\n").join("").trim()
+                }
+              }
+
+              Timer {
+                interval: __INTERVAL__
+                running: true
+                repeat: true
+                onTriggered: { __PROC_ID__.running = false; __PROC_ID__.running = true }
+              }
+            }
+"#
+    .replace("__ID__", &qml_id(id, "txt"))
+    .replace("__PROC_ID__", &qml_id(id, "proc"))
+    .replace("__TEXT__", &palette.text)
+    .replace("__FONT_SIZE__", &font_size.to_string())
+    .replace("__ICON_FONT__", icon_font)
+    .replace("__COMMAND__", &json_string(command))
+    .replace("__INTERVAL__", &interval.to_string())
+    .replace("__PREFIX__", &qml_string_escape(&prefix))
+}
+
+fn command_button_qml(
+    id: &str,
+    palette: &Palette,
+    height: i64,
+    radius: i64,
+    font_size: i64,
+    icon_font: &str,
+    label: &str,
+    command: &str,
+) -> String {
+    let button_height = (height - 8).max(22);
+    let button_radius = (radius - 4).max(6);
+
+    r#"
+            Rectangle {
+              width: __WIDTH__
+              height: __HEIGHT__
+              anchors.verticalCenter: parent.verticalCenter
+              radius: __RADIUS__
+              color: "__SURFACE__"
+
+              Text {
+                anchors.centerIn: parent
+                text: "__LABEL__"
+                color: "__TEXT__"
+                font.pixelSize: __FONT_SIZE__
+                font.family: "__ICON_FONT__"
+                font.bold: true
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onEntered: parent.color = "__ACCENT__"
+                onExited: parent.color = "__SURFACE__"
+                onClicked: { __PROC_ID__.running = false; __PROC_ID__.running = true }
+              }
+
+              Process {
+                id: __PROC_ID__
+                command: ["sh", "-c", __COMMAND__]
+              }
+            }
+"#
+    .replace("__WIDTH__", &((label.chars().count() as i64 * 11).max(30)).to_string())
+    .replace("__HEIGHT__", &button_height.to_string())
+    .replace("__RADIUS__", &button_radius.to_string())
+    .replace("__SURFACE__", &palette.surface)
+    .replace("__ACCENT__", &palette.accent)
+    .replace("__TEXT__", &palette.text)
+    .replace("__FONT_SIZE__", &font_size.to_string())
+    .replace("__ICON_FONT__", icon_font)
+    .replace("__LABEL__", &qml_string_escape(label))
+    .replace("__PROC_ID__", &qml_id(id, "btnProc"))
+    .replace("__COMMAND__", &json_string(command))
+}
+
+fn media_controller_qml(
+    id: &str,
+    palette: &Palette,
+    height: i64,
+    radius: i64,
+    font_size: i64,
+    icon_font: &str,
+) -> String {
+    format!(
+        r#"
+            Row {{
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: 4
+{prev}
+{play}
+{next}
+            }}
+"#,
+        prev = command_button_qml(&format!("{id}_prev"), palette, height, radius, font_size, icon_font, "", "playerctl previous"),
+        play = command_button_qml(&format!("{id}_play"), palette, height, radius, font_size, icon_font, "", "playerctl play-pause"),
+        next = command_button_qml(&format!("{id}_next"), palette, height, radius, font_size, icon_font, "", "playerctl next"),
+    )
+}
+
+fn workspaces_qml(
+    id: &str,
+    palette: &Palette,
+    height: i64,
+    radius: i64,
+    font_size: i64,
+    workspace_count: i64,
+    icon_font: &str,
+) -> String {
+    r#"
+            Row {
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: 6
+
+              Repeater {
+                model: __WORKSPACE_COUNT__
+                Rectangle {
+                  width: (index + 1) === root.activeWorkspace ? __ACTIVE_W__ : __INACTIVE_W__
+                  height: (index + 1) === root.activeWorkspace ? __ACTIVE_H__ : __INACTIVE_H__
+                  anchors.verticalCenter: parent.verticalCenter
+                  radius: __BUTTON_RADIUS__
+                  color: (index + 1) === root.activeWorkspace ? "__ACCENT__" : "__SURFACE__"
+                  opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.72
+
+                  Text {
+                    anchors.centerIn: parent
+                    text: index + 1
+                    color: (index + 1) === root.activeWorkspace ? "__ACTIVE_TEXT__" : "__TEXT__"
+                    font.bold: true
+                    font.pixelSize: __FONT_SIZE__
+                    font.family: "__ICON_FONT__"
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: { __PROC_ID__.running = false; __PROC_ID__.running = true }
+                    onEntered: parent.opacity = 1.0
+                    onExited: parent.opacity = (index + 1) === root.activeWorkspace ? 1.0 : 0.72
+                  }
+
+                  Process {
+                    id: __PROC_ID__
+                    command: ["hyprctl", "dispatch", "workspace", String(index + 1)]
+                  }
+                }
+              }
+            }
+"#
+    .replace("__WORKSPACE_COUNT__", &workspace_count.to_string())
+    .replace("__ACTIVE_W__", &(height - 2).to_string())
+    .replace("__INACTIVE_W__", &(height - 14).to_string())
+    .replace("__ACTIVE_H__", &(height - 2).to_string())
+    .replace("__INACTIVE_H__", &(height - 14).to_string())
+    .replace("__BUTTON_RADIUS__", &(radius - 4).max(3).to_string().as_str())
+    .replace("__ACCENT__", &palette.accent)
+    .replace("__SURFACE__", &palette.surface)
+    .replace("__ACTIVE_TEXT__", &palette.active_text)
+    .replace("__TEXT__", &palette.text)
+    .replace("__FONT_SIZE__", &(font_size - 1).to_string())
+    .replace("__ICON_FONT__", icon_font)
+    .replace("__PROC_ID__", &qml_id(id, "workspaceProc"))
+}
+
+fn qml_id(id: &str, prefix: &str) -> String {
+    let safe = id
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect::<String>();
+
+    format!("{prefix}_{safe}")
+}
+
+fn qml_string_escape(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "")
 }
 
 #[derive(Clone)]
@@ -4435,79 +4619,57 @@ struct BarWidgetChoice {
     setting: &'static str,
 }
 
+
 fn bar_widget_choices() -> &'static [BarWidgetChoice] {
     &[
-        BarWidgetChoice {
-            id: "workspaces",
-            label: "Workspaces",
-            setting: "DOTFILES_BAR_SHOW_WORKSPACES",
-        },
-        BarWidgetChoice {
-            id: "clock",
-            label: "Clock",
-            setting: "DOTFILES_BAR_SHOW_CLOCK",
-        },
-        BarWidgetChoice {
-            id: "volume",
-            label: "Volume",
-            setting: "DOTFILES_BAR_SHOW_VOLUME",
-        },
-        BarWidgetChoice {
-            id: "network",
-            label: "Network",
-            setting: "DOTFILES_BAR_SHOW_NETWORK",
-        },
-        BarWidgetChoice {
-            id: "battery",
-            label: "Battery",
-            setting: "DOTFILES_BAR_SHOW_BATTERY",
-        },
-        BarWidgetChoice {
-            id: "cpu",
-            label: "CPU",
-            setting: "DOTFILES_BAR_SHOW_CPU",
-        },
-        BarWidgetChoice {
-            id: "memory",
-            label: "Memory",
-            setting: "DOTFILES_BAR_SHOW_MEMORY",
-        },
-        BarWidgetChoice {
-            id: "temp",
-            label: "Temperature",
-            setting: "DOTFILES_BAR_SHOW_TEMP",
-        },
-        BarWidgetChoice {
-            id: "disk",
-            label: "Disk",
-            setting: "DOTFILES_BAR_SHOW_DISK",
-        },
-        BarWidgetChoice {
-            id: "brightness",
-            label: "Brightness",
-            setting: "DOTFILES_BAR_SHOW_BRIGHTNESS",
-        },
-        BarWidgetChoice {
-            id: "bluetooth",
-            label: "Bluetooth",
-            setting: "DOTFILES_BAR_SHOW_BLUETOOTH",
-        },
-        BarWidgetChoice {
-            id: "media",
-            label: "Media",
-            setting: "DOTFILES_BAR_SHOW_MEDIA",
-        },
-        BarWidgetChoice {
-            id: "updates",
-            label: "Updates",
-            setting: "DOTFILES_BAR_SHOW_UPDATES",
-        },
-        BarWidgetChoice {
-            id: "keyboard",
-            label: "board",
-            setting: "DOTFILES_BAR_SHOW_KEYBOARD",
-        },
+        BarWidgetChoice { id: "workspaces",         label: "Workspaces",            setting: "DOTFILES_WIDGET_WORKSPACES" },
+        BarWidgetChoice { id: "clock",              label: "Clock",                 setting: "DOTFILES_WIDGET_CLOCK" },
+        BarWidgetChoice { id: "date",               label: "Date",                  setting: "DOTFILES_WIDGET_CLOCK" },
+        BarWidgetChoice { id: "calendar",           label: "Calendar",              setting: "DOTFILES_WIDGET_CLOCK" },
+
+        BarWidgetChoice { id: "media",              label: "Now Playing",           setting: "DOTFILES_WIDGET_MEDIA" },
+        BarWidgetChoice { id: "media_prev",         label: "Media Previous",        setting: "DOTFILES_WIDGET_MEDIA" },
+        BarWidgetChoice { id: "media_playpause",    label: "Media Play/Pause",      setting: "DOTFILES_WIDGET_MEDIA" },
+        BarWidgetChoice { id: "media_next",         label: "Media Next",            setting: "DOTFILES_WIDGET_MEDIA" },
+        BarWidgetChoice { id: "media_controls",     label: "Playerctl Controls",    setting: "DOTFILES_WIDGET_MEDIA" },
+
+        BarWidgetChoice { id: "easyeffects",        label: "EasyEffects",          setting: "DOTFILES_WIDGET_EASYEFFECTS" },
+        BarWidgetChoice { id: "volume",             label: "Volume",                setting: "DOTFILES_WIDGET_VOLUME" },
+        BarWidgetChoice { id: "microphone",         label: "Microphone",            setting: "DOTFILES_WIDGET_MICROPHONE" },
+        BarWidgetChoice { id: "network",            label: "Network",               setting: "DOTFILES_WIDGET_NETWORK" },
+        BarWidgetChoice { id: "bluetooth",          label: "Bluetooth",             setting: "DOTFILES_WIDGET_BLUETOOTH" },
+        BarWidgetChoice { id: "battery",            label: "Battery",               setting: "DOTFILES_WIDGET_BATTERY" },
+        BarWidgetChoice { id: "brightness",         label: "Brightness",            setting: "DOTFILES_WIDGET_BRIGHTNESS" },
+
+        BarWidgetChoice { id: "cpu",                label: "CPU",                   setting: "DOTFILES_WIDGET_CPU" },
+        BarWidgetChoice { id: "memory",             label: "Memory",                setting: "DOTFILES_WIDGET_MEMORY" },
+        BarWidgetChoice { id: "temp",               label: "Temperature",           setting: "DOTFILES_WIDGET_TEMP" },
+        BarWidgetChoice { id: "disk",               label: "Disk",                  setting: "DOTFILES_WIDGET_DISK" },
+        BarWidgetChoice { id: "updates",            label: "Updates",               setting: "DOTFILES_WIDGET_UPDATES" },
+
+        BarWidgetChoice { id: "keyboard",           label: "Keyboard Layout",       setting: "DOTFILES_WIDGET_KEYBOARD" },
+        BarWidgetChoice { id: "window_title",       label: "Window Title",          setting: "DOTFILES_WIDGET_WINDOW_TITLE" },
+        BarWidgetChoice { id: "notifications",      label: "Notifications",         setting: "DOTFILES_WIDGET_NOTIFICATIONS" },
+        BarWidgetChoice { id: "idle_inhibitor",     label: "Idle Inhibitor",        setting: "DOTFILES_WIDGET_IDLE_INHIBITOR" },
+
+        BarWidgetChoice { id: "wallpaper_prev",     label: "Wallpaper Previous",    setting: "DOTFILES_WIDGET_WALLPAPER" },
+        BarWidgetChoice { id: "wallpaper_shuffle",  label: "Wallpaper Shuffle",     setting: "DOTFILES_WIDGET_WALLPAPER" },
+        BarWidgetChoice { id: "wallpaper_next",     label: "Wallpaper Next",        setting: "DOTFILES_WIDGET_WALLPAPER" },
+
+        BarWidgetChoice { id: "custom_text",        label: "Custom Text",           setting: "DOTFILES_WIDGET_CUSTOM_TEXT" },
+        BarWidgetChoice { id: "custom_script",      label: "Custom Script",         setting: "DOTFILES_WIDGET_CUSTOM_SCRIPT" },
+        BarWidgetChoice { id: "spacer",             label: "Spacer",                setting: "DOTFILES_WIDGET_SPACER" },
+        BarWidgetChoice { id: "power",              label: "Power Menu",            setting: "DOTFILES_WIDGET_POWER" },
     ]
+}
+
+fn split_csv(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(|item| item.trim())
+        .filter(|item| !item.is_empty())
+        .map(|item| item.to_string())
+        .collect()
 }
 
 fn parse_widget_zone(value: &str) -> Vec<String> {
@@ -4520,11 +4682,24 @@ fn parse_widget_zone(value: &str) -> Vec<String> {
 }
 
 fn widget_label(id: &str) -> String {
-    bar_widget_choices()
-        .iter()
-        .find(|widget| widget.id == id)
-        .map(|widget| widget.label.to_string())
-        .unwrap_or_else(|| id.to_string())
+    for choice in bar_widget_choices() {
+        if choice.id == id {
+            return choice.label.to_string();
+        }
+    }
+
+    id.replace('_', " ")
+        .replace('-', " ")
+        .split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn widget_setting(id: &str) -> Option<&'static str> {

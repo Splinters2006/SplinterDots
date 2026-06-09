@@ -65,3 +65,6 @@ imagemagick
 jq
 libheif
 unzip
+pamixer
+hyprpicker
+easyeffects
