@@ -324,6 +324,19 @@ reenable_welcome_after_update() {
 }
 
 
+
+ensure_wallpaper_directory() {
+  local wallpaper_dir="$HOME_DIR/Pictures/Wallpapers"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] mkdir -p $wallpaper_dir"
+    return
+  fi
+
+  mkdir -p "$wallpaper_dir"
+  log "ensured wallpaper directory: $wallpaper_dir"
+}
+
 ensure_hyprland_generated_config() {
   local repo_file="$ROOT_DIR/home/.config/hypr/dotfiles-generated.conf"
   local user_file="$HOME_DIR/.config/hypr/dotfiles-generated.conf"
@@ -381,6 +394,7 @@ link_file() {
 
 log "Dotfiles root: $ROOT_DIR"
 load_settings
+ensure_wallpaper_directory
 ensure_hyprland_generated_config
 
 if [ "$UPDATE_DOTFILES" -eq 1 ]; then
