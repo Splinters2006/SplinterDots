@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
 LOCAL_CONF="$CONFIG_DIR/local.conf"
@@ -10,41 +10,88 @@ if [ -f "$LOCAL_CONF" ]; then
   . "$LOCAL_CONF"
 fi
 
-set_wallpaper() {
+save_wallpaper_path() {
   local image="$1"
+  local tmp quoted
+
   mkdir -p "$CONFIG_DIR"
+  tmp="$(mktemp)"
 
-  if [ -n "$image" ] && [ ! -f "$image" ]; then
+  if [ -f "$LOCAL_CONF" ]; then
+    grep -v '^DOTFILES_WALLPAPER=' "$LOCAL_CONF" > "$tmp" || true
+  fi
+
+  printf -v quoted '%q' "$image"
+  printf 'DOTFILES_WALLPAPER=%s\n' "$quoted" >> "$tmp"
+  mv "$tmp" "$LOCAL_CONF"
+}
+
+ensure_swww() {
+  if ! command -v swww >/dev/null 2>&1; then
+    printf 'swww is not installed. Install it with: sudo pacman -S swww\n' >&2
+    return 1
+  fi
+
+  if swww query >/dev/null 2>&1; then
+    return 0
+  fi
+
+  swww-daemon >/dev/null 2>&1 &
+
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 0.2
+    if swww query >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+
+  printf 'swww-daemon did not start. Try running: swww-daemon\n' >&2
+  return 1
+}
+
+set_wallpaper() {
+  local image="${1:-}"
+
+  if [ -z "$image" ]; then
+    printf 'No wallpaper image was selected.\n' >&2
+    return 1
+  fi
+
+  if [ "${image#~/}" != "$image" ]; then
+    image="$HOME/${image#~/}"
+  fi
+
+  if [ ! -f "$image" ]; then
     printf 'Wallpaper not found: %s\n' "$image" >&2
-    exit 1
+    return 1
   fi
 
-  if grep -q '^DOTFILES_WALLPAPER=' "$LOCAL_CONF" 2>/dev/null; then
-    sed -i "s|^DOTFILES_WALLPAPER=.*|DOTFILES_WALLPAPER=\"$image\"|" "$LOCAL_CONF"
-  else
-    printf 'DOTFILES_WALLPAPER="%s"\n' "$image" >> "$LOCAL_CONF"
-  fi
-
+  save_wallpaper_path "$image"
   DOTFILES_WALLPAPER="$image"
 
   apply_wallpaper
 }
 
 apply_wallpaper() {
-  if ! command -v swww >/dev/null 2>&1; then
-    exit 0
+  if [ "${DOTFILES_WALLPAPER#~/}" != "$DOTFILES_WALLPAPER" ]; then
+    DOTFILES_WALLPAPER="$HOME/${DOTFILES_WALLPAPER#~/}"
   fi
 
-  if ! swww query >/dev/null 2>&1; then
-    swww-daemon >/dev/null 2>&1 &
-    sleep 0.2
+  if [ -z "${DOTFILES_WALLPAPER:-}" ]; then
+    printf 'No wallpaper configured yet.\n' >&2
+    return 0
   fi
 
-  if [ -n "${DOTFILES_WALLPAPER:-}" ] && [ -f "$DOTFILES_WALLPAPER" ]; then
-    swww img "$DOTFILES_WALLPAPER" --transition-type wipe --transition-duration 0.8
-  else
-    swww clear 1e1e2e
+  if [ ! -f "$DOTFILES_WALLPAPER" ]; then
+    printf 'Configured wallpaper is missing: %s\n' "$DOTFILES_WALLPAPER" >&2
+    return 1
   fi
+
+  ensure_swww || return 1
+
+  swww img "$DOTFILES_WALLPAPER" \
+    --transition-type wipe \
+    --transition-duration 0.8
 }
 
 case "${1:-apply}" in

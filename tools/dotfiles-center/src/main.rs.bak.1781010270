@@ -12,11 +12,9 @@ use std::process::{Command, Stdio};
 const SETTINGS_KEYS: &[(&str, &str)] = &[
     ("DOTFILES_EDITOR", "nano"),
     ("DOTFILES_BROWSER", "zen-browser"),
-    ("DOTFILES_UI_FONT", "CaskaydiaCove Nerd Font"),
     ("DOTFILES_THEME", "dark"),
     ("DOTFILES_ACCENT", "#89b4fa"),
     ("DOTFILES_WALLPAPER", ""),
-    ("DOTFILES_WALLPAPER_DIR", "~/Pictures/Wallpapers"),
     ("DOTFILES_TERMINAL", "kitty"),
     ("DOTFILES_FILE_MANAGER", "thunar"),
     ("DOTFILES_APP_LAUNCHER", "wofi --show drun"),
@@ -192,8 +190,6 @@ struct DotfilesCenter {
     hypr_schema: Vec<HyprOption>,
     hypr_values: HashMap<String, String>,
     hypr_search: String,
-    wallpaper_images: Vec<PathBuf>,
-    wallpaper_textures: HashMap<String, egui::TextureHandle>,
     status: String,
     no_show_on_startup: bool,
 }
@@ -274,7 +270,6 @@ impl DotfilesCenter {
         let shortcuts = load_shortcuts(&paths);
         let hypr_schema = load_hypr_schema(&paths);
         let hypr_values = load_hypr_values(&paths, &hypr_schema);
-        let wallpaper_images = scan_wallpaper_dir(&value_or(&values, "DOTFILES_WALLPAPER_DIR"));
         let no_show_on_startup = paths.disabled_file.exists();
 
         Self {
@@ -286,8 +281,6 @@ impl DotfilesCenter {
             hypr_schema,
             hypr_values,
             hypr_search: String::new(),
-            wallpaper_images,
-            wallpaper_textures: HashMap::new(),
             status: String::new(),
             no_show_on_startup,
         }
@@ -417,7 +410,7 @@ impl DotfilesCenter {
         let wallpaper = self.value("DOTFILES_WALLPAPER").trim().to_string();
 
         if wallpaper.is_empty() {
-            self.status = "Choose a wallpaper first".to_string();
+            self.status = "Choose a wallpaper image first".to_string();
             return;
         }
 
@@ -428,19 +421,17 @@ impl DotfilesCenter {
             return;
         }
 
-        self.set_value(
-            "DOTFILES_WALLPAPER",
-            wallpaper_path.to_string_lossy().to_string(),
-        );
+        let wallpaper = wallpaper_path.to_string_lossy().to_string();
+        self.set_value("DOTFILES_WALLPAPER", wallpaper.clone());
 
         if let Err(err) = write_local_conf(&self.paths, &self.values) {
-            self.status = format!("Could not save wallpaper: {err}");
+            self.status = format!("Could not save wallpaper path: {err}");
             return;
         }
 
         let result = Command::new(self.paths.script("dotfiles-wallpaper"))
             .arg("set")
-            .arg(wallpaper_path.to_string_lossy().to_string())
+            .arg(&wallpaper)
             .output();
 
         self.status = match result {
@@ -459,186 +450,6 @@ impl DotfilesCenter {
             }
             Err(err) => format!("Could not run wallpaper helper: {err}"),
         };
-    }
-
-    fn refresh_wallpapers(&mut self) {
-        let dir = self.value("DOTFILES_WALLPAPER_DIR");
-        self.wallpaper_images = scan_wallpaper_dir(&dir);
-
-        let valid: std::collections::HashSet<String> = self
-            .wallpaper_images
-            .iter()
-            .map(|path| path.to_string_lossy().to_string())
-            .collect();
-
-        self.wallpaper_textures
-            .retain(|path, _| valid.contains(path));
-
-        self.status = if self.wallpaper_images.is_empty() {
-            format!("No images found in {}", expand_home_path(&dir).display())
-        } else {
-            format!("Found {} wallpapers", self.wallpaper_images.len())
-        };
-    }
-
-    fn choose_wallpaper_dir(&mut self) {
-        let mut picked: Option<String> = None;
-
-        if command_exists("zenity") {
-            if let Ok(output) = Command::new("zenity")
-                .args([
-                    "--file-selection",
-                    "--directory",
-                    "--title=Choose wallpaper folder",
-                ])
-                .output()
-            {
-                if output.status.success() {
-                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    if !path.is_empty() {
-                        picked = Some(path);
-                    }
-                }
-            }
-        }
-
-        if picked.is_none() && command_exists("kdialog") {
-            if let Ok(output) = Command::new("kdialog")
-                .args(["--getexistingdirectory", "~", "Choose wallpaper folder"])
-                .output()
-            {
-                if output.status.success() {
-                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    if !path.is_empty() {
-                        picked = Some(path);
-                    }
-                }
-            }
-        }
-
-        if let Some(path) = picked {
-            self.set_value("DOTFILES_WALLPAPER_DIR", path);
-            let _ = write_local_conf(&self.paths, &self.values);
-            self.refresh_wallpapers();
-        } else {
-            self.status =
-                "Could not open folder picker. Install zenity/kdialog or type the path manually."
-                    .to_string();
-        }
-    }
-
-    fn wallpaper_texture(
-        &mut self,
-        ctx: &egui::Context,
-        path: &Path,
-    ) -> Option<egui::TextureHandle> {
-        let key = path.to_string_lossy().to_string();
-
-        if let Some(texture) = self.wallpaper_textures.get(&key) {
-            return Some(texture.clone());
-        }
-
-        let bytes = fs::read(path).ok()?;
-        let image = image::load_from_memory(&bytes).ok()?;
-        let image = image.thumbnail(360, 220).to_rgba8();
-        let size = [image.width() as usize, image.height() as usize];
-        let pixels = image.into_raw();
-
-        let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
-        let texture = ctx.load_texture(
-            format!("wallpaper-preview-{key}"),
-            color_image,
-            egui::TextureOptions::LINEAR,
-        );
-
-        self.wallpaper_textures.insert(key, texture.clone());
-        Some(texture)
-    }
-
-    fn wallpaper_grid(&mut self, ui: &mut egui::Ui, theme: &AppTheme) {
-        if self.wallpaper_images.is_empty() {
-            Self::soft_card(theme, ui, |ui| {
-                ui.label(RichText::new("No wallpapers found in this folder.").color(theme.muted));
-                ui.label(
-                    RichText::new("Supported formats: png, jpg, jpeg, webp, gif, bmp")
-                        .color(theme.muted)
-                        .size(12.0),
-                );
-            });
-            return;
-        }
-
-        let current = expand_home_path(&self.value("DOTFILES_WALLPAPER"));
-        let images = self.wallpaper_images.clone();
-        let mut clicked: Option<PathBuf> = None;
-
-        egui::Grid::new("wallpaper-preview-grid")
-            .num_columns(3)
-            .spacing([12.0, 12.0])
-            .show(ui, |ui| {
-                for (index, path) in images.iter().enumerate() {
-                    let selected = path == &current;
-                    let texture = self.wallpaper_texture(ui.ctx(), path);
-
-                    Frame {
-                        fill: if selected {
-                            theme.card_hover
-                        } else {
-                            theme.panel_soft
-                        },
-                        corner_radius: CornerRadius::same(16),
-                        inner_margin: Margin::same(10),
-                        stroke: Stroke::new(
-                            if selected { 2.0 } else { 1.0 },
-                            if selected { theme.accent } else { theme.border },
-                        ),
-                        ..Default::default()
-                    }
-                    .show(ui, |ui| {
-                        ui.set_min_width(210.0);
-
-                        if let Some(texture) = texture {
-                            let response = ui.add(
-                                egui::Image::new((texture.id(), Vec2::new(200.0, 120.0)))
-                                    .sense(egui::Sense::click()),
-                            );
-
-                            if response.clicked() {
-                                clicked = Some(path.clone());
-                            }
-                        } else if ui
-                            .add_sized(
-                                Vec2::new(200.0, 120.0),
-                                egui::Button::new("Could not preview"),
-                            )
-                            .clicked()
-                        {
-                            clicked = Some(path.clone());
-                        }
-
-                        ui.add_space(6.0);
-
-                        let name = file_name_string(path);
-                        let display = shorten_text(&name, 26);
-
-                        if ui
-                            .selectable_label(selected, RichText::new(display).strong())
-                            .clicked()
-                        {
-                            clicked = Some(path.clone());
-                        }
-                    });
-
-                    if index % 3 == 2 {
-                        ui.end_row();
-                    }
-                }
-            });
-
-        if let Some(path) = clicked {
-            self.set_value("DOTFILES_WALLPAPER", path.to_string_lossy().to_string());
-            self.apply_wallpaper();
-        }
     }
 
     fn restart_bar(&mut self) {
@@ -1252,112 +1063,41 @@ impl DotfilesCenter {
 
         Self::card(&theme, ui, |ui| {
             ui.label(RichText::new("Theme").strong().size(18.0));
-            ui.label(RichText::new("Choose a full SplinterDots theme.").color(theme.muted));
+            ui.label(
+                RichText::new("Switch between a dark desktop and a bright desktop.")
+                    .color(theme.muted),
+            );
             ui.add_space(10.0);
 
             let mut theme_value = self.value("DOTFILES_THEME");
-
-            egui::Grid::new("theme-picker-grid")
-                .num_columns(4)
-                .spacing([8.0, 8.0])
-                .show(ui, |ui| {
-                    for (index, choice) in theme_choices().iter().enumerate() {
-                        selectable_pill(ui, &mut theme_value, choice, theme_label(choice));
-                        if index % 4 == 3 {
-                            ui.end_row();
-                        }
-                    }
-                });
-
+            ui.horizontal(|ui| {
+                selectable_pill(ui, &mut theme_value, "dark", "Dark");
+                selectable_pill(ui, &mut theme_value, "light", "Light");
+            });
             self.set_value("DOTFILES_THEME", theme_value);
+        });
 
-            ui.add_space(12.0);
+        Self::card(&theme, ui, |ui| {
+            ui.label(RichText::new("Accent and wallpaper").strong().size(18.0));
+            ui.add_space(10.0);
 
             let mut accent = self.value("DOTFILES_ACCENT");
             labeled_text(ui, "Accent color", &mut accent);
             self.set_value("DOTFILES_ACCENT", accent);
 
-            ui.add_space(10.0);
-
-            let mut font = self.value("DOTFILES_UI_FONT");
-            labeled_text(ui, "UI font", &mut font);
-            self.set_value("DOTFILES_UI_FONT", font);
-
-            ui.label(
-                RichText::new("Recommended: CaskaydiaCove Nerd Font")
-                    .color(theme.muted)
-                    .size(12.0),
-            );
-
-            if ui.button("Apply theme and font").clicked() {
-                self.save_all();
-                self.status = "Theme and font saved".to_string();
-            }
-        });
-
-        Self::card(&theme, ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.label(RichText::new("Wallpaper library").strong().size(18.0));
-                    ui.label(
-                        RichText::new("Choose a folder, then click an image to apply it.")
-                            .color(theme.muted),
-                    );
-                });
-
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if primary_button(ui, &theme, "Scan folder").clicked() {
-                        self.refresh_wallpapers();
-                    }
-
-                    if ui.button("Choose folder").clicked() {
-                        self.choose_wallpaper_dir();
-                    }
-                });
-            });
+            let mut wallpaper = self.value("DOTFILES_WALLPAPER");
+            labeled_text(ui, "Wallpaper path", &mut wallpaper);
+            self.set_value("DOTFILES_WALLPAPER", wallpaper);
 
             ui.add_space(10.0);
-
-            let mut wallpaper_dir = self.value("DOTFILES_WALLPAPER_DIR");
-            ui.label(RichText::new("Wallpaper folder").color(theme.muted));
-
-            if ui
-                .text_edit_singleline(&mut wallpaper_dir)
-                .on_hover_text("Example: ~/Pictures/Wallpapers")
-                .changed()
-            {
-                self.set_value("DOTFILES_WALLPAPER_DIR", wallpaper_dir);
-                let _ = write_local_conf(&self.paths, &self.values);
-                self.refresh_wallpapers();
-            }
-
-            ui.add_space(8.0);
-
             ui.horizontal(|ui| {
-                if ui.button("Use ~/Pictures/Wallpapers").clicked() {
-                    self.set_value(
-                        "DOTFILES_WALLPAPER_DIR",
-                        "~/Pictures/Wallpapers".to_string(),
-                    );
-                    let _ = write_local_conf(&self.paths, &self.values);
-                    self.refresh_wallpapers();
-                }
-
-                if ui.button("Apply current wallpaper").clicked() {
+                if primary_button(ui, &theme, "Apply wallpaper").clicked() {
                     self.apply_wallpaper();
                 }
-
-                let current = self.value("DOTFILES_WALLPAPER");
-                if !current.trim().is_empty() {
-                    ui.label(
-                        RichText::new(format!("Current: {}", shorten_text(&current, 52)))
-                            .color(theme.muted),
-                    );
+                if ui.button("Apply theme").clicked() {
+                    self.save_all();
                 }
             });
-
-            ui.add_space(12.0);
-            self.wallpaper_grid(ui, &theme);
         });
     }
 
@@ -1752,36 +1492,6 @@ fn sc(name: &str, key: &str, kind: &str, value: &str) -> Shortcut {
     }
 }
 
-fn write_shortcuts_file(paths: &DotfilesPaths, shortcuts: &[Shortcut]) -> std::io::Result<()> {
-    let target = paths.home_config.join("hypr/keybindings.conf");
-
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    let mut out = String::new();
-    out.push_str("# Generated by SplinterDots Center\n");
-    out.push_str("# You can edit shortcuts in SplinterDots Center.\n\n");
-
-    for shortcut in shortcuts {
-        let name = shortcut.name.trim();
-        let bind = shortcut.bind.trim();
-        let command = shortcut.command.trim();
-
-        if bind.is_empty() || command.is_empty() {
-            continue;
-        }
-
-        if !name.is_empty() {
-            out.push_str(&format!("# {name}\n"));
-        }
-
-        out.push_str(&format!("bind = {bind}, exec, {command}\n\n"));
-    }
-
-    fs::write(target, out)
-}
-
 fn load_shortcuts(paths: &Paths) -> Vec<Shortcut> {
     let Ok(content) = fs::read_to_string(&paths.keybinds_json) else {
         return default_shortcuts();
@@ -1790,31 +1500,10 @@ fn load_shortcuts(paths: &Paths) -> Vec<Shortcut> {
     serde_json::from_str::<Vec<Shortcut>>(&content).unwrap_or_else(|_| default_shortcuts())
 }
 
-fn add_shortcut(&mut self) {
-    self.shortcuts.push(Shortcut {
-        name: "New shortcut".to_string(),
-        bind: "SUPER, Return".to_string(),
-        command: "kitty".to_string(),
-        kind: "exec".to_string(),
-    });
-
-    self.selected_shortcut = Some(self.shortcuts.len().saturating_sub(1));
-    self.save_shortcuts();
-}
-
-fn save_shortcuts(&mut self) {
-    match write_shortcuts_file(&self.paths, &self.shortcuts) {
-        Ok(()) => {
-            self.status = "Shortcuts saved".to_string();
-
-            if command_exists("hyprctl") {
-                let _ = Command::new("hyprctl").arg("reload").status();
-            }
-        }
-        Err(err) => {
-            self.status = format!("Could not save shortcuts: {err}");
-        }
-    }
+fn save_shortcuts(paths: &Paths, shortcuts: &[Shortcut]) -> Result<(), String> {
+    ensure_dir(&paths.dotfiles_dir)?;
+    let text = serde_json::to_string_pretty(shortcuts).map_err(err_string)?;
+    fs::write(&paths.keybinds_json, text + "\n").map_err(err_string)
 }
 
 fn load_hypr_schema(paths: &Paths) -> Vec<HyprOption> {
@@ -2585,135 +2274,6 @@ fn build_status_command(values: &HashMap<String, String>, icons: &IconSet) -> St
     }
 
     parts.join("; ")
-}
-
-fn expand_home_path(value: &str) -> PathBuf {
-    if value == "~" {
-        return env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."));
-    }
-
-    if let Some(rest) = value.strip_prefix("~/") {
-        return env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(rest);
-    }
-
-    PathBuf::from(value)
-}
-
-fn scan_wallpaper_dir(value: &str) -> Vec<PathBuf> {
-    let dir = expand_home_path(value);
-
-    let mut images: Vec<PathBuf> = match fs::read_dir(dir) {
-        Ok(entries) => entries
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| path.is_file() && is_wallpaper_image(path))
-            .collect(),
-        Err(_) => Vec::new(),
-    };
-
-    images.sort_by_key(|path| file_name_string(path).to_ascii_lowercase());
-    images
-}
-
-fn is_wallpaper_image(path: &Path) -> bool {
-    let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
-        return false;
-    };
-
-    matches!(
-        ext.to_ascii_lowercase().as_str(),
-        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp"
-    )
-}
-
-fn file_name_string(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("wallpaper")
-        .to_string()
-}
-
-fn shorten_text(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        return value.to_string();
-    }
-
-    let keep = max_chars.saturating_sub(1);
-    let mut shortened: String = value.chars().take(keep).collect();
-    shortened.push('…');
-    shortened
-}
-
-fn command_exists(program: &str) -> bool {
-    Command::new("sh")
-        .arg("-c")
-        .arg(format!(
-            "command -v {} >/dev/null 2>&1",
-            shell_quote(program)
-        ))
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
-}
-
-fn theme_choices() -> &'static [&'static str] {
-    &[
-        "midnight",
-        "catppuccin",
-        "nord",
-        "gruvbox",
-        "sakura",
-        "cyberpunk",
-        "everforest",
-        "dracula",
-    ]
-}
-
-fn theme_label(theme: &str) -> &'static str {
-    match theme {
-        "midnight" => "Midnight",
-        "catppuccin" => "Catppuccin",
-        "nord" => "Nord",
-        "gruvbox" => "Gruvbox",
-        "sakura" => "Sakura",
-        "cyberpunk" => "Cyberpunk",
-        "everforest" => "Everforest",
-        "dracula" => "Dracula",
-        _ => "Custom",
-    }
-}
-
-fn install_global_egui_font(ctx: &egui::Context, preferred_font: &str) {
-    let mut fonts = egui::FontDefinitions::default();
-
-    let mut families = vec![
-        preferred_font.to_string(),
-        "CaskaydiaCove Nerd Font".to_string(),
-        "JetBrainsMono Nerd Font".to_string(),
-        "Inter".to_string(),
-        "Sans".to_string(),
-    ];
-
-    families.dedup();
-
-    fonts
-        .families
-        .entry(egui::FontFamily::Proportional)
-        .or_default()
-        .splice(0..0, families.clone());
-
-    fonts
-        .families
-        .entry(egui::FontFamily::Monospace)
-        .or_default()
-        .splice(0..0, families);
-
-    ctx.set_fonts(fonts);
 }
 
 fn primary_button(ui: &mut egui::Ui, theme: &AppTheme, text: &str) -> egui::Response {

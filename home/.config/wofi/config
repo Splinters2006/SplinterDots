@@ -1,6 +1,11 @@
 show=drun
-width=540
-height=420
-prompt=Search apps
+width=760
+height=560
+prompt=Search apps...
+normal_window=false
 allow_images=true
 insensitive=true
+matching=fuzzy
+term=kitty
+columns=1
+hide_scroll=true

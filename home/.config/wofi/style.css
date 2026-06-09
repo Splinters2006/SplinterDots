@@ -1,24 +1,72 @@
+* {
+  font-family: "CaskaydiaCove Nerd Font", "JetBrainsMono Nerd Font", "Inter", sans-serif;
+  font-size: 15px;
+  outline: none;
+}
+
 window {
-  background-color: #1e1e2e;
-  color: #cdd6f4;
-  border: 2px solid #89b4fa;
-  border-radius: 8px;
+  margin: 0;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(139, 152, 255, 0.35);
+  background:
+    linear-gradient(135deg, rgba(20, 22, 38, 0.96), rgba(11, 13, 24, 0.96));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+
+#outer-box {
+  margin: 0;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.045);
 }
 
 #input {
-  margin: 10px;
-  padding: 8px;
-  border: none;
-  border-radius: 6px;
-  background-color: #313244;
-  color: #cdd6f4;
+  min-height: 48px;
+  margin: 0 0 16px 0;
+  padding: 0 18px;
+  border: 1px solid rgba(139, 152, 255, 0.35);
+  border-radius: 16px;
+  color: #f5f7ff;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+#scroll {
+  margin: 0;
+  padding: 0;
+}
+
+#inner-box {
+  margin: 0;
+  padding: 0;
+  spacing: 8px;
 }
 
 #entry {
-  padding: 8px;
+  min-height: 58px;
+  margin: 5px 0;
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.035);
 }
 
 #entry:selected {
-  background-color: #89b4fa;
-  color: #11111b;
+  border: 1px solid rgba(139, 152, 255, 0.65);
+  background: rgba(139, 152, 255, 0.18);
+}
+
+#img {
+  min-width: 32px;
+  min-height: 32px;
+  margin-right: 14px;
+}
+
+#text {
+  margin-left: 12px;
+  color: #eef1ff;
+}
+
+#entry:selected #text {
+  color: #ffffff;
 }

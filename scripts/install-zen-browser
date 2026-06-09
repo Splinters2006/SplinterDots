@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+mkdir -p "$HOME/.local/bin"
+
+if command -v zen-browser >/dev/null 2>&1; then
+  echo "Zen Browser already installed: $(command -v zen-browser)"
+  exit 0
+fi
+
+if command -v yay >/dev/null 2>&1; then
+  yay -S --needed zen-browser-bin || yay -S --needed zen-browser
+elif command -v paru >/dev/null 2>&1; then
+  paru -S --needed zen-browser-bin || paru -S --needed zen-browser
+else
+  echo "No AUR helper found. Trying Flatpak fallback..."
+  sudo pacman -S --needed flatpak
+  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+  flatpak install -y flathub app.zen_browser.zen
+
+  cat > "$HOME/.local/bin/zen-browser" <<'WRAP'
+#!/usr/bin/env bash
+exec flatpak run app.zen_browser.zen "$@"
+WRAP
+
+  chmod +x "$HOME/.local/bin/zen-browser"
+fi
+
+if ! command -v zen-browser >/dev/null 2>&1; then
+  echo "Zen Browser was installed, but zen-browser is not in PATH yet."
+  echo "Open a new terminal or run: export PATH=\"\$HOME/.local/bin:\$PATH\""
+fi

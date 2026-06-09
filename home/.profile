@@ -15,7 +15,7 @@ fi
 
 export EDITOR="${DOTFILES_EDITOR:-nano}"
 export VISUAL="$EDITOR"
-export BROWSER="${DOTFILES_BROWSER:-firefox}"
+export BROWSER="${DOTFILES_BROWSER:-zen-browser}"
 
 if [ -n "${DOTFILES_EXTRA_PATH:-}" ]; then
   export PATH="$DOTFILES_EXTRA_PATH:$PATH"
