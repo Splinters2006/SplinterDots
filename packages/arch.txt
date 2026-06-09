@@ -1,5 +1,6 @@
 # Core tools
 base-devel
+systemd
 git
 curl
 wget
