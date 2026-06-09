@@ -977,7 +977,7 @@ impl SplinterDots {
                         ..Default::default()
                     }
                     .show(ui, |ui| {
-                        let image_size = Vec2::new(ui.available_width() - 18.0, 160.0);
+                        let image_size = Vec2::new(ui.available_width() - 18.0, 120.0);
                         ui.set_min_width(image_size.x + 12.0);
 
                         let (rect, response) =

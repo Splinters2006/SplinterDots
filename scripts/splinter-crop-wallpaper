@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+input="${1:-}"
+
+if [ -z "$input" ] || [ ! -f "$input" ]; then
+  echo "Usage: splinter-crop-wallpaper /path/to/wallpaper" >&2
+  exit 1
+fi
+
+if ! command -v magick >/dev/null 2>&1; then
+  echo "$input"
+  exit 0
+fi
+
+cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/splinterdots/wallpapers"
+mkdir -p "$cache_dir"
+
+# Get focused monitor size first. Fallback to first monitor.
+monitor_size="$(
+  hyprctl monitors -j 2>/dev/null |
+    jq -r '
+      (map(select(.focused == true))[0] // .[0]) |
+      "\(.width)x\(.height)"
+    ' 2>/dev/null || true
+)"
+
+if ! printf '%s' "$monitor_size" | grep -Eq '^[0-9]+x[0-9]+$'; then
+  # Fallback to common 16:9 if monitor detection fails.
+  monitor_size="1920x1080"
+fi
+
+width="${monitor_size%x*}"
+height="${monitor_size#*x}"
+
+hash="$(
+  printf '%s-%s-%s' "$input" "$width" "$height" "$(stat -c %Y "$input" 2>/dev/null || stat -f %m "$input")" |
+    sha256sum |
+    awk '{print $1}'
+)"
+
+output="$cache_dir/${hash}.png"
+
+if [ ! -f "$output" ]; then
+  magick "$input" \
+    -auto-orient \
+    -resize "${width}x${height}^" \
+    -gravity center \
+    -extent "${width}x${height}" \
+    "$output"
+fi
+
+echo "$output"

@@ -61,3 +61,5 @@ zenity
 util-linux
 libnotify
 nano
+imagemagick
+jq
