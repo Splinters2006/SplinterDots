@@ -718,6 +718,8 @@ class DotfilesCenter(tk.Tk):
 
         card = self._card(frame)
         self._card_title(card, "Default apps", "Choose the apps launched by keybinds and helper actions.")
+        form = ttk.Frame(card, style="Card.TFrame")
+        form.pack(fill="x", pady=(14, 0))
 
         fields = [
             ("Terminal", "DOTFILES_TERMINAL"),
@@ -728,10 +730,10 @@ class DotfilesCenter(tk.Tk):
         ]
 
         for row, (label, key) in enumerate(fields):
-            ttk.Label(card, text=label, style="Card.TLabel").grid(row=row, column=0, sticky="w", pady=8)
-            ttk.Entry(card, textvariable=self.vars[key], width=42).grid(row=row, column=1, sticky="ew", padx=8, pady=8)
+            ttk.Label(form, text=label, style="Card.TLabel").grid(row=row, column=0, sticky="w", pady=8)
+            ttk.Entry(form, textvariable=self.vars[key], width=42).grid(row=row, column=1, sticky="ew", padx=8, pady=8)
 
-        card.columnconfigure(1, weight=1)
+        form.columnconfigure(1, weight=1)
 
         actions = self._card(frame)
         self._card_title(actions, "Quick actions")
