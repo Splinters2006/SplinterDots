@@ -87,6 +87,15 @@ status() {
     printf 'missing %s\n' "$wallpaper_dest"
   fi
 
+  screenshot_dest="$HOME/.local/bin/dotfiles-screenshot"
+  if [ -L "$screenshot_dest" ] && [ "$(readlink "$screenshot_dest")" = "$ROOT_DIR/scripts/dotfiles-screenshot" ]; then
+    printf 'linked  %s\n' "$screenshot_dest"
+  elif [ -e "$screenshot_dest" ] || [ -L "$screenshot_dest" ]; then
+    printf 'custom  %s\n' "$screenshot_dest"
+  else
+    printf 'missing %s\n' "$screenshot_dest"
+  fi
+
   autostart_dest="$HOME/.local/bin/dotfiles-hypr-autostart"
   if [ -L "$autostart_dest" ] && [ "$(readlink "$autostart_dest")" = "$ROOT_DIR/scripts/dotfiles-hypr-autostart" ]; then
     printf 'linked  %s\n' "$autostart_dest"
@@ -195,6 +204,11 @@ uninstall() {
   if [ -L "$HOME/.local/bin/dotfiles-wallpaper" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-wallpaper")" = "$ROOT_DIR/scripts/dotfiles-wallpaper" ]; then
     rm "$HOME/.local/bin/dotfiles-wallpaper"
     printf 'removed %s\n' "$HOME/.local/bin/dotfiles-wallpaper"
+  fi
+
+  if [ -L "$HOME/.local/bin/dotfiles-screenshot" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-screenshot")" = "$ROOT_DIR/scripts/dotfiles-screenshot" ]; then
+    rm "$HOME/.local/bin/dotfiles-screenshot"
+    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-screenshot"
   fi
 
   if [ -L "$HOME/.local/bin/dotfiles-hypr-autostart" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-hypr-autostart")" = "$ROOT_DIR/scripts/dotfiles-hypr-autostart" ]; then

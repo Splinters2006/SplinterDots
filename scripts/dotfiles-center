@@ -37,8 +37,8 @@ KEYBIND_ACTIONS = [
     ("Exit Hyprland", "M", "exit"),
     ("Fullscreen", "F", "fullscreen"),
     ("Floating mode", "V", "togglefloating"),
-    ("Screenshot region", "S", 'exec, grim -g "$(slurp)" - | wl-copy'),
-    ("Screenshot full screen", "SHIFT, S", 'exec, grim "$HOME/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png"'),
+    ("Screenshot region", "S", "exec, dotfiles-screenshot region"),
+    ("Screenshot full screen", "SHIFT, S", "exec, dotfiles-screenshot full"),
     ("Dotfiles Center", "W", "exec, dotctl welcome"),
     ("Reload Hyprland", "SHIFT, R", "exec, hyprctl reload"),
 ]
