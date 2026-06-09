@@ -81,3 +81,7 @@ adwaita-icon-theme
 easyeffects
 rust
 cargo
+lm_sensors
+pacman-contrib
+ttf-nerd-fonts-symbols
+otf-font-awesome

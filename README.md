@@ -1,21 +1,18 @@
-# Cargo Dotfiles Center
+# Sleek Rust Dotfiles Center + Reactive QML Bar
 
-This patch makes Dotfiles Center a normal Cargo workspace project inside the dotfiles repo.
+This replaces `tools/dotfiles-center/src/main.rs` with the completed version.
 
-It adds:
-
-- `Cargo.toml` at the repo root
-- `tools/dotfiles-center/Cargo.toml`
-- `tools/dotfiles-center/src/main.rs`
-- a small Bash launcher at `scripts/dotfiles-center`
-
-It updates:
-
-- `packages/arch.txt`: removes `tk`, adds `rust` and `cargo`
-- `.gitignore`: ignores `/target/`
-
-Apply from the repo root:
+Run from the repo root:
 
 ```bash
-./apply_cargo_dotfiles_center.sh
+./apply_sleek_bar_update.sh
+```
+
+Then:
+
+```bash
+./install.sh --dry-run
+./install.sh --packages
+./install.sh
+dotctl center
 ```
