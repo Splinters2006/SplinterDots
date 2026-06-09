@@ -60,3 +60,4 @@ rustup
 zenity
 util-linux
 libnotify
+nano
