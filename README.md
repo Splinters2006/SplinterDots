@@ -48,7 +48,7 @@ Run the full setup with automatic package confirmations:
 ```
 
 On a clean minimal Arch install, `--all` installs Hyprland, Waybar, Wofi,
-Mako, Kitty, Thunar, Firefox, PipeWire audio, NetworkManager, screenshot tools,
+Mako, Kitty, Thunar, Zen Browser, PipeWire audio, NetworkManager, screenshot tools,
 clipboard tools, wallpaper support, Bluetooth tools, EasyEffects audio presets,
 portals, and a graphical login stack. It
 also installs the greetd config from `system/greetd/config.toml` and enables
