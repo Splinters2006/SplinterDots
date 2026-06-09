@@ -71,7 +71,7 @@ const EXCLUDED_HYPR_OPTIONS: &[&str] = &[
     "debug:watchdog_timeout",
 ];
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Shortcut {
     name: String,
     key: String,
@@ -109,7 +109,6 @@ enum Tab {
     Hyprland,
     Shortcuts,
     Appearance,
-    Addons,
     Bar,
     Widgets,
     Setup,
@@ -122,7 +121,6 @@ impl Tab {
             Tab::Hyprland => "Hyprland",
             Tab::Shortcuts => "Shortcuts",
             Tab::Appearance => "Appearance",
-            Tab::Addons => "Addons",
             Tab::Bar => "QML Bar",
             Tab::Widgets => "Widgets",
             Tab::Setup => "Setup",
@@ -135,7 +133,6 @@ impl Tab {
             Tab::Hyprland => "Safe visual and behavior settings",
             Tab::Shortcuts => "Keyboard and mouse controls",
             Tab::Appearance => "Theme, accent, and wallpaper",
-            Tab::Addons => "Download optional fonts, icons, tools, and extras",
             Tab::Bar => "Bar layout, icons, and speed",
             Tab::Widgets => "Choose and configure every bar widget",
             Tab::Setup => "Default apps and helper actions",
@@ -148,7 +145,6 @@ impl Tab {
             Tab::Hyprland => "◇",
             Tab::Shortcuts => "⌘",
             Tab::Appearance => "◐",
-            Tab::Addons => "+",
             Tab::Bar => "▣",
             Tab::Widgets => "✦",
             Tab::Setup => "⚙",
@@ -194,7 +190,6 @@ struct DotfilesCenter {
     tab: Tab,
     values: HashMap<String, String>,
     shortcuts: Vec<Shortcut>,
-    saved_shortcuts: Vec<Shortcut>,
     selected_shortcut: Option<usize>,
     hypr_schema: Vec<HyprOption>,
     hypr_values: HashMap<String, String>,
@@ -279,7 +274,6 @@ impl DotfilesCenter {
         let paths = Paths::new();
         let values = read_settings(&paths);
         let shortcuts = load_shortcuts(&paths);
-        let saved_shortcuts = shortcuts.clone();
         let hypr_schema = load_hypr_schema(&paths);
         let hypr_values = load_hypr_values(&paths, &hypr_schema);
         let wallpaper_images = scan_wallpaper_dir(&value_or(&values, "DOTFILES_WALLPAPER_DIR"));
@@ -290,7 +284,6 @@ impl DotfilesCenter {
             tab: Tab::Overview,
             values,
             shortcuts,
-            saved_shortcuts,
             selected_shortcut: None,
             hypr_schema,
             hypr_values,
@@ -391,29 +384,6 @@ impl DotfilesCenter {
             .text_styles
             .insert(egui::TextStyle::Button, FontId::proportional(14.0));
         ctx.set_style(style);
-    }
-
-    fn shortcut_changes_pending(&self) -> bool {
-        self.shortcuts != self.saved_shortcuts
-    }
-
-    fn update_shortcut_dirty_status(&mut self) {
-        if self.shortcut_changes_pending() {
-            self.update_shortcut_dirty_status();
-        } else {
-            self.status = "No shortcut changes".to_string();
-        }
-    }
-
-    fn save_shortcut_changes(&mut self) {
-        if !self.shortcut_changes_pending() {
-            self.status = "No shortcut changes to save".to_string();
-            return;
-        }
-
-        self.save_all();
-        self.saved_shortcuts = self.shortcuts.clone();
-        self.status = "Shortcut changes saved".to_string();
     }
 
     fn save_all(&mut self) {
@@ -714,26 +684,6 @@ impl DotfilesCenter {
         };
     }
 
-    fn install_addon_package(&mut self, package: &str) {
-        let terminal = self.value("DOTFILES_TERMINAL");
-        let helper = self.paths.script("splinterdots-style");
-        let command = format!(
-            "{} install {}; echo; read -rp 'Press enter to close...'",
-            shell_quote(&helper.to_string_lossy()),
-            shell_quote(package)
-        );
-
-        let result = Command::new("sh")
-            .arg("-c")
-            .arg(format!("{} -e sh -c {}", terminal, shell_quote(&command)))
-            .spawn();
-
-        self.status = match result {
-            Ok(_) => format!("Opening installer for {package}"),
-            Err(err) => format!("Could not open installer: {err}"),
-        };
-    }
-
     fn restart_bar(&mut self) {
         let _ = Command::new("pkill")
             .args(["-x", "quickshell"])
@@ -842,7 +792,6 @@ impl DotfilesCenter {
                     Tab::Hyprland,
                     Tab::Shortcuts,
                     Tab::Appearance,
-                    Tab::Addons,
                     Tab::Bar,
                     Tab::Widgets,
                     Tab::Setup,
@@ -1211,7 +1160,7 @@ impl DotfilesCenter {
                         value: self.value("DOTFILES_TERMINAL"),
                     });
                     self.selected_shortcut = Some(self.shortcuts.len() - 1);
-                    self.update_shortcut_dirty_status();
+                    self.save_all();
                 }
 
                 if ui.button("Remove selected").clicked() {
@@ -1219,8 +1168,7 @@ impl DotfilesCenter {
                         if index < self.shortcuts.len() {
                             self.shortcuts.remove(index);
                             self.selected_shortcut = None;
-                            self.status =
-                                "Shortcut removed. Press Save changes to apply.".to_string();
+                            self.save_all();
                         }
                     }
                 }
@@ -1228,7 +1176,7 @@ impl DotfilesCenter {
                 if ui.button("Restore defaults").clicked() {
                     self.shortcuts = default_shortcuts();
                     self.selected_shortcut = None;
-                    self.update_shortcut_dirty_status();
+                    self.save_all();
                 }
             });
         });
@@ -1330,7 +1278,8 @@ impl DotfilesCenter {
                             .changed();
 
                         if changed {
-                            self.update_shortcut_dirty_status();
+                            self.save_all();
+                            self.status = "Shortcut saved live".to_string();
                         }
                     }
                 } else {
@@ -1348,270 +1297,143 @@ impl DotfilesCenter {
     fn appearance_tab(&mut self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
 
-        ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            ui.label(RichText::new("Appearance").strong().size(28.0));
+        Self::card(&theme, ui, |ui| {
+            ui.label(RichText::new("Theme").strong().size(18.0));
+            ui.label(RichText::new("Choose the main SplinterDots theme.").color(theme.muted));
+            ui.add_space(10.0);
+
+            let mut theme_value = self.value("DOTFILES_THEME");
+
+            for choice in [
+                "midnight",
+                "catppuccin",
+                "nord",
+                "gruvbox",
+                "sakura",
+                "cyberpunk",
+                "everforest",
+                "dracula",
+            ] {
+                selectable_pill(ui, &mut theme_value, choice, choice);
+            }
+
+            self.set_value("DOTFILES_THEME", theme_value);
+        });
+
+        Self::card(&theme, ui, |ui| {
+            ui.label(RichText::new("Fonts and icon packs").strong().size(18.0));
             ui.label(
-                RichText::new("Themes, fonts, icons, cursor theme, and wallpapers.")
+                RichText::new("Items marked 'requires download' need to be installed separately.")
                     .color(theme.muted),
             );
-            ui.add_space(16.0);
+            ui.add_space(12.0);
 
-            ui.columns(2, |columns| {
-                // LEFT COLUMN
-                Self::card(&theme, &mut columns[0], |ui| {
-                    ui.label(RichText::new("Theme").strong().size(18.0));
+            let mut font = self.value("DOTFILES_UI_FONT");
+            if let Some(package) =
+                style_choice_grid(ui, &theme, "UI font", &mut font, font_choices())
+            {
+                self.install_style_package(package);
+            }
+            self.set_value("DOTFILES_UI_FONT", font);
+
+            ui.add_space(14.0);
+
+            let mut icon_theme = self.value("DOTFILES_ICON_THEME");
+            if let Some(package) = style_choice_grid(
+                ui,
+                &theme,
+                "System icon theme",
+                &mut icon_theme,
+                icon_theme_choices(),
+            ) {
+                self.install_style_package(package);
+            }
+            self.set_value("DOTFILES_ICON_THEME", icon_theme);
+
+            ui.add_space(14.0);
+
+            let mut cursor_theme = self.value("DOTFILES_CURSOR_THEME");
+            if let Some(package) = style_choice_grid(
+                ui,
+                &theme,
+                "Cursor theme",
+                &mut cursor_theme,
+                cursor_theme_choices(),
+            ) {
+                self.install_style_package(package);
+            }
+            self.set_value("DOTFILES_CURSOR_THEME", cursor_theme);
+
+            ui.add_space(14.0);
+
+            if primary_button(ui, &theme, "Apply font and icon settings").clicked() {
+                self.apply_style_pack();
+            }
+        });
+
+        Self::card(&theme, ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.label(RichText::new("Wallpaper library").strong().size(18.0));
                     ui.label(
-                        RichText::new("Choose the overall SplinterDots look.")
+                        RichText::new("Choose a folder, then click an image to apply it.")
                             .color(theme.muted),
                     );
-                    ui.add_space(12.0);
-
-                    let mut theme_value = self.value("DOTFILES_THEME");
-
-                    egui::Grid::new("theme-pill-grid")
-                        .num_columns(2)
-                        .spacing([10.0, 10.0])
-                        .show(ui, |ui| {
-                            for (i, choice) in [
-                                ("midnight", "Midnight"),
-                                ("catppuccin", "Catppuccin"),
-                                ("nord", "Nord"),
-                                ("gruvbox", "Gruvbox"),
-                                ("sakura", "Sakura"),
-                                ("cyberpunk", "Cyberpunk"),
-                                ("everforest", "Everforest"),
-                                ("dracula", "Dracula"),
-                            ]
-                            .iter()
-                            .enumerate()
-                            {
-                                selectable_pill(ui, &mut theme_value, choice.0, choice.1);
-                                if i % 2 == 1 {
-                                    ui.end_row();
-                                }
-                            }
-                        });
-
-                    self.set_value("DOTFILES_THEME", theme_value);
-
-                    ui.add_space(16.0);
-
-                    let mut accent = self.value("DOTFILES_ACCENT");
-                    labeled_text(ui, "Accent color", &mut accent);
-                    self.set_value("DOTFILES_ACCENT", accent);
-
-                    ui.add_space(12.0);
-
-                    if primary_button(ui, &theme, "Apply theme").clicked() {
-                        self.save_all();
-                        self.status = "Theme updated".to_string();
-                    }
                 });
 
-                Self::card(&theme, &mut columns[0], |ui| {
-                    ui.label(RichText::new("Wallpaper").strong().size(18.0));
-                    ui.label(
-                        RichText::new("Choose a folder and click a wallpaper preview.")
-                            .color(theme.muted),
-                    );
-                    ui.add_space(10.0);
-
-                    let mut wallpaper_dir = self.value("DOTFILES_WALLPAPER_DIR");
-                    ui.label(RichText::new("Wallpaper folder").color(theme.muted));
-
-                    if ui
-                        .text_edit_singleline(&mut wallpaper_dir)
-                        .on_hover_text("Example: ~/Pictures/Wallpapers")
-                        .changed()
-                    {
-                        self.set_value("DOTFILES_WALLPAPER_DIR", wallpaper_dir);
-                        let _ = write_local_conf(&self.paths, &self.values);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if primary_button(ui, &theme, "Scan folder").clicked() {
+                        self.refresh_wallpapers();
                     }
 
-                    ui.add_space(8.0);
-
-                    ui.horizontal_wrapped(|ui| {
-                        if primary_button(ui, &theme, "Scan folder").clicked() {
-                            self.refresh_wallpapers();
-                        }
-
-                        if ui.button("Choose folder").clicked() {
-                            self.choose_wallpaper_dir();
-                        }
-
-                        if ui.button("Use ~/Pictures/Wallpapers").clicked() {
-                            self.set_value(
-                                "DOTFILES_WALLPAPER_DIR",
-                                "~/Pictures/Wallpapers".to_string(),
-                            );
-                            let _ = write_local_conf(&self.paths, &self.values);
-                            self.refresh_wallpapers();
-                        }
-                    });
-
-                    ui.add_space(12.0);
-
-                    let current = self.value("DOTFILES_WALLPAPER");
-                    if !current.trim().is_empty() {
-                        ui.label(
-                            RichText::new(format!("Current: {}", shorten_text(&current, 56)))
-                                .color(theme.muted),
-                        );
-                        ui.add_space(8.0);
-                    }
-
-                    self.wallpaper_grid(ui, &theme);
-                });
-
-                // RIGHT COLUMN
-                Self::card(&theme, &mut columns[1], |ui| {
-                    ui.label(RichText::new("Fonts and icon packs").strong().size(18.0));
-                    ui.label(
-                        RichText::new("Items marked as requiring download need to be installed separately.")
-                            .color(theme.muted),
-                    );
-                    ui.add_space(14.0);
-
-                    let mut font = self.value("DOTFILES_UI_FONT");
-                    if let Some(package) = style_choice_grid(ui, &theme, "UI font", &mut font, font_choices()) {
-                        self.install_style_package(package);
-                    }
-                    self.set_value("DOTFILES_UI_FONT", font);
-
-                    ui.add_space(18.0);
-
-                    let mut icon_theme = self.value("DOTFILES_ICON_THEME");
-                    if let Some(package) = style_choice_grid(
-                        ui,
-                        &theme,
-                        "System icon theme",
-                        &mut icon_theme,
-                        icon_theme_choices(),
-                    ) {
-                        self.install_style_package(package);
-                    }
-                    self.set_value("DOTFILES_ICON_THEME", icon_theme);
-
-                    ui.add_space(18.0);
-
-                    let mut cursor_theme = self.value("DOTFILES_CURSOR_THEME");
-                    if let Some(package) = style_choice_grid(
-                        ui,
-                        &theme,
-                        "Cursor theme",
-                        &mut cursor_theme,
-                        cursor_theme_choices(),
-                    ) {
-                        self.install_style_package(package);
-                    }
-                    self.set_value("DOTFILES_CURSOR_THEME", cursor_theme);
-
-                    ui.add_space(18.0);
-
-                    if primary_button(ui, &theme, "Apply font and icon settings").clicked() {
-                        self.apply_style_pack();
+                    if ui.button("Choose folder").clicked() {
+                        self.choose_wallpaper_dir();
                     }
                 });
             });
-        });
-    }
 
-    fn addons_tab(&mut self, ui: &mut egui::Ui) {
-        let theme = self.app_theme();
-
-        Self::card(&theme, ui, |ui| {
-            ui.label(RichText::new("Addons").strong().size(20.0));
-            ui.label(
-                RichText::new(
-                    "Optional extras are kept out of the base install. Install only what you want.",
-                )
-                .color(theme.muted),
-            );
             ui.add_space(10.0);
-            ui.label(
-                RichText::new("Base required packages stay minimal. Wallpapers require swww and it is installed with the base setup.")
-                    .color(theme.muted)
-                    .size(12.0),
-            );
-        });
 
-        let mut grouped: BTreeMap<&'static str, Vec<AddonChoice>> = BTreeMap::new();
-        for addon in addon_choices() {
-            grouped.entry(addon.category).or_default().push(*addon);
-        }
+            let mut wallpaper_dir = self.value("DOTFILES_WALLPAPER_DIR");
+            ui.label(RichText::new("Wallpaper folder").color(theme.muted));
 
-        ScrollArea::vertical().show(ui, |ui| {
-            for (category, addons) in grouped {
-                Self::card(&theme, ui, |ui| {
-                    ui.label(RichText::new(category).strong().size(18.0));
-                    ui.add_space(8.0);
-
-                    egui::Grid::new(format!("addons-grid-{category}"))
-                        .num_columns(2)
-                        .spacing([12.0, 12.0])
-                        .show(ui, |ui| {
-                            for (index, addon) in addons.iter().enumerate() {
-                                let installed = addon_package_installed(addon.package);
-
-                                Frame {
-                                    fill: theme.panel_soft,
-                                    corner_radius: CornerRadius::same(16),
-                                    inner_margin: Margin::same(14),
-                                    stroke: Stroke::new(1.0, theme.border),
-                                    ..Default::default()
-                                }
-                                .show(ui, |ui| {
-                                    ui.set_min_width(360.0);
-
-                                    ui.horizontal(|ui| {
-                                        ui.vertical(|ui| {
-                                            ui.label(RichText::new(addon.name).strong());
-                                            ui.label(
-                                                RichText::new(addon.description)
-                                                    .color(theme.muted)
-                                                    .size(12.0),
-                                            );
-                                            ui.label(
-                                                RichText::new("Comes preconfigured after install. You can change it yourself later in SplinterDots.")
-                                                    .color(theme.muted)
-                                                    .size(11.0),
-                                            );
-                                            ui.monospace(addon.package);
-                                        });
-
-                                        ui.with_layout(
-                                            Layout::right_to_left(Align::Center),
-                                            |ui| {
-                                                if installed {
-                                                    ui.label(
-                                                        RichText::new("Installed")
-                                                            .color(theme.success)
-                                                            .strong(),
-                                                    );
-                                                } else if ui.button("Requires download").clicked() {
-                                                    self.install_addon_package(addon.package);
-                                                }
-                                            },
-                                        );
-                                    });
-
-                                    if !installed {
-                                        ui.add_space(8.0);
-                                        if primary_button(ui, &theme, "Download / install")
-                                            .clicked()
-                                        {
-                                            self.install_addon_package(addon.package);
-                                        }
-                                    }
-                                });
-
-                                if index % 2 == 1 {
-                                    ui.end_row();
-                                }
-                            }
-                        });
-                });
+            if ui
+                .text_edit_singleline(&mut wallpaper_dir)
+                .on_hover_text("Example: ~/Pictures/Wallpapers")
+                .changed()
+            {
+                self.set_value("DOTFILES_WALLPAPER_DIR", wallpaper_dir);
+                let _ = write_local_conf(&self.paths, &self.values);
+                self.refresh_wallpapers();
             }
+
+            ui.add_space(8.0);
+
+            ui.horizontal(|ui| {
+                if ui.button("Use ~/Pictures/Wallpapers").clicked() {
+                    self.set_value(
+                        "DOTFILES_WALLPAPER_DIR",
+                        "~/Pictures/Wallpapers".to_string(),
+                    );
+                    let _ = write_local_conf(&self.paths, &self.values);
+                    self.refresh_wallpapers();
+                }
+
+                if ui.button("Apply current wallpaper").clicked() {
+                    self.apply_wallpaper();
+                }
+
+                let current = self.value("DOTFILES_WALLPAPER");
+                if !current.trim().is_empty() {
+                    ui.label(
+                        RichText::new(format!("Current: {}", shorten_text(&current, 52)))
+                            .color(theme.muted),
+                    );
+                }
+            });
+
+            ui.add_space(12.0);
+            self.wallpaper_grid(ui, &theme);
         });
     }
 
@@ -1851,17 +1673,7 @@ impl eframe::App for DotfilesCenter {
                     ui.checkbox(&mut self.no_show_on_startup, "Don't show on startup");
 
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if primary_button(
-                            ui,
-                            &theme,
-                            if self.shortcut_changes_pending() {
-                                "Save changes *"
-                            } else {
-                                "Saved"
-                            },
-                        )
-                        .clicked()
-                        {
+                        if primary_button(ui, &theme, "Save changes").clicked() {
                             self.save_all();
                         }
 
@@ -1895,7 +1707,6 @@ impl eframe::App for DotfilesCenter {
                     Tab::Hyprland => self.hyprland_tab(ui),
                     Tab::Shortcuts => self.shortcuts_tab(ui),
                     Tab::Appearance => self.appearance_tab(ui),
-                    Tab::Addons => self.addons_tab(ui),
                     Tab::Bar => self.bar_tab(ui),
                     Tab::Widgets => self.widgets_tab(ui),
                     Tab::Setup => self.setup_tab(ui),
@@ -3099,11 +2910,11 @@ fn style_choice_grid(
     let mut package_to_install = None;
 
     ui.label(RichText::new(title).strong().size(16.0));
-    ui.add_space(8.0);
+    ui.add_space(6.0);
 
     egui::Grid::new(format!("style-choice-grid-{title}"))
-        .num_columns(2)
-        .spacing([12.0, 12.0])
+        .num_columns(3)
+        .spacing([10.0, 10.0])
         .show(ui, |ui| {
             for (index, choice) in choices.iter().enumerate() {
                 let selected = current == choice.value;
@@ -3115,7 +2926,7 @@ fn style_choice_grid(
                     } else {
                         theme.panel_soft
                     },
-                    corner_radius: CornerRadius::same(16),
+                    corner_radius: CornerRadius::same(14),
                     inner_margin: Margin::same(12),
                     stroke: Stroke::new(
                         if selected { 2.0 } else { 1.0 },
@@ -3124,204 +2935,45 @@ fn style_choice_grid(
                     ..Default::default()
                 }
                 .show(ui, |ui| {
-                    ui.set_min_width(280.0);
+                    ui.set_min_width(205.0);
 
-                    ui.horizontal(|ui| {
-                        if ui
-                            .selectable_label(selected, RichText::new(choice.label).strong())
-                            .clicked()
-                        {
-                            *current = choice.value.to_string();
+                    if ui
+                        .selectable_label(selected, RichText::new(choice.label).strong())
+                        .clicked()
+                    {
+                        *current = choice.value.to_string();
+                    }
+
+                    ui.add_space(4.0);
+
+                    match choice.package {
+                        Some(_package) if installed => {
+                            ui.label(RichText::new("Installed").color(theme.success).size(12.0));
                         }
+                        Some(package) => {
+                            ui.label(
+                                RichText::new(format!("requires download: {package}"))
+                                    .color(theme.muted)
+                                    .size(12.0),
+                            );
 
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            match choice.package {
-                                Some(package) if !installed => {
-                                    if ui.small_button("Requires download").clicked() {
-                                        package_to_install = Some(package);
-                                    }
-                                }
-                                Some(_) => {
-                                    ui.label(
-                                        RichText::new("Installed").color(theme.success).size(12.0),
-                                    );
-                                }
-                                None => {
-                                    ui.label(
-                                        RichText::new("Built in").color(theme.success).size(12.0),
-                                    );
-                                }
+                            if ui.button("Download / install").clicked() {
+                                package_to_install = Some(package);
                             }
-                        });
-                    });
-
-                    if let Some(package) = choice.package {
-                        if !installed {
-                            ui.add_space(4.0);
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new(package)
-                                        .color(theme.muted)
-                                        .size(11.0)
-                                        .monospace(),
-                                );
-
-                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    if ui.button("Download / install").clicked() {
-                                        package_to_install = Some(package);
-                                    }
-                                });
-                            });
+                        }
+                        None => {
+                            ui.label(RichText::new("Built in").color(theme.success).size(12.0));
                         }
                     }
                 });
 
-                if index % 2 == 1 {
+                if index % 3 == 2 {
                     ui.end_row();
                 }
             }
         });
 
     package_to_install
-}
-
-#[derive(Clone, Copy)]
-struct AddonChoice {
-    category: &'static str,
-    name: &'static str,
-    description: &'static str,
-    package: &'static str,
-}
-
-fn addon_choices() -> &'static [AddonChoice] {
-    &[
-        AddonChoice {
-            category: "Fonts",
-            name: "CaskaydiaCove Nerd Font",
-            description: "Recommended fancy SplinterDots UI font.",
-            package: "ttf-cascadia-code-nerd",
-        },
-        AddonChoice {
-            category: "Fonts",
-            name: "JetBrainsMono Nerd Font",
-            description: "Clean developer font with Nerd icons.",
-            package: "ttf-jetbrains-mono-nerd",
-        },
-        AddonChoice {
-            category: "Fonts",
-            name: "FiraCode Nerd Font",
-            description: "Programming font with ligatures.",
-            package: "ttf-firacode-nerd",
-        },
-        AddonChoice {
-            category: "Fonts",
-            name: "Hack Nerd Font",
-            description: "Readable terminal font.",
-            package: "ttf-hack-nerd",
-        },
-        AddonChoice {
-            category: "Fonts",
-            name: "Iosevka Nerd Font",
-            description: "Compact advanced terminal font.",
-            package: "ttf-iosevka-nerd",
-        },
-        AddonChoice {
-            category: "Icons",
-            name: "Papirus Icons",
-            description: "Modern icon pack for GTK apps.",
-            package: "papirus-icon-theme",
-        },
-        AddonChoice {
-            category: "Icons",
-            name: "Breeze Icons",
-            description: "KDE-style icon pack.",
-            package: "breeze-icons",
-        },
-        AddonChoice {
-            category: "Icons",
-            name: "Tela Icons",
-            description: "Colorful modern icon theme. May require AUR.",
-            package: "tela-icon-theme",
-        },
-        AddonChoice {
-            category: "Icons",
-            name: "Qogir Icons",
-            description: "Flat icon theme. May require AUR.",
-            package: "qogir-icon-theme",
-        },
-        AddonChoice {
-            category: "Icons",
-            name: "Vimix Icons",
-            description: "Material-style icon theme. May require AUR.",
-            package: "vimix-icon-theme",
-        },
-        AddonChoice {
-            category: "Cursors",
-            name: "Bibata Cursor",
-            description: "Popular modern cursor theme. May require AUR.",
-            package: "bibata-cursor-theme",
-        },
-        AddonChoice {
-            category: "Cursors",
-            name: "Capitaine Cursor",
-            description: "macOS-like cursor theme. May require AUR.",
-            package: "capitaine-cursors",
-        },
-        AddonChoice {
-            category: "Tools",
-            name: "Better ls: eza",
-            description: "Nicer directory listings.",
-            package: "eza",
-        },
-        AddonChoice {
-            category: "Tools",
-            name: "Better cat: bat",
-            description: "Syntax-highlighted file viewer.",
-            package: "bat",
-        },
-        AddonChoice {
-            category: "Tools",
-            name: "Fuzzy finder: fzf",
-            description: "Fast fuzzy searching in terminal.",
-            package: "fzf",
-        },
-        AddonChoice {
-            category: "Tools",
-            name: "Audio control: pavucontrol",
-            description: "Simple PipeWire/PulseAudio volume GUI.",
-            package: "pavucontrol",
-        },
-        AddonChoice {
-            category: "Tools",
-            name: "Bluetooth GUI: blueman",
-            description: "Bluetooth tray and device manager.",
-            package: "blueman",
-        },
-        AddonChoice {
-            category: "Tools",
-            name: "EasyEffects",
-            description: "Audio effects and EQ.",
-            package: "easyeffects",
-        },
-        AddonChoice {
-            category: "Tools",
-            name: "Zenity",
-            description: "GUI dialogs for folder/file pickers.",
-            package: "zenity",
-        },
-    ]
-}
-
-fn addon_package_installed(package: &str) -> bool {
-    Command::new("sh")
-        .arg("-c")
-        .arg(format!(
-            "pacman -Qi {} >/dev/null 2>&1",
-            shell_quote(package)
-        ))
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
 }
 
 fn primary_button(ui: &mut egui::Ui, theme: &AppTheme, text: &str) -> egui::Response {

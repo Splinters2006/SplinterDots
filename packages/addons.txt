@@ -1,0 +1,59 @@
+# Optional build/AUR helpers
+base-devel
+wget
+openssh
+less
+
+# Optional file manager extras
+thunar-volman
+tumbler
+gvfs
+
+# Optional graphics/diagnostics
+mesa-utils
+vulkan-tools
+lm_sensors
+pacman-contrib
+
+# Optional desktop apps
+pavucontrol
+blueman
+easyeffects
+zenity
+
+# Optional CLI tools
+bat
+eza
+fd
+ripgrep
+fzf
+zoxide
+nano
+tmux
+python
+
+# Optional fonts
+ttf-cascadia-code-nerd
+ttf-jetbrains-mono-nerd
+ttf-firacode-nerd
+ttf-hack-nerd
+ttf-iosevka-nerd
+ttf-dejavu
+ttf-ubuntu-font-family
+cantarell-fonts
+otf-font-awesome
+
+# Optional icon themes
+adwaita-icon-theme
+papirus-icon-theme
+breeze-icons
+tela-icon-theme
+qogir-icon-theme
+vimix-icon-theme
+kora-icon-theme
+nordzy-icon-theme
+
+# Optional cursor themes
+bibata-cursor-theme
+capitaine-cursors
+qogir-cursor-theme

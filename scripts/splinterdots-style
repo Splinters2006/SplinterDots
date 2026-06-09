@@ -1,59 +1,56 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
-LOCAL_CONF="$CONFIG_DIR/local.conf"
-
-DOTFILES_UI_FONT="CaskaydiaCove Nerd Font"
-DOTFILES_ICON_THEME="Papirus-Dark"
-DOTFILES_CURSOR_THEME="Bibata-Modern-Ice"
-
-if [ -f "$LOCAL_CONF" ]; then
-  # shellcheck disable=SC1090
-  . "$LOCAL_CONF"
-fi
-
 install_packages() {
   if [ "$#" -eq 0 ]; then
     echo "No packages given."
     exit 1
   fi
 
-  if command -v pacman >/dev/null 2>&1; then
-    official=()
-    aur=()
+  official=()
+  aur=()
 
-    for pkg in "$@"; do
-      if pacman -Si "$pkg" >/dev/null 2>&1; then
-        official+=("$pkg")
-      else
-        aur+=("$pkg")
-      fi
-    done
-
-    if [ "${#official[@]}" -gt 0 ]; then
-      sudo pacman -S --needed "${official[@]}"
+  for pkg in "$@"; do
+    if pacman -Si "$pkg" >/dev/null 2>&1; then
+      official+=("$pkg")
+    else
+      aur+=("$pkg")
     fi
+  done
 
-    if [ "${#aur[@]}" -gt 0 ]; then
-      if command -v paru >/dev/null 2>&1; then
-        paru -S --needed "${aur[@]}"
-      elif command -v yay >/dev/null 2>&1; then
-        yay -S --needed "${aur[@]}"
-      else
-        echo "These packages need AUR, but no paru/yay was found:"
-        printf '  %s\n' "${aur[@]}"
-        echo "Install paru or yay first, then run this command again."
-        exit 1
-      fi
+  if [ "${#official[@]}" -gt 0 ]; then
+    sudo pacman -S --needed "${official[@]}"
+  fi
+
+  if [ "${#aur[@]}" -gt 0 ]; then
+    if command -v paru >/dev/null 2>&1; then
+      paru -S --needed "${aur[@]}"
+    elif command -v yay >/dev/null 2>&1; then
+      yay -S --needed "${aur[@]}"
+    else
+      echo
+      echo "These packages are not in pacman and probably require AUR:"
+      printf '  %s\n' "${aur[@]}"
+      echo
+      echo "Install yay or paru first, then try again."
+      exit 1
     fi
-  else
-    echo "This installer is made for Arch Linux/pacman."
-    exit 1
   fi
 }
 
 apply_style() {
+  CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
+  LOCAL_CONF="$CONFIG_DIR/local.conf"
+
+  DOTFILES_UI_FONT="CaskaydiaCove Nerd Font"
+  DOTFILES_ICON_THEME="Papirus-Dark"
+  DOTFILES_CURSOR_THEME="Bibata-Modern-Ice"
+
+  if [ -f "$LOCAL_CONF" ]; then
+    # shellcheck disable=SC1090
+    . "$LOCAL_CONF"
+  fi
+
   mkdir -p "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0"
 
   for file in "$HOME/.config/gtk-3.0/settings.ini" "$HOME/.config/gtk-4.0/settings.ini"; do
@@ -65,18 +62,7 @@ gtk-cursor-theme-name=$DOTFILES_CURSOR_THEME
 INI
   done
 
-  if command -v gsettings >/dev/null 2>&1; then
-    gsettings set org.gnome.desktop.interface font-name "$DOTFILES_UI_FONT 11" || true
-    gsettings set org.gnome.desktop.interface icon-theme "$DOTFILES_ICON_THEME" || true
-    gsettings set org.gnome.desktop.interface cursor-theme "$DOTFILES_CURSOR_THEME" || true
-  fi
-
-  echo "Applied:"
-  echo "  Font:   $DOTFILES_UI_FONT"
-  echo "  Icons:  $DOTFILES_ICON_THEME"
-  echo "  Cursor: $DOTFILES_CURSOR_THEME"
-  echo
-  echo "Some apps may need to be restarted."
+  echo "Applied style settings."
 }
 
 case "${1:-apply}" in
@@ -89,8 +75,8 @@ case "${1:-apply}" in
     ;;
   *)
     echo "Usage:"
-    echo "  splinterdots-style apply"
     echo "  splinterdots-style install PACKAGE..."
+    echo "  splinterdots-style apply"
     exit 1
     ;;
 esac

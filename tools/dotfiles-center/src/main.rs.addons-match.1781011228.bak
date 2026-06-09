@@ -1571,11 +1571,6 @@ impl DotfilesCenter {
                                                     .color(theme.muted)
                                                     .size(12.0),
                                             );
-                                            ui.label(
-                                                RichText::new("Comes preconfigured after install. You can change it yourself later in SplinterDots.")
-                                                    .color(theme.muted)
-                                                    .size(11.0),
-                                            );
                                             ui.monospace(addon.package);
                                         });
 
@@ -1895,7 +1890,6 @@ impl eframe::App for DotfilesCenter {
                     Tab::Hyprland => self.hyprland_tab(ui),
                     Tab::Shortcuts => self.shortcuts_tab(ui),
                     Tab::Appearance => self.appearance_tab(ui),
-                    Tab::Addons => self.addons_tab(ui),
                     Tab::Bar => self.bar_tab(ui),
                     Tab::Widgets => self.widgets_tab(ui),
                     Tab::Setup => self.setup_tab(ui),
