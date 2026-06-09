@@ -15,6 +15,7 @@ Commands:
   update      Update this repo, then re-run the installer
   all         Update repo, install packages, and apply dotfiles
   packages    Install recommended Arch packages
+  aur         Install yay and packages from packages/aur.txt
   system      Configure greetd and enable desktop services
   welcome     Show the startup welcome tour now
   center      Open the graphical Dotfiles Center
@@ -102,6 +103,10 @@ packages() {
   "$ROOT_DIR/install.sh" --packages
 }
 
+aur() {
+  "$ROOT_DIR/install.sh" --aur
+}
+
 system_setup() {
   "$ROOT_DIR/install.sh" --system
 }
@@ -167,6 +172,7 @@ case "$cmd" in
   update) update_dotfiles ;;
   all) all ;;
   packages) packages ;;
+  aur) aur ;;
   system) system_setup ;;
   welcome) welcome ;;
   center) center ;;

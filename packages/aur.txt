@@ -1,0 +1,6 @@
+# AUR packages installed with yay.
+# Keep this file for packages not available in the official Arch repos.
+
+# Examples you may want later:
+# brave-bin
+# visual-studio-code-bin

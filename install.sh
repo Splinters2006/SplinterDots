@@ -6,6 +6,7 @@ HOME_DIR="${HOME:?HOME is required}"
 BACKUP_DIR="$ROOT_DIR/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 DRY_RUN=0
 INSTALL_PACKAGES=0
+INSTALL_AUR=0
 UPDATE_DOTFILES=0
 CONFIGURE_SYSTEM=0
 DOTFILES_NAME="Arch User"
@@ -18,9 +19,10 @@ Usage: ./install.sh [options]
 Options:
   --dry-run       Show actions without changing files
   --packages      Install recommended Arch packages with pacman
+  --aur           Install yay, then install packages from packages/aur.txt
   --upd           Update this dotfiles repo, then apply dotfiles
   --system        Configure greetd and enable desktop services
-  --all           Update repo, install packages, configure system, and apply dotfiles
+  --all           Update repo, install pacman/AUR packages, configure system, and apply dotfiles
   -h, --help      Show this help
 EOF
 }
@@ -53,6 +55,9 @@ while [ "$#" -gt 0 ]; do
     --packages)
       INSTALL_PACKAGES=1
       ;;
+    --aur)
+      INSTALL_AUR=1
+      ;;
     --upd)
       UPDATE_DOTFILES=1
       ;;
@@ -62,6 +67,7 @@ while [ "$#" -gt 0 ]; do
     --all)
       UPDATE_DOTFILES=1
       INSTALL_PACKAGES=1
+      INSTALL_AUR=1
       CONFIGURE_SYSTEM=1
       ;;
     -h|--help)
@@ -106,6 +112,56 @@ install_packages() {
   fi
 
   sudo pacman -S --needed "${packages[@]}"
+}
+
+install_yay() {
+  if command -v yay >/dev/null 2>&1; then
+    log "yay is already installed."
+    return
+  fi
+
+  if [ "$IS_ARCH" -ne 1 ]; then
+    log "Skipping yay: /etc/arch-release was not found."
+    return
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] sudo pacman -S --needed base-devel git"
+    log "[dry-run] git clone https://aur.archlinux.org/yay.git /tmp/dotfiles-yay"
+    log "[dry-run] cd /tmp/dotfiles-yay && makepkg -si --noconfirm"
+    return
+  fi
+
+  sudo pacman -S --needed base-devel git
+  rm -rf /tmp/dotfiles-yay
+  git clone https://aur.archlinux.org/yay.git /tmp/dotfiles-yay
+  (
+    cd /tmp/dotfiles-yay
+    makepkg -si --noconfirm
+  )
+}
+
+install_aur_packages() {
+  if [ "$IS_ARCH" -ne 1 ]; then
+    log "Skipping AUR packages: /etc/arch-release was not found."
+    return
+  fi
+
+  install_yay
+
+  mapfile -t aur_packages < <(sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' "$ROOT_DIR/packages/aur.txt")
+
+  if [ "${#aur_packages[@]}" -eq 0 ]; then
+    log "No AUR packages listed in packages/aur.txt."
+    return
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] yay -S --needed ${aur_packages[*]}"
+    return
+  fi
+
+  yay -S --needed "${aur_packages[@]}"
 }
 
 configure_system() {
@@ -212,6 +268,10 @@ fi
 
 if [ "$INSTALL_PACKAGES" -eq 1 ]; then
   install_packages
+fi
+
+if [ "$INSTALL_AUR" -eq 1 ]; then
+  install_aur_packages
 fi
 
 if [ "$CONFIGURE_SYSTEM" -eq 1 ]; then

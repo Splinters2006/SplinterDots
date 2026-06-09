@@ -29,6 +29,12 @@ Install recommended Arch packages too:
 ./install.sh --packages
 ```
 
+Install `yay` and AUR packages from `packages/aur.txt`:
+
+```sh
+./install.sh --aur
+```
+
 Do everything in one run:
 
 ```sh
@@ -39,7 +45,8 @@ On a clean minimal Arch install, `--all` installs Hyprland, Waybar, Wofi,
 Mako, Kitty, Thunar, Firefox, PipeWire audio, NetworkManager, screenshot tools,
 clipboard tools, wallpaper support, portals, and a graphical login stack. It
 also installs the greetd config from `system/greetd/config.toml` and enables
-NetworkManager plus greetd.
+NetworkManager plus greetd. It also installs `yay` if missing, then installs
+any AUR packages listed in `packages/aur.txt`.
 
 Update the dotfiles repo and re-apply links:
 
@@ -124,6 +131,7 @@ dotctl apply
 dotctl update
 dotctl all
 dotctl packages
+dotctl aur
 dotctl system
 dotctl welcome
 dotctl center
@@ -162,6 +170,7 @@ graphically.
 ├── config/dotfiles/settings.conf  # Main user-facing settings
 ├── home/                          # Files linked into $HOME
 ├── packages/arch.txt              # Recommended pacman packages
+├── packages/aur.txt               # Optional AUR packages installed with yay
 ├── scripts/dotctl                 # Helper command
 └── install.sh                     # Safe installer
 ```
