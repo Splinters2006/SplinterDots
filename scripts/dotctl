@@ -15,6 +15,9 @@ Commands:
   update      Update this repo, then re-run the installer
   all         Update repo, install packages, and apply dotfiles
   packages    Install recommended Arch packages
+  system      Configure greetd and enable desktop services
+  welcome     Show the startup welcome tour now
+  center      Open the graphical Dotfiles Center
   uninstall   Remove symlinks created by these dotfiles
   help        Show this help
 EOF
@@ -52,10 +55,43 @@ status() {
   else
     printf 'missing %s\n' "$git_user_dest"
   fi
+
+  welcome_dest="$HOME/.local/bin/dotfiles-welcome"
+  if [ -L "$welcome_dest" ] && [ "$(readlink "$welcome_dest")" = "$ROOT_DIR/scripts/dotfiles-welcome" ]; then
+    printf 'linked  %s\n' "$welcome_dest"
+  elif [ -e "$welcome_dest" ] || [ -L "$welcome_dest" ]; then
+    printf 'custom  %s\n' "$welcome_dest"
+  else
+    printf 'missing %s\n' "$welcome_dest"
+  fi
+
+  center_dest="$HOME/.local/bin/dotfiles-center"
+  if [ -L "$center_dest" ] && [ "$(readlink "$center_dest")" = "$ROOT_DIR/scripts/dotfiles-center" ]; then
+    printf 'linked  %s\n' "$center_dest"
+  elif [ -e "$center_dest" ] || [ -L "$center_dest" ]; then
+    printf 'custom  %s\n' "$center_dest"
+  else
+    printf 'missing %s\n' "$center_dest"
+  fi
+
+  wallpaper_dest="$HOME/.local/bin/dotfiles-wallpaper"
+  if [ -L "$wallpaper_dest" ] && [ "$(readlink "$wallpaper_dest")" = "$ROOT_DIR/scripts/dotfiles-wallpaper" ]; then
+    printf 'linked  %s\n' "$wallpaper_dest"
+  elif [ -e "$wallpaper_dest" ] || [ -L "$wallpaper_dest" ]; then
+    printf 'custom  %s\n' "$wallpaper_dest"
+  else
+    printf 'missing %s\n' "$wallpaper_dest"
+  fi
+
+  if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/welcome-disabled" ]; then
+    printf 'disabled startup welcome tour\n'
+  else
+    printf 'enabled  startup welcome tour\n'
+  fi
 }
 
 edit_settings() {
-  "${EDITOR:-nvim}" "$ROOT_DIR/config/dotfiles/settings.conf"
+  "${EDITOR:-nano}" "$ROOT_DIR/config/dotfiles/settings.conf"
 }
 
 apply() {
@@ -66,12 +102,24 @@ packages() {
   "$ROOT_DIR/install.sh" --packages
 }
 
+system_setup() {
+  "$ROOT_DIR/install.sh" --system
+}
+
 update_dotfiles() {
   "$ROOT_DIR/install.sh" --upd
 }
 
 all() {
   "$ROOT_DIR/install.sh" --all
+}
+
+welcome() {
+  "$ROOT_DIR/scripts/dotfiles-welcome" --force
+}
+
+center() {
+  "$ROOT_DIR/scripts/dotfiles-center" --force
 }
 
 uninstall() {
@@ -94,6 +142,21 @@ uninstall() {
     rm "$HOME/.local/bin/dotctl"
     printf 'removed %s\n' "$HOME/.local/bin/dotctl"
   fi
+
+  if [ -L "$HOME/.local/bin/dotfiles-welcome" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-welcome")" = "$ROOT_DIR/scripts/dotfiles-welcome" ]; then
+    rm "$HOME/.local/bin/dotfiles-welcome"
+    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-welcome"
+  fi
+
+  if [ -L "$HOME/.local/bin/dotfiles-center" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-center")" = "$ROOT_DIR/scripts/dotfiles-center" ]; then
+    rm "$HOME/.local/bin/dotfiles-center"
+    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-center"
+  fi
+
+  if [ -L "$HOME/.local/bin/dotfiles-wallpaper" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-wallpaper")" = "$ROOT_DIR/scripts/dotfiles-wallpaper" ]; then
+    rm "$HOME/.local/bin/dotfiles-wallpaper"
+    printf 'removed %s\n' "$HOME/.local/bin/dotfiles-wallpaper"
+  fi
 }
 
 cmd="${1:-help}"
@@ -104,6 +167,9 @@ case "$cmd" in
   update) update_dotfiles ;;
   all) all ;;
   packages) packages ;;
+  system) system_setup ;;
+  welcome) welcome ;;
+  center) center ;;
   uninstall) uninstall ;;
   help|-h|--help) usage ;;
   *)

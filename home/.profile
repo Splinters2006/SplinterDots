@@ -13,7 +13,7 @@ if [ -f "$DOTFILES_CONFIG_HOME/local.conf" ]; then
   . "$DOTFILES_CONFIG_HOME/local.conf"
 fi
 
-export EDITOR="${DOTFILES_EDITOR:-nvim}"
+export EDITOR="${DOTFILES_EDITOR:-nano}"
 export VISUAL="$EDITOR"
 export BROWSER="${DOTFILES_BROWSER:-firefox}"
 

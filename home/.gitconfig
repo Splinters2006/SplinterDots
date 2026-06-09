@@ -1,5 +1,6 @@
 [user]
-	name = Arch User
+	name = Splinters2006
+	email = miraschelkens@gmail.com
 
 [init]
 	defaultBranch = main
@@ -11,7 +12,7 @@
 	autoSetupRemote = true
 
 [core]
-	editor = nvim
+	editor = nano
 
 [color]
 	ui = auto

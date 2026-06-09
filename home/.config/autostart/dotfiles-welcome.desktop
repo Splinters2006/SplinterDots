@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Dotfiles Welcome Tour
+Comment=Show a short tour of the dotfiles on login
+Exec=/bin/sh -c "$HOME/.local/bin/dotfiles-welcome"
+Terminal=false
+X-GNOME-Autostart-enabled=true

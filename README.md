@@ -1,12 +1,13 @@
 # Arch Dotfiles
 
-Friendly, customizable dotfiles for Arch Linux.
+Friendly, customizable Hyprland dotfiles for Arch Linux.
 
 This repo is designed around three ideas:
 
 - Change settings in one obvious place: `config/dotfiles/settings.conf`
 - Install safely: dry-run first, backups before overwrites
 - Keep local machine choices out of Git: use `~/.config/dotfiles/local.conf`
+- Start from a minimal Arch install and get a complete Hyprland desktop
 
 ## Quick Start
 
@@ -34,6 +35,12 @@ Do everything in one run:
 ./install.sh --all
 ```
 
+On a clean minimal Arch install, `--all` installs Hyprland, Waybar, Wofi,
+Mako, Kitty, Thunar, Firefox, PipeWire audio, NetworkManager, screenshot tools,
+clipboard tools, wallpaper support, portals, and a graphical login stack. It
+also installs the greetd config from `system/greetd/config.toml` and enables
+NetworkManager plus greetd.
+
 Update the dotfiles repo and re-apply links:
 
 ```sh
@@ -45,6 +52,10 @@ After installation, open a new terminal or reload your shell:
 ```sh
 exec "$SHELL"
 ```
+
+On graphical desktop login, Dotfiles Center appears. It explains keybinds and
+lets you change wallpaper, colors, apps, and common Hyprland keybinds without
+hand-editing config files. Click `Don't show this on startup` to disable it.
 
 ## Customize
 
@@ -71,7 +82,7 @@ Example `local.conf`:
 
 ```sh
 DOTFILES_THEME="dark"
-DOTFILES_EDITOR="nvim"
+DOTFILES_EDITOR="nano"
 DOTFILES_BROWSER="firefox"
 DOTFILES_ENABLE_STARSHIP="1"
 ```
@@ -88,8 +99,16 @@ The installer links files from `home/` into your home directory:
 | `home/.zshrc` | `~/.zshrc` |
 | `home/.profile` | `~/.profile` |
 | `home/.gitconfig` | `~/.gitconfig` |
+| `home/.config/hypr/hyprland.conf` | `~/.config/hypr/hyprland.conf` |
+| `home/.config/hypr/keybindings.conf` | `~/.config/hypr/keybindings.conf` |
+| `home/.config/hypr/colors.conf` | `~/.config/hypr/colors.conf` |
+| `home/.config/waybar/config` | `~/.config/waybar/config` |
+| `home/.config/waybar/style.css` | `~/.config/waybar/style.css` |
+| `home/.config/wofi/config` | `~/.config/wofi/config` |
+| `home/.config/wofi/style.css` | `~/.config/wofi/style.css` |
+| `home/.config/mako/config` | `~/.config/mako/config` |
 | `home/.config/starship.toml` | `~/.config/starship.toml` |
-| `home/.config/nvim/init.lua` | `~/.config/nvim/init.lua` |
+| `home/.config/autostart/dotfiles-welcome.desktop` | `~/.config/autostart/dotfiles-welcome.desktop` |
 | `config/dotfiles/settings.conf` | `~/.config/dotfiles/settings.conf` |
 
 Existing files are moved into `.dotfiles-backup/<timestamp>/` before links are created.
@@ -105,7 +124,36 @@ dotctl apply
 dotctl update
 dotctl all
 dotctl packages
+dotctl system
+dotctl welcome
+dotctl center
 ```
+
+## Default Hyprland Keybinds
+
+All keybinds use the `Super` / Windows key.
+
+| Keybind | Action |
+| --- | --- |
+| `Super + Return` | Open terminal |
+| `Super + E` | Open file manager |
+| `Super + D` | Open app launcher |
+| `Super + B` | Open browser |
+| `Super + C` | Close focused window |
+| `Super + M` | Exit Hyprland |
+| `Super + F` | Toggle fullscreen |
+| `Super + V` | Toggle floating window |
+| `Super + S` | Select screenshot region and copy it |
+| `Super + Shift + S` | Save full screenshot |
+| `Super + W` | Open Dotfiles Center |
+| `Super + Shift + R` | Reload Hyprland config |
+| `Super + Arrow keys` | Move focus |
+| `Super + Shift + Arrow keys` | Move focused window |
+| `Super + 1` through `9` | Switch workspace |
+| `Super + Shift + 1` through `9` | Move window to workspace |
+
+Use `dotctl center` to change wallpaper, colors, apps, and keybinds
+graphically.
 
 ## Layout
 
@@ -127,3 +175,9 @@ dotctl uninstall
 ```
 
 Backups are kept in `.dotfiles-backup/` so you can restore manually if needed.
+
+To re-enable the welcome tour after clicking `Don't show again`, remove:
+
+```sh
+rm ~/.config/dotfiles/welcome-disabled
+```

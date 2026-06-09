@@ -7,6 +7,7 @@ BACKUP_DIR="$ROOT_DIR/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 DRY_RUN=0
 INSTALL_PACKAGES=0
 UPDATE_DOTFILES=0
+CONFIGURE_SYSTEM=0
 DOTFILES_NAME="Arch User"
 DOTFILES_EMAIL=""
 
@@ -18,7 +19,8 @@ Options:
   --dry-run       Show actions without changing files
   --packages      Install recommended Arch packages with pacman
   --upd           Update this dotfiles repo, then apply dotfiles
-  --all           Update repo, install packages, and apply dotfiles
+  --system        Configure greetd and enable desktop services
+  --all           Update repo, install packages, configure system, and apply dotfiles
   -h, --help      Show this help
 EOF
 }
@@ -54,9 +56,13 @@ while [ "$#" -gt 0 ]; do
     --upd)
       UPDATE_DOTFILES=1
       ;;
+    --system)
+      CONFIGURE_SYSTEM=1
+      ;;
     --all)
       UPDATE_DOTFILES=1
       INSTALL_PACKAGES=1
+      CONFIGURE_SYSTEM=1
       ;;
     -h|--help)
       usage
@@ -100,6 +106,22 @@ install_packages() {
   fi
 
   sudo pacman -S --needed "${packages[@]}"
+}
+
+configure_system() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    log "Skipping system setup: systemctl was not found."
+    return
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] sudo install -Dm644 $ROOT_DIR/system/greetd/config.toml /etc/greetd/config.toml"
+    log "[dry-run] sudo systemctl enable NetworkManager greetd"
+    return
+  fi
+
+  sudo install -Dm644 "$ROOT_DIR/system/greetd/config.toml" /etc/greetd/config.toml
+  sudo systemctl enable NetworkManager greetd
 }
 
 update_dotfiles() {
@@ -192,6 +214,10 @@ if [ "$INSTALL_PACKAGES" -eq 1 ]; then
   install_packages
 fi
 
+if [ "$CONFIGURE_SYSTEM" -eq 1 ]; then
+  configure_system
+fi
+
 find "$ROOT_DIR/home" -type f -print | while IFS= read -r src; do
   rel="${src#"$ROOT_DIR/home/"}"
   link_file "$src" "$HOME_DIR/$rel"
@@ -202,6 +228,9 @@ write_git_user_config
 
 run mkdir -p "$HOME_DIR/.local/bin"
 link_file "$ROOT_DIR/scripts/dotctl" "$HOME_DIR/.local/bin/dotctl"
+link_file "$ROOT_DIR/scripts/dotfiles-center" "$HOME_DIR/.local/bin/dotfiles-center"
+link_file "$ROOT_DIR/scripts/dotfiles-welcome" "$HOME_DIR/.local/bin/dotfiles-welcome"
+link_file "$ROOT_DIR/scripts/dotfiles-wallpaper" "$HOME_DIR/.local/bin/dotfiles-wallpaper"
 
 log ""
 log "Done. Open a new shell or run: exec \"\$SHELL\""

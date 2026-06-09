@@ -1,0 +1,359 @@
+#!/usr/bin/env python3
+import os
+import re
+import subprocess
+import sys
+import tkinter as tk
+from pathlib import Path
+from tkinter import colorchooser, filedialog, messagebox, ttk
+
+
+ROOT = Path(__file__).resolve().parent.parent
+CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+DOTFILES_DIR = CONFIG_HOME / "dotfiles"
+LOCAL_CONF = DOTFILES_DIR / "local.conf"
+DISABLED_FILE = DOTFILES_DIR / "welcome-disabled"
+HYPR_DIR = CONFIG_HOME / "hypr"
+HYPR_COLORS = HYPR_DIR / "colors.conf"
+HYPR_KEYBINDS = HYPR_DIR / "keybindings.conf"
+
+DEFAULTS = {
+    "DOTFILES_EDITOR": "nano",
+    "DOTFILES_BROWSER": "firefox",
+    "DOTFILES_THEME": "dark",
+    "DOTFILES_ACCENT": "#89b4fa",
+    "DOTFILES_WALLPAPER": "",
+    "DOTFILES_TERMINAL": "kitty",
+    "DOTFILES_FILE_MANAGER": "thunar",
+    "DOTFILES_APP_LAUNCHER": "wofi --show drun",
+}
+
+KEYBIND_ACTIONS = [
+    ("Terminal", "Return", "exec, $terminal"),
+    ("File manager", "E", "exec, $fileManager"),
+    ("App launcher", "D", "exec, $menu"),
+    ("Browser", "B", "exec, firefox"),
+    ("Close window", "C", "killactive"),
+    ("Exit Hyprland", "M", "exit"),
+    ("Fullscreen", "F", "fullscreen"),
+    ("Floating mode", "V", "togglefloating"),
+    ("Screenshot region", "S", 'exec, grim -g "$(slurp)" - | wl-copy'),
+    ("Screenshot full screen", "SHIFT, S", 'exec, grim "$HOME/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png"'),
+    ("Dotfiles Center", "W", "exec, dotctl welcome"),
+    ("Reload Hyprland", "SHIFT, R", "exec, hyprctl reload"),
+]
+
+
+def shell_quote(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def read_local_conf() -> dict:
+    values = DEFAULTS.copy()
+    if not LOCAL_CONF.exists():
+        return values
+
+    pattern = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+    for line in LOCAL_CONF.read_text(encoding="utf-8").splitlines():
+        match = pattern.match(line.strip())
+        if not match:
+            continue
+        key, raw = match.groups()
+        raw = raw.strip()
+        if len(raw) >= 2 and raw[0] == raw[-1] == '"':
+            raw = raw[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+        values[key] = raw
+    return values
+
+
+def write_local_conf(values: dict) -> None:
+    DOTFILES_DIR.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "# Machine-local dotfiles settings written by Dotfiles Center.",
+        "# It is safe to edit this file manually too.",
+    ]
+    for key in DEFAULTS:
+        lines.append(f"{key}={shell_quote(values.get(key, DEFAULTS[key]))}")
+    LOCAL_CONF.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def hex_to_hypr_rgba(hex_color: str) -> str:
+    clean = hex_color.strip().lstrip("#")
+    if len(clean) != 6 or not re.fullmatch(r"[0-9a-fA-F]{6}", clean):
+        clean = "89b4fa"
+    return f"rgba({clean.lower()}ff)"
+
+
+def write_colors(accent: str) -> None:
+    HYPR_DIR.mkdir(parents=True, exist_ok=True)
+    HYPR_COLORS.write_text(
+        f"$accent = {hex_to_hypr_rgba(accent)}\n$inactive = rgba(45475aff)\n",
+        encoding="utf-8",
+    )
+
+
+def write_keybinds(values: dict, key_values: dict) -> None:
+    HYPR_DIR.mkdir(parents=True, exist_ok=True)
+    terminal = values.get("DOTFILES_TERMINAL", DEFAULTS["DOTFILES_TERMINAL"])
+    file_manager = values.get("DOTFILES_FILE_MANAGER", DEFAULTS["DOTFILES_FILE_MANAGER"])
+    launcher = values.get("DOTFILES_APP_LAUNCHER", DEFAULTS["DOTFILES_APP_LAUNCHER"])
+
+    lines = [
+        "$mainMod = SUPER",
+        f"$terminal = {terminal}",
+        f"$fileManager = {file_manager}",
+        f"$menu = {launcher}",
+        "",
+    ]
+
+    for label, default_key, action in KEYBIND_ACTIONS:
+        key = key_values.get(label, default_key).strip() or default_key
+        modifier = "$mainMod"
+        key_name = key
+        if key.startswith("SHIFT,"):
+            modifier = "$mainMod SHIFT"
+            key_name = key.split(",", 1)[1].strip()
+        lines.append(f"bind = {modifier}, {key_name}, {action}")
+
+    lines.extend(
+        [
+            "",
+            "bind = $mainMod, left, movefocus, l",
+            "bind = $mainMod, right, movefocus, r",
+            "bind = $mainMod, up, movefocus, u",
+            "bind = $mainMod, down, movefocus, d",
+            "",
+            "bind = $mainMod SHIFT, left, movewindow, l",
+            "bind = $mainMod SHIFT, right, movewindow, r",
+            "bind = $mainMod SHIFT, up, movewindow, u",
+            "bind = $mainMod SHIFT, down, movewindow, d",
+            "",
+        ]
+    )
+
+    for i in range(1, 10):
+        lines.append(f"bind = $mainMod, {i}, workspace, {i}")
+    lines.append("")
+    for i in range(1, 10):
+        lines.append(f"bind = $mainMod SHIFT, {i}, movetoworkspace, {i}")
+
+    HYPR_KEYBINDS.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def run_quiet(command: list[str]) -> None:
+    try:
+      subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+      pass
+
+
+class DotfilesCenter(tk.Tk):
+    def __init__(self, force: bool) -> None:
+        super().__init__()
+        self.force = force
+        self.values = read_local_conf()
+        self.title("Dotfiles Center")
+        self.geometry("820x620")
+        self.minsize(760, 560)
+        self.configure(bg="#f4f6f8")
+
+        self.vars = {key: tk.StringVar(value=value) for key, value in self.values.items()}
+        self.key_vars = {
+            label: tk.StringVar(value=default_key)
+            for label, default_key, _action in KEYBIND_ACTIONS
+        }
+        self.no_show_var = tk.BooleanVar(value=DISABLED_FILE.exists())
+
+        self._build()
+
+    def _build(self) -> None:
+        header = ttk.Frame(self, padding=(18, 16, 18, 8))
+        header.pack(fill="x")
+        ttk.Label(header, text="Dotfiles Center", font=("Sans", 20, "bold")).pack(anchor="w")
+        ttk.Label(
+            header,
+            text="Hyprland setup, keybinds, wallpaper, colors, and beginner-friendly controls.",
+        ).pack(anchor="w", pady=(4, 0))
+
+        notebook = ttk.Notebook(self)
+        notebook.pack(fill="both", expand=True, padx=18, pady=12)
+
+        self._overview_tab(notebook)
+        self._keybinds_tab(notebook)
+        self._appearance_tab(notebook)
+        self._setup_tab(notebook)
+
+        footer = ttk.Frame(self, padding=(18, 0, 18, 16))
+        footer.pack(fill="x")
+        ttk.Checkbutton(
+            footer,
+            text="Don't show this on startup",
+            variable=self.no_show_var,
+            command=self.save_startup_choice,
+        ).pack(side="left")
+        ttk.Button(footer, text="Save all changes", command=self.save_all).pack(side="right")
+
+    def _overview_tab(self, notebook: ttk.Notebook) -> None:
+        frame = ttk.Frame(notebook, padding=16)
+        notebook.add(frame, text="Overview")
+
+        text = tk.Text(frame, wrap="word", height=18, relief="flat", bg="#ffffff", padx=14, pady=12)
+        text.pack(fill="both", expand=True)
+        text.insert(
+            "1.0",
+            "This setup is built for Hyprland on a clean minimal Arch install.\n\n"
+            "What --all installs:\n"
+            "- Hyprland window manager\n"
+            "- Waybar top bar\n"
+            "- Wofi app launcher\n"
+            "- Mako notifications\n"
+            "- Kitty terminal\n"
+            "- Thunar file manager\n"
+            "- Firefox browser\n"
+            "- Screenshot, clipboard, wallpaper, audio, network, portal, and login tools\n\n"
+            "Important commands:\n"
+            "- Super + D opens the app launcher\n"
+            "- Super + Return opens the terminal\n"
+            "- Super + W opens this Dotfiles Center\n"
+            "- Super + Shift + R reloads Hyprland after config changes\n"
+            "- dotctl all updates, installs packages, and applies dotfiles\n"
+            "- dotctl status shows what is linked\n\n"
+            "After installing from a TTY, start Hyprland with: Hyprland\n"
+            "If you enable greetd, you can log into Hyprland from a graphical login prompt.",
+        )
+        text.configure(state="disabled")
+
+    def _keybinds_tab(self, notebook: ttk.Notebook) -> None:
+        frame = ttk.Frame(notebook, padding=16)
+        notebook.add(frame, text="Keybinds")
+
+        ttk.Label(frame, text="Main modifier: Super / Windows key", font=("Sans", 12, "bold")).pack(anchor="w")
+        ttk.Label(frame, text="Change the keys below, then click Save all changes. Hyprland can reload with Super + D then search Reload, or log out and back in.").pack(anchor="w", pady=(0, 10))
+
+        table = ttk.Frame(frame)
+        table.pack(fill="both", expand=True)
+        ttk.Label(table, text="Action", font=("Sans", 10, "bold")).grid(row=0, column=0, sticky="w", padx=4, pady=4)
+        ttk.Label(table, text="Key", font=("Sans", 10, "bold")).grid(row=0, column=1, sticky="w", padx=4, pady=4)
+        ttk.Label(table, text="What it does", font=("Sans", 10, "bold")).grid(row=0, column=2, sticky="w", padx=4, pady=4)
+
+        descriptions = {
+            "Terminal": "Open a terminal window",
+            "File manager": "Browse files graphically",
+            "App launcher": "Search and launch apps",
+            "Browser": "Open the web browser",
+            "Close window": "Close the focused app",
+            "Exit Hyprland": "Log out of Hyprland",
+            "Fullscreen": "Toggle fullscreen",
+            "Floating mode": "Toggle floating window mode",
+            "Screenshot region": "Select an area and copy it",
+            "Screenshot full screen": "Save a screenshot to Pictures",
+            "Dotfiles Center": "Open this app",
+            "Reload Hyprland": "Apply Hyprland config changes",
+        }
+
+        for row, (label, _default_key, _action) in enumerate(KEYBIND_ACTIONS, start=1):
+            ttk.Label(table, text=label).grid(row=row, column=0, sticky="w", padx=4, pady=4)
+            ttk.Entry(table, textvariable=self.key_vars[label], width=16).grid(row=row, column=1, sticky="w", padx=4, pady=4)
+            ttk.Label(table, text=descriptions[label]).grid(row=row, column=2, sticky="w", padx=4, pady=4)
+
+        table.columnconfigure(2, weight=1)
+
+    def _appearance_tab(self, notebook: ttk.Notebook) -> None:
+        frame = ttk.Frame(notebook, padding=16)
+        notebook.add(frame, text="Appearance")
+
+        grid = ttk.Frame(frame)
+        grid.pack(fill="x")
+
+        ttk.Label(grid, text="Wallpaper").grid(row=0, column=0, sticky="w", pady=8)
+        ttk.Entry(grid, textvariable=self.vars["DOTFILES_WALLPAPER"], width=58).grid(row=0, column=1, sticky="ew", padx=8)
+        ttk.Button(grid, text="Choose image", command=self.choose_wallpaper).grid(row=0, column=2, sticky="ew")
+
+        ttk.Label(grid, text="Accent color").grid(row=1, column=0, sticky="w", pady=8)
+        ttk.Entry(grid, textvariable=self.vars["DOTFILES_ACCENT"], width=18).grid(row=1, column=1, sticky="w", padx=8)
+        ttk.Button(grid, text="Pick color", command=self.choose_color).grid(row=1, column=2, sticky="ew")
+
+        ttk.Label(grid, text="Theme").grid(row=2, column=0, sticky="w", pady=8)
+        ttk.Combobox(grid, textvariable=self.vars["DOTFILES_THEME"], values=["dark", "light"], state="readonly", width=16).grid(row=2, column=1, sticky="w", padx=8)
+
+        grid.columnconfigure(1, weight=1)
+
+        ttk.Button(frame, text="Apply wallpaper now", command=self.apply_wallpaper).pack(anchor="w", pady=(18, 4))
+        ttk.Label(frame, text="Wallpaper uses swww. If no image is selected, the desktop uses a clean solid background.").pack(anchor="w")
+
+    def _setup_tab(self, notebook: ttk.Notebook) -> None:
+        frame = ttk.Frame(notebook, padding=16)
+        notebook.add(frame, text="Setup")
+
+        fields = [
+            ("Terminal", "DOTFILES_TERMINAL"),
+            ("File manager", "DOTFILES_FILE_MANAGER"),
+            ("App launcher", "DOTFILES_APP_LAUNCHER"),
+            ("Editor", "DOTFILES_EDITOR"),
+            ("Browser", "DOTFILES_BROWSER"),
+        ]
+
+        for row, (label, key) in enumerate(fields):
+            ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=7)
+            ttk.Entry(frame, textvariable=self.vars[key], width=42).grid(row=row, column=1, sticky="ew", padx=8, pady=7)
+
+        frame.columnconfigure(1, weight=1)
+
+        buttons = ttk.Frame(frame)
+        buttons.grid(row=len(fields), column=0, columnspan=2, sticky="w", pady=(18, 0))
+        ttk.Button(buttons, text="Open dotfiles folder", command=lambda: run_quiet(["xdg-open", str(ROOT)])).pack(side="left", padx=(0, 8))
+        ttk.Button(buttons, text="Open settings file", command=lambda: run_quiet([self.vars["DOTFILES_EDITOR"].get(), str(ROOT / "config/dotfiles/settings.conf")])).pack(side="left", padx=8)
+        ttk.Button(buttons, text="Show status", command=lambda: run_quiet(["kitty", "-e", "dotctl", "status"])).pack(side="left", padx=8)
+        ttk.Button(buttons, text="Reload Hyprland", command=lambda: run_quiet(["hyprctl", "reload"])).pack(side="left", padx=8)
+
+    def choose_wallpaper(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Choose wallpaper",
+            filetypes=[("Images", "*.png *.jpg *.jpeg *.webp"), ("All files", "*")],
+        )
+        if path:
+            self.vars["DOTFILES_WALLPAPER"].set(path)
+
+    def choose_color(self) -> None:
+        color = colorchooser.askcolor(color=self.vars["DOTFILES_ACCENT"].get(), title="Choose accent color")
+        if color and color[1]:
+            self.vars["DOTFILES_ACCENT"].set(color[1])
+
+    def save_startup_choice(self) -> None:
+        DOTFILES_DIR.mkdir(parents=True, exist_ok=True)
+        if self.no_show_var.get():
+            DISABLED_FILE.write_text("", encoding="utf-8")
+        elif DISABLED_FILE.exists():
+            DISABLED_FILE.unlink()
+
+    def save_all(self) -> None:
+        values = {key: var.get() for key, var in self.vars.items()}
+        write_local_conf(values)
+        write_colors(values["DOTFILES_ACCENT"])
+        write_keybinds(values, {key: var.get() for key, var in self.key_vars.items()})
+        self.save_startup_choice()
+        self.apply_wallpaper(show_errors=False)
+        messagebox.showinfo("Saved", "Dotfiles settings saved. Hyprland will use them after reload or next login.")
+
+    def apply_wallpaper(self, show_errors: bool = True) -> None:
+        wallpaper = self.vars["DOTFILES_WALLPAPER"].get()
+        try:
+            subprocess.run(["dotfiles-wallpaper", "set", wallpaper], check=True)
+        except (OSError, subprocess.CalledProcessError) as exc:
+            if show_errors:
+                messagebox.showwarning("Wallpaper", f"Could not apply wallpaper yet: {exc}")
+
+
+def main() -> int:
+    force = "--force" in sys.argv
+    if not force and DISABLED_FILE.exists():
+        return 0
+    if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+        return 0
+    app = DotfilesCenter(force)
+    app.mainloop()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
