@@ -63,9 +63,9 @@ Variants {
       Rectangle {
         anchors.fill: parent
         radius: 10
-        color: "#ea241b2e"
+        color: "#ea282828"
         border.width: 1
-        border.color: "#392a49"
+        border.color: "#3c3836"
 
         RowLayout {
           anchors.fill: parent
@@ -89,14 +89,14 @@ Variants {
                   width: 27
                   height: 27
                   radius: 6
-                  color: "#392a49"
-                  border.color: "#ddb0cd"
+                  color: "#3c3836"
+                  border.color: "#bdae93"
                   border.width: 1
 
                   Text {
                     anchors.centerIn: parent
                     text: modelData + 1
-                    color: "#ffebf6"
+                    color: "#ebdbb2"
                     font.pixelSize: 12
                     font.family: "Symbols Nerd Font"
                   }
@@ -162,8 +162,8 @@ Variants {
                 id: dateBubble
                 height: Math.max(22, 35 - 10)
                 radius: Math.max(10, 10 - 4)
-                color: "#392a49"
-                border.color: "#ddb0cd"
+                color: "#3c3836"
+                border.color: "#bdae93"
                 border.width: 1
                 width: textItem.implicitWidth + 20
 
@@ -173,7 +173,7 @@ Variants {
                     id: textItem
                     anchors.centerIn: parent
                     text: center_0.displayText
-                    color: "#ffebf6"
+                    color: "#ebdbb2"
                     font.pixelSize: Math.max(10, 12 - 1)
                     font.bold: true
                 }
@@ -233,8 +233,8 @@ Variants {
                 height: Math.max(22, 35 - 10)
                 anchors.verticalCenter: parent.verticalCenter
                 radius: Math.max(10, 10 - 4)
-                color: "#392a49"
-                border.color: "#ddb0cd"
+                color: "#3c3836"
+                border.color: "#bdae93"
                 border.width: 1
                 clip: true
 
@@ -289,14 +289,14 @@ Variants {
                 width: 27
                 height: 27
                 radius: 6
-                color: mediaMouse.containsMouse ? "#89b4fa" : "#392a49"
+                color: mediaMouse.containsMouse ? "#89b4fa" : "#3c3836"
                 border.color: "#89b4fa"
                 border.width: 1
 
                 Text {
                   anchors.centerIn: parent
                   text: ""
-                  color: "#ffebf6"
+                  color: "#ebdbb2"
                   font.family: "Symbols Nerd Font"
                   font.pixelSize: 12
                 }

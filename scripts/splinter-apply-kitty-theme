@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+SETTINGS_FILE="$CONFIG_HOME/dotfiles/settings.conf"
+KITTY_DIR="$CONFIG_HOME/kitty"
+THEMES_DIR="$KITTY_DIR/themes"
+LOG="/tmp/splinter-kitty-theme.log"
+SOCKET="unix:/tmp/splinter-kitty"
+
+theme="${1:-}"
+
+if [[ -z "$theme" && -f "$SETTINGS_FILE" ]]; then
+  line="$(grep -E '^DOTFILES_THEME=' "$SETTINGS_FILE" | tail -n1 || true)"
+  [[ -n "$line" ]] && theme="${line#*=}"
+fi
+
+theme="${theme:-midnight}"
+theme="${theme//\'/}"
+theme="${theme//\"/}"
+
+case "$theme" in
+  midnight|catppuccin|gruvbox|sakura|neon|monochrome|nord|light) ;;
+  gruvbox-dark) theme="gruvbox" ;;
+  cyberpunk) theme="neon" ;;
+  pink|rose) theme="sakura" ;;
+  dark) theme="midnight" ;;
+  *) theme="midnight" ;;
+esac
+
+mkdir -p "$KITTY_DIR" "$THEMES_DIR"
+
+if [[ -d "$HOME/SplinterDots/home/.config/kitty/themes" ]]; then
+  cp "$HOME/SplinterDots/home/.config/kitty/themes/"*.conf "$THEMES_DIR/" 2>/dev/null || true
+fi
+
+if [[ ! -f "$THEMES_DIR/$theme.conf" ]]; then
+  theme="midnight"
+fi
+
+ln -sf "$THEMES_DIR/$theme.conf" "$KITTY_DIR/current-theme.conf"
+
+{
+  echo "Applied Kitty theme: $theme"
+  echo "Theme file: $(readlink -f "$KITTY_DIR/current-theme.conf")"
+  echo "Socket: $SOCKET"
+} > "$LOG"
+
+timeout 1s kitty @ --to "$SOCKET" set-colors --all --configured "$KITTY_DIR/current-theme.conf" >> "$LOG" 2>&1 || true
