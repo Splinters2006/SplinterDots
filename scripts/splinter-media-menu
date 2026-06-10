@@ -26,49 +26,47 @@ accent="${accent//\"/}"
 
 case "$theme" in
   light)
-    surface="#ffffff"
-    card="#eef2ff"
+    surface="#f7f9fc"
+    card="#e9eef7"
     text="#0f172a"
-    muted="#64748b"
+    muted="#475569"
     border="#cbd5e1"
-    overlay="#f8fafc"
+    overlay="#ffffff"
     ;;
   cyber)
-    surface="#121a3a"
-    card="#1a244e"
-    text="#e8fcff"
-    muted="#87cdda"
-    border="#254d66"
-    overlay="#040814"
+    surface="#1a2344"
+    card="#243156"
+    text="#eefcff"
+    muted="#9cd7e0"
+    border="#36557a"
+    overlay="#10172f"
     ;;
   dracula)
-    surface="#313244"
-    card="#44475a"
+    surface="#3a3f5a"
+    card="#49506f"
     text="#f8f8f2"
-    muted="#bd93f9"
-    border="#6272a4"
-    overlay="#282a36"
+    muted="#d0b7ff"
+    border="#6b7394"
+    overlay="#262938"
     ;;
   everforest)
-    surface="#343f44"
-    card="#3d484d"
-    text="#d3c6aa"
-    muted="#a89984"
-    border="#586363"
-    overlay="#232a2e"
+    surface="#414c52"
+    card="#4a565c"
+    text="#e6dac0"
+    muted="#c5b79d"
+    border="#677277"
+    overlay="#2c3438"
     ;;
   *)
-    surface="#141824"
-    card="#1e2436"
+    surface="#222a3b"
+    card="#2c3548"
     text="#e2e8f0"
-    muted="#94a3b8"
-    border="#334155"
-    overlay="#0a0c12"
+    muted="#a8b3c7"
+    border="#475569"
+    overlay="#151b28"
     ;;
 esac
 
-# Always open fresh.
-# If an older media popup exists, close it first so one click always shows the panel.
 if pgrep -u "$UID" -f "$MENU_QML" >/dev/null 2>&1; then
   pkill -u "$UID" -f "$MENU_QML" || true
   sleep 0.08
@@ -86,26 +84,19 @@ ShellRoot {
     visible: true
     title: "Splinter Media Controls"
 
-    width: 300
-    height: 214
+    width: 290
+    height: 150
 
-    minimumWidth: 300
-    maximumWidth: 300
-    minimumHeight: 214
-    maximumHeight: 214
+    minimumWidth: 290
+    maximumWidth: 290
+    minimumHeight: 150
+    maximumHeight: 150
 
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.MSWindowsFixedSizeDialogHint
     color: "transparent"
 
-    // Default top-right. After dragging, it snaps to closest corner.
     x: Screen.width - width - 18
     y: 52
-
-    property bool dragging: false
-    property real pressX: 0
-    property real pressY: 0
-    property real startX: 0
-    property real startY: 0
 
     property string mediaTitle: "No media playing"
     property string playerStatus: "Stopped"
@@ -113,24 +104,40 @@ ShellRoot {
     property real positionSeconds: 0
     property real lengthMicroseconds: 0
     property real progress: 0
+    property bool shuffleEnabled: false
+    property string loopMode: "none"
 
     Process {
       id: refreshProc
       command: [
         "sh",
         "-c",
-        "title=\$(playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null || true); status=\$(playerctl status 2>/dev/null || echo Stopped); length=\$(playerctl metadata mpris:length 2>/dev/null || echo 0); pos=\$(playerctl position 2>/dev/null || echo 0); art=\$(playerctl metadata mpris:artUrl 2>/dev/null || true); printf '%s\\n%s\\n%s\\n%s\\n%s\\n' \"\$title\" \"\$status\" \"\$length\" \"\$pos\" \"\$art\""
+        "title=\$(playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null || true); status=\$(playerctl status 2>/dev/null || echo Stopped); length=\$(playerctl metadata mpris:length 2>/dev/null || echo 0); pos=\$(playerctl position 2>/dev/null || echo 0); art=\$(playerctl metadata mpris:artUrl 2>/dev/null || true); shuffle=\$(playerctl shuffle 2>/dev/null || echo false); loop=\$(playerctl loop 2>/dev/null || echo None); printf '%s|%s|%s|%s|%s|%s|%s\\n' \"\$title\" \"\$status\" \"\$length\" \"\$pos\" \"\$art\" \"\$shuffle\" \"\$loop\""
       ]
 
       stdout: StdioCollector {
         onStreamFinished: {
-          var parts = this.text.split("\\n")
+          var line = this.text.split("\n")[0]
+          var parts = line.split("|")
 
           root.mediaTitle = parts[0] && parts[0].length > 0 ? parts[0] : "No media playing"
           root.playerStatus = parts[1] && parts[1].length > 0 ? parts[1] : "Stopped"
           root.lengthMicroseconds = parts[2] ? Number(parts[2]) : 0
           root.positionSeconds = parts[3] ? Number(parts[3]) : 0
           root.artUrl = parts[4] && parts[4].length > 0 ? parts[4] : ""
+
+          var shuffleRaw = parts[5] ? parts[5].trim().toLowerCase() : "false"
+          var loopRaw = parts[6] ? parts[6].trim().toLowerCase() : "none"
+
+          root.shuffleEnabled = shuffleRaw === "true" || shuffleRaw === "1" || shuffleRaw === "yes" || shuffleRaw === "on"
+
+          if (loopRaw === "playlist") {
+            root.loopMode = "playlist"
+          } else if (loopRaw === "track") {
+            root.loopMode = "track"
+          } else {
+            root.loopMode = "none"
+          }
 
           if (root.lengthMicroseconds > 0) {
             root.progress = Math.max(0, Math.min(1, (root.positionSeconds * 1000000) / root.lengthMicroseconds))
@@ -141,29 +148,13 @@ ShellRoot {
       }
     }
 
-    Process {
-      id: prevProc
-      command: ["sh", "-c", "playerctl previous"]
-    }
-
-    Process {
-      id: playProc
-      command: ["sh", "-c", "playerctl play-pause"]
-    }
-
-    Process {
-      id: nextProc
-      command: ["sh", "-c", "playerctl next"]
-    }
-
-    Process {
-      id: shuffleProc
-      command: ["sh", "-c", "playerctl shuffle Toggle"]
-    }
-
+    Process { id: prevProc; command: ["sh", "-c", "playerctl previous"] }
+    Process { id: playProc; command: ["sh", "-c", "playerctl play-pause"] }
+    Process { id: nextProc; command: ["sh", "-c", "playerctl next"] }
+    Process { id: shuffleProc; command: ["sh", "-c", "playerctl shuffle toggle"] }
     Process {
       id: repeatCycleProc
-      command: ["sh", "-c", "state=$(playerctl loop 2>/dev/null || echo None); case \"$state\" in None) playerctl loop Playlist ;; Playlist) playerctl loop Track ;; Track) playerctl loop None ;; *) playerctl loop None ;; esac"]
+      command: ["sh", "-c", "state=\$(playerctl loop 2>/dev/null || echo None); case \"\$state\" in None) playerctl loop Playlist ;; Playlist) playerctl loop Track ;; Track) playerctl loop None ;; *) playerctl loop None ;; esac"]
     }
 
     Timer {
@@ -181,27 +172,9 @@ ShellRoot {
       refreshProc.running = true
     }
 
-    function clampToScreen() {
-      root.x = Math.max(8, Math.min(root.x, Screen.width - root.width - 8))
-      root.y = Math.max(8, Math.min(root.y, Screen.height - root.height - 8))
-    }
-
-    function snapToNearestCorner() {
-      var leftX = 18
-      var rightX = Screen.width - root.width - 18
-      var topY = 52
-      var bottomY = Screen.height - root.height - 18
-
-      var centerX = root.x + root.width / 2
-      var centerY = root.y + root.height / 2
-
-      root.x = centerX < Screen.width / 2 ? leftX : rightX
-      root.y = centerY < Screen.height / 2 ? topY : bottomY
-    }
-
     Rectangle {
       anchors.fill: parent
-      radius: 26
+      radius: 0
       color: "$surface"
       border.color: "$accent"
       border.width: 1
@@ -211,63 +184,64 @@ ShellRoot {
         anchors.fill: parent
         source: root.artUrl
         fillMode: Image.PreserveAspectCrop
+        horizontalAlignment: Image.AlignHCenter
+        verticalAlignment: Image.AlignVCenter
         visible: root.artUrl.length > 0
-        opacity: 0.36
         asynchronous: true
+        cache: true
+        smooth: true
       }
 
       Rectangle {
         anchors.fill: parent
         color: "$overlay"
-        opacity: root.artUrl.length > 0 ? 0.74 : 0.96
+        opacity: root.artUrl.length > 0 ? 0.50 : 0.90
       }
 
       Rectangle {
         anchors.fill: parent
         anchors.margins: 1
-        radius: 25
+        radius: 0
         color: "transparent"
         border.color: "$border"
         border.width: 1
-        opacity: 0.7
+        opacity: 0.65
       }
 
       Column {
         anchors.fill: parent
-        anchors.margins: 14
-        spacing: 11
+        anchors.margins: 12
+        spacing: 8
 
         Row {
-          id: header
           width: parent.width
-          height: 34
+          height: 26
           spacing: 8
 
           Text {
-            width: parent.width - 42
+            width: parent.width - 34
             anchors.verticalCenter: parent.verticalCenter
             text: root.mediaTitle
             color: "$text"
-            font.pixelSize: 13
+            font.pixelSize: 11
             font.bold: true
             elide: Text.ElideRight
             maximumLineCount: 1
           }
 
           Rectangle {
-            width: 30
-            height: 28
-            radius: 12
+            width: 24
+            height: 24
+            radius: 10
             color: closeMouse.containsMouse ? "$card" : "transparent"
             border.color: "$border"
             border.width: 1
-            z: 10
 
             Text {
               anchors.centerIn: parent
               text: "×"
               color: "$muted"
-              font.pixelSize: 17
+              font.pixelSize: 15
               font.bold: true
             }
 
@@ -281,11 +255,10 @@ ShellRoot {
           }
         }
 
-
         Rectangle {
           width: parent.width
-          height: 7
-          radius: 4
+          height: 5
+          radius: 3
           color: "$card"
           border.color: "$border"
           border.width: 1
@@ -300,13 +273,44 @@ ShellRoot {
 
         Row {
           width: parent.width
-          height: 50
-          spacing: 10
+          height: 40
+          spacing: 7
 
           Rectangle {
-            width: 54
-            height: 46
-            radius: 18
+            width: 44
+            height: 36
+            radius: 13
+            color: root.shuffleEnabled ? "$accent" : (shuffleMouse.containsMouse ? "$card" : "$card")
+            border.color: "$border"
+            border.width: 1
+
+            Text {
+              anchors.centerIn: parent
+              text: ""
+              color: root.shuffleEnabled ? "$text" : "$muted"
+              font.pixelSize: 13
+              font.bold: true
+            }
+
+            MouseArea {
+              id: shuffleMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                root.shuffleEnabled = !root.shuffleEnabled
+                shuffleProc.running = false
+                shuffleProc.running = true
+                refreshProc.running = false
+                refreshProc.running = true
+              }
+            }
+          }
+
+          Rectangle {
+            width: 44
+            height: 36
+            radius: 13
             color: prevMouse.containsMouse ? "$accent" : "$card"
             border.color: "$border"
             border.width: 1
@@ -315,7 +319,7 @@ ShellRoot {
               anchors.centerIn: parent
               text: ""
               color: "$text"
-              font.pixelSize: 16
+              font.pixelSize: 14
               font.bold: true
             }
 
@@ -332,9 +336,9 @@ ShellRoot {
           }
 
           Rectangle {
-            width: 120
-            height: 46
-            radius: 18
+            width: 68
+            height: 36
+            radius: 13
             color: playMouse.containsMouse ? "$accent" : "$card"
             border.color: "$border"
             border.width: 1
@@ -343,7 +347,7 @@ ShellRoot {
               anchors.centerIn: parent
               text: root.playerStatus === "Playing" ? "" : ""
               color: "$text"
-              font.pixelSize: 18
+              font.pixelSize: 16
               font.bold: true
             }
 
@@ -362,9 +366,9 @@ ShellRoot {
           }
 
           Rectangle {
-            width: 54
-            height: 46
-            radius: 18
+            width: 44
+            height: 36
+            radius: 13
             color: nextMouse.containsMouse ? "$accent" : "$card"
             border.color: "$border"
             border.width: 1
@@ -373,7 +377,7 @@ ShellRoot {
               anchors.centerIn: parent
               text: ""
               color: "$text"
-              font.pixelSize: 16
+              font.pixelSize: 14
               font.bold: true
             }
 
@@ -388,54 +392,20 @@ ShellRoot {
               }
             }
           }
-        }
-
-        Row {
-          width: parent.width
-          height: 32
-          spacing: 10
 
           Rectangle {
-            width: 129
-            height: 30
-            radius: 15
-            color: shuffleMouse.containsMouse ? "$accent" : "$card"
+            width: 44
+            height: 36
+            radius: 13
+            color: root.loopMode !== "none" ? "$accent" : (repeatCycleMouse.containsMouse ? "$card" : "$card")
             border.color: "$border"
             border.width: 1
 
             Text {
               anchors.centerIn: parent
-              text: "  Shuffle"
-              color: "$text"
-              font.pixelSize: 12
-              font.bold: true
-            }
-
-            MouseArea {
-              id: shuffleMouse
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: {
-                shuffleProc.running = false
-                shuffleProc.running = true
-              }
-            }
-          }
-
-          Rectangle {
-            width: 129
-            height: 30
-            radius: 15
-            color: repeatCycleMouse.containsMouse ? "$accent" : "$card"
-            border.color: "$border"
-            border.width: 1
-
-            Text {
-              anchors.centerIn: parent
-              text: "  Repeat"
-              color: "$text"
-              font.pixelSize: 12
+              text: root.loopMode === "track" ? "¹" : (root.loopMode === "playlist" ? "" : "")
+              color: root.loopMode === "none" ? "$muted" : "$text"
+              font.pixelSize: root.loopMode === "track" ? 17 : 13
               font.bold: true
             }
 
@@ -445,8 +415,18 @@ ShellRoot {
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: {
+                if (root.loopMode === "none") {
+                  root.loopMode = "playlist"
+                } else if (root.loopMode === "playlist") {
+                  root.loopMode = "track"
+                } else {
+                  root.loopMode = "none"
+                }
+
                 repeatCycleProc.running = false
                 repeatCycleProc.running = true
+                refreshProc.running = false
+                refreshProc.running = true
               }
             }
           }
@@ -456,4 +436,5 @@ ShellRoot {
   }
 }
 QML
-quickshell -p "$MENU_QML" 2>&1 | tee /tmp/splinter-media-menu.log &
+
+quickshell -p "$MENU_QML" > /tmp/splinter-media-menu.log 2>&1 &
