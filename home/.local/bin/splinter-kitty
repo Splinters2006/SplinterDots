@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOCKET="/tmp/splinter-kitty"
+
+# Remove stale socket if Kitty is not actually running anymore.
+if [[ -S "$SOCKET" ]] && ! pgrep -u "$UID" -x kitty >/dev/null 2>&1; then
+  rm -f "$SOCKET"
+fi
+
+# Use one Kitty instance/socket for all future windows.
+exec kitty --single-instance --listen-on "unix:$SOCKET" "$@"

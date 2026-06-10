@@ -1,7 +1,0 @@
-[Desktop Entry]
-Name=Start Hyprland
-Comment=Start Hyprland through the dotfiles wrapper
-Exec=/usr/local/bin/dotfiles-start-hyprland
-Type=Application
-DesktopNames=Hyprland
-Keywords=tiling;wayland;compositor;

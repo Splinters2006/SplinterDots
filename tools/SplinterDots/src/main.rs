@@ -202,6 +202,8 @@ struct SplinterDots {
     selected_keybind: Option<usize>,
     hypr_schema: Vec<HyprOption>,
     hypr_values: HashMap<String, String>,
+    saved_theme_on_open: String,
+    theme_was_saved: bool,
     hypr_search: String,
     wallpaper_images: Vec<PathBuf>,
     wallpaper_textures: HashMap<String, egui::TextureHandle>,
@@ -214,6 +216,17 @@ struct SplinterDots {
     status: String,
     no_show_on_startup: bool,
     loaded_ui_font: String,
+}
+
+
+impl Drop for SplinterDots {
+    fn drop(&mut self) {
+        if !self.theme_was_saved {
+            let saved = self.saved_theme_on_open.clone();
+            self.set_value("DOTFILES_THEME", saved.clone());
+            apply_preview_theme(&saved);
+        }
+    }
 }
 
 fn main() -> eframe::Result<()> {
@@ -321,6 +334,7 @@ fn strip_ansi(input: &str) -> String {
 
 
 impl Paths {
+
     fn new() -> Self {
         let root = env::var_os("SPLINTERDOTS_ROOT")
             .map(PathBuf::from)
@@ -372,6 +386,16 @@ impl Paths {
 }
 
 
+
+fn apply_preview_theme(theme: &str) {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/mira".to_string());
+    let kitty_script = format!("{}/.local/bin/splinter-apply-kitty-theme", home);
+
+    let _ = std::process::Command::new(&kitty_script)
+        .arg(theme)
+        .spawn();
+}
+
 fn apply_kitty_theme(theme: &str) {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/home/mira".to_string());
     let script = format!("{}/.local/bin/splinter-apply-kitty-theme", home);
@@ -394,6 +418,8 @@ impl SplinterDots {
         let no_show_on_startup = paths.disabled_file.exists();
 
         Self {
+            saved_theme_on_open: value_or(&values, "DOTFILES_THEME").to_string(),
+            theme_was_saved: false,
             paths,
             tab: Tab::Overview,
             values,
@@ -1302,6 +1328,26 @@ misc               = 313244
         };
     }
 
+
+    fn preview_theme(&mut self, theme_name: &str) {
+        self.values
+            .insert("DOTFILES_THEME".to_string(), theme_name.to_string());
+
+        let _ = std::fs::write("/tmp/splinter-preview-theme.log", format!("preview={theme_name}
+"));
+
+        match write_quickshell_bar(&self.paths, &self.values) {
+            Ok(_) => {
+                self.restart_bar();
+                apply_preview_theme(theme_name);
+                self.status = format!("Previewing theme: {theme_name}");
+            }
+            Err(err) => {
+                self.status = format!("Could not preview bar theme: {err}");
+            }
+        }
+    }
+
     fn restart_bar(&mut self) {
         let _ = Command::new("pkill")
             .args(["-x", "quickshell"])
@@ -1968,36 +2014,38 @@ misc               = 313244
                         );
                         ui.add_space(8.0);
 
-                        let mut theme_value = self.value("DOTFILES_THEME");
+                        let current_theme = self.value("DOTFILES_THEME");
 
-                        egui::Grid::new("theme-pill-grid")
-                            .num_columns(2)
-                            .spacing([10.0, 10.0])
-                            .show(ui, |ui| {
-                                for (i, choice) in [
-                                    ("midnight", "Midnight"),
-                                    ("catppuccin", "Catppuccin"),
-                                    ("nord", "Nord"),
-                                    ("gruvbox", "Gruvbox"),
-                                    ("sakura", "Sakura"),
-                                    ("cyberpunk", "Cyberpunk"),
-                                    ("everforest", "Everforest"),
-                                    ("dracula", "Dracula"),
-                                ]
-                                .iter()
-                                .enumerate()
-                                {
-                                    selectable_pill(ui, &mut theme_value, choice.0, choice.1);
-                                    if i % 2 == 1 {
-                                        ui.end_row();
-                                    }
-                                }
-                            });
+                       egui::Grid::new("theme-pill-grid")
+                           .num_columns(2)
+                           .spacing([10.0, 10.0])
+                           .show(ui, |ui| {
+                               for (i, choice) in [
+                                   ("midnight", "Midnight"),
+                                   ("catppuccin", "Catppuccin"),
+                                   ("nord", "Nord"),
+                                   ("gruvbox", "Gruvbox"),
+                                   ("sakura", "Sakura"),
+                                   ("cyberpunk", "Cyberpunk"),
+                                   ("everforest", "Everforest"),
+                                   ("dracula", "Dracula"),
+                               ]
+                               .iter()
+                               .enumerate()
+                               {
+                                   let selected = current_theme == choice.0;
 
-                        self.set_value("DOTFILES_THEME", theme_value.clone());
-                        apply_kitty_theme(&theme_value);
+                                   if ui.selectable_label(selected, choice.1).clicked() {
+                                       self.preview_theme(choice.0);
+                                   }
 
-                        ui.add_space(16.0);
+                                   if i % 2 == 1 {
+                                       ui.end_row();
+                                   }
+                               }
+                           });
+
+                       ui.add_space(16.0);
 
                         let mut accent = self.value("DOTFILES_ACCENT");
                         labeled_text(ui, "Accent color", &mut accent);
@@ -2393,7 +2441,7 @@ misc               = 313244
                         egui::Sense::click_and_drag(),
                     );
 
-                    if drag_response.hovered() {
+                    if drag_response.clicked() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
                     }
 
@@ -2401,7 +2449,7 @@ misc               = 313244
                         self.dragged_bar_widget = Some((zone.to_string(), index));
                     }
 
-                    if self.dragged_bar_widget.is_some() && card_response.hovered() {
+                    if self.dragged_bar_widget.is_some() && card_response.clicked() {
                         drop_index = Some(index);
 
                         let marker_y = card_response.rect.top();
