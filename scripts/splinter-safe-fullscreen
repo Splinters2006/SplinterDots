@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 
-title="$(hyprctl activewindow -j 2>/dev/null | jq -r '.title // ""')"
+info="$(hyprctl activewindow -j 2>/dev/null)"
 
-case "$title" in
-  "Splinter Media Controls")
+title="$(printf '%s' "$info" | jq -r '.title // ""')"
+class="$(printf '%s' "$info" | jq -r '.class // ""')"
+
+case "$title:$class" in
+  *"Splinter Media Controls"*|*splinter-media-menu*)
     exit 0
     ;;
 esac

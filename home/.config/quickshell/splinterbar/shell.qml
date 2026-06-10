@@ -159,17 +159,16 @@ Variants {
               height: 40
 
               Process {
-                id: proc_right_0_menu_proc
-                command: ["sh", "-c", "splinter-media-menu"]
+                id: proc_right_0_media_menu
+                command: ["bash", "-lc", "echo clicked >> /tmp/splinter-media-button.log; exec $HOME/.local/bin/splinter-media-menu >> /tmp/splinter-media-button.log 2>&1"]
               }
 
               Rectangle {
-                id: mediaButton
                 anchors.centerIn: parent
                 width: 32
                 height: 32
                 radius: 24
-                color: "#392a49"
+                color: mediaMouse.containsMouse ? "#89b4fa" : "#392a49"
                 border.color: "#89b4fa"
                 border.width: 1
 
@@ -182,12 +181,15 @@ Variants {
                 }
 
                 MouseArea {
+                  id: mediaMouse
                   anchors.fill: parent
+                  hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
                   acceptedButtons: Qt.LeftButton
+
                   onClicked: {
-                    proc_right_0_menu_proc.running = false
-                    proc_right_0_menu_proc.running = true
+                    proc_right_0_media_menu.running = false
+                    proc_right_0_media_menu.running = true
                   }
                 }
               }

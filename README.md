@@ -4,6 +4,8 @@ widgets:
 split clock into clock and date
 combine media widgets into one
 remove easyfx widget
+make a GOOD volume widget
+
 
 make custom app launcher
 

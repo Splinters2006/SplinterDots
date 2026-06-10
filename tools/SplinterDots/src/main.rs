@@ -3718,7 +3718,7 @@ fn media_controls_qml(
     icon_font: &str,
 ) -> String {
     let item_id = qml_id(id, "media");
-    let menu_proc = qml_id(&format!("{id}_menu_proc"), "proc");
+    let proc_id = qml_id(&format!("{id}_media_menu"), "proc");
     let button_size = (height - 8).max(22);
 
     format!(
@@ -3729,17 +3729,16 @@ fn media_controls_qml(
               height: __HEIGHT__
 
               Process {{
-                id: __MENU_PROC__
-                command: ["sh", "-c", "splinter-media-menu"]
+                id: __PROC_ID__
+                command: ["bash", "-lc", "echo clicked >> /tmp/splinter-media-button.log; exec $HOME/.local/bin/splinter-media-menu >> /tmp/splinter-media-button.log 2>&1"]
               }}
 
               Rectangle {{
-                id: mediaButton
                 anchors.centerIn: parent
                 width: __BUTTON_SIZE__
                 height: __BUTTON_SIZE__
                 radius: __BUTTON_RADIUS__
-                color: "__SURFACE__"
+                color: mediaMouse.containsMouse ? "__ACCENT__" : "__SURFACE__"
                 border.color: "__ACCENT__"
                 border.width: 1
 
@@ -3752,12 +3751,15 @@ fn media_controls_qml(
                 }}
 
                 MouseArea {{
+                  id: mediaMouse
                   anchors.fill: parent
+                  hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
                   acceptedButtons: Qt.LeftButton
+
                   onClicked: {{
-                    __MENU_PROC__.running = false
-                    __MENU_PROC__.running = true
+                    __PROC_ID__.running = false
+                    __PROC_ID__.running = true
                   }}
                 }}
               }}
@@ -3765,7 +3767,7 @@ fn media_controls_qml(
 "#,
     )
     .replace("__ID__", &item_id)
-    .replace("__MENU_PROC__", &menu_proc)
+    .replace("__PROC_ID__", &proc_id)
     .replace("__HEIGHT__", &height.to_string())
     .replace("__BUTTON_SIZE__", &button_size.to_string())
     .replace("__BUTTON_RADIUS__", &(radius - 4).max(4).to_string())

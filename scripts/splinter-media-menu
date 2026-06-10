@@ -20,109 +20,123 @@ setting() {
 }
 
 theme="$(setting DOTFILES_THEME dark)"
-accent="$(setting DOTFILES_ACCENT '#89b4fa')"
+accent="$(setting DOTFILES_ACCENT "#89b4fa")"
+accent="${accent//\'/}"
+accent="${accent//\"/}"
 
 case "$theme" in
   light)
-    bg="#f8fafc"
     surface="#ffffff"
     card="#eef2ff"
     text="#0f172a"
     muted="#64748b"
     border="#cbd5e1"
+    overlay="#f8fafc"
     ;;
   cyber)
-    bg="#040814"
     surface="#121a3a"
     card="#1a244e"
     text="#e8fcff"
     muted="#87cdda"
     border="#254d66"
+    overlay="#040814"
     ;;
   dracula)
-    bg="#282a36"
     surface="#313244"
     card="#44475a"
     text="#f8f8f2"
     muted="#bd93f9"
     border="#6272a4"
+    overlay="#282a36"
     ;;
   everforest)
-    bg="#232a2e"
     surface="#343f44"
     card="#3d484d"
     text="#d3c6aa"
     muted="#a89984"
     border="#586363"
+    overlay="#232a2e"
     ;;
   *)
-    bg="#0a0c12"
     surface="#141824"
     card="#1e2436"
     text="#e2e8f0"
     muted="#94a3b8"
     border="#334155"
+    overlay="#0a0c12"
     ;;
 esac
 
-# Toggle the popup if it is already open.
+# Always open fresh.
+# If an older media popup exists, close it first so one click always shows the panel.
 if pgrep -u "$UID" -f "$MENU_QML" >/dev/null 2>&1; then
   pkill -u "$UID" -f "$MENU_QML" || true
-  exit 0
+  sleep 0.08
 fi
 
 cat > "$MENU_QML" <<QML
 import QtQuick
+import QtQuick.Window
 import Quickshell
 import Quickshell.Io
-import Quickshell.Wayland
 
 ShellRoot {
-  PanelWindow {
+  Window {
     id: root
     visible: true
+    title: "Splinter Media Controls"
+
+    width: 300
+    height: 214
+
+    minimumWidth: 300
+    maximumWidth: 300
+    minimumHeight: 214
+    maximumHeight: 214
+
+    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.MSWindowsFixedSizeDialogHint
     color: "transparent"
 
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
-
-    // Start top-left internally so we can move with margins.
-    anchors {
-      top: true
-      left: true
-    }
-
-    exclusiveZone: 0
-    implicitWidth: 340
-    implicitHeight: 164
-
-    property int popupW: 340
-    property int popupH: 164
-
-    // Default position: top-right.
-    property int savedX: screen.width - popupW - 18
-    property int savedY: 52
+    // Default top-right. After dragging, it snaps to closest corner.
+    x: Screen.width - width - 18
+    y: 52
 
     property bool dragging: false
     property real pressX: 0
     property real pressY: 0
-    property int dragStartX: 0
-    property int dragStartY: 0
+    property real startX: 0
+    property real startY: 0
 
     property string mediaTitle: "No media playing"
-
-    margins {
-      left: root.savedX
-      top: root.savedY
-    }
+    property string playerStatus: "Stopped"
+    property string artUrl: ""
+    property real positionSeconds: 0
+    property real lengthMicroseconds: 0
+    property real progress: 0
 
     Process {
       id: refreshProc
-      command: ["sh", "-c", "playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null || echo 'No media playing'"]
+      command: [
+        "sh",
+        "-c",
+        "title=\$(playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null || true); status=\$(playerctl status 2>/dev/null || echo Stopped); length=\$(playerctl metadata mpris:length 2>/dev/null || echo 0); pos=\$(playerctl position 2>/dev/null || echo 0); art=\$(playerctl metadata mpris:artUrl 2>/dev/null || true); printf '%s\\n%s\\n%s\\n%s\\n%s\\n' \"\$title\" \"\$status\" \"\$length\" \"\$pos\" \"\$art\""
+      ]
+
       stdout: StdioCollector {
         onStreamFinished: {
-          const clean = this.text.split("\\n").join("").trim()
-          root.mediaTitle = clean.length > 0 ? clean : "No media playing"
+          var parts = this.text.split("\\n")
+
+          root.mediaTitle = parts[0] && parts[0].length > 0 ? parts[0] : "No media playing"
+          root.playerStatus = parts[1] && parts[1].length > 0 ? parts[1] : "Stopped"
+          root.lengthMicroseconds = parts[2] ? Number(parts[2]) : 0
+          root.positionSeconds = parts[3] ? Number(parts[3]) : 0
+          root.artUrl = parts[4] && parts[4].length > 0 ? parts[4] : ""
+
+          if (root.lengthMicroseconds > 0) {
+            root.progress = Math.max(0, Math.min(1, (root.positionSeconds * 1000000) / root.lengthMicroseconds))
+          } else {
+            root.progress = 0
+          }
         }
       }
     }
@@ -143,125 +157,117 @@ ShellRoot {
     }
 
     Process {
-      id: openProc
-      command: ["sh", "-c", "spotify >/dev/null 2>&1 &"]
+      id: shuffleProc
+      command: ["sh", "-c", "playerctl shuffle Toggle"]
+    }
+
+    Process {
+      id: repeatCycleProc
+      command: ["sh", "-c", "state=$(playerctl loop 2>/dev/null || echo None); case \"$state\" in None) playerctl loop Playlist ;; Playlist) playerctl loop Track ;; Track) playerctl loop None ;; *) playerctl loop None ;; esac"]
     }
 
     Timer {
+      id: refreshTimer
       interval: 1000
       running: true
       repeat: true
-      triggeredOnStart: true
       onTriggered: {
         refreshProc.running = false
         refreshProc.running = true
       }
     }
 
-    function clampPosition() {
-      root.savedX = Math.max(8, Math.min(root.savedX, root.screen.width - root.popupW - 8))
-      root.savedY = Math.max(8, Math.min(root.savedY, root.screen.height - root.popupH - 8))
+    Component.onCompleted: {
+      refreshProc.running = true
+    }
+
+    function clampToScreen() {
+      root.x = Math.max(8, Math.min(root.x, Screen.width - root.width - 8))
+      root.y = Math.max(8, Math.min(root.y, Screen.height - root.height - 8))
     }
 
     function snapToNearestCorner() {
-      const leftX = 18
-      const rightX = root.screen.width - root.popupW - 18
-      const topY = 52
-      const bottomY = root.screen.height - root.popupH - 18
+      var leftX = 18
+      var rightX = Screen.width - root.width - 18
+      var topY = 52
+      var bottomY = Screen.height - root.height - 18
 
-      const centerX = root.savedX + root.popupW / 2
-      const centerY = root.savedY + root.popupH / 2
+      var centerX = root.x + root.width / 2
+      var centerY = root.y + root.height / 2
 
-      root.savedX = centerX < root.screen.width / 2 ? leftX : rightX
-      root.savedY = centerY < root.screen.height / 2 ? topY : bottomY
-
-      savePosProc.command = ["sh", "-c", "mkdir -p '$CONFIG_HOME/quickshell/splinter-media-menu'; printf '%s\\n%s\\n' '" + root.savedX + "' '" + root.savedY + "' > '$CONFIG_HOME/quickshell/splinter-media-menu/position'"]
-      savePosProc.running = false
-      savePosProc.running = true
-    }
-
-    Process {
-      id: savePosProc
-    }
-
-    Process {
-      id: loadPosProc
-      command: ["sh", "-c", "cat '$CONFIG_HOME/quickshell/splinter-media-menu/position' 2>/dev/null || true"]
-      stdout: StdioCollector {
-        onStreamFinished: {
-          const parts = this.text.trim().split("\\n")
-          if (parts.length >= 2) {
-            const x = parseInt(parts[0])
-            const y = parseInt(parts[1])
-
-            if (!isNaN(x) && !isNaN(y)) {
-              root.savedX = x
-              root.savedY = y
-              root.clampPosition()
-            }
-          }
-        }
-      }
-    }
-
-    Component.onCompleted: {
-      loadPosProc.running = true
+      root.x = centerX < Screen.width / 2 ? leftX : rightX
+      root.y = centerY < Screen.height / 2 ? topY : bottomY
     }
 
     Rectangle {
       anchors.fill: parent
-      radius: 18
+      radius: 26
       color: "$surface"
       border.color: "$accent"
       border.width: 1
+      clip: true
+
+      Image {
+        anchors.fill: parent
+        source: root.artUrl
+        fillMode: Image.PreserveAspectCrop
+        visible: root.artUrl.length > 0
+        opacity: 0.36
+        asynchronous: true
+      }
+
+      Rectangle {
+        anchors.fill: parent
+        color: "$overlay"
+        opacity: root.artUrl.length > 0 ? 0.74 : 0.96
+      }
 
       Rectangle {
         anchors.fill: parent
         anchors.margins: 1
-        radius: 17
+        radius: 25
         color: "transparent"
         border.color: "$border"
         border.width: 1
-        opacity: 0.55
+        opacity: 0.7
       }
 
       Column {
         anchors.fill: parent
         anchors.margins: 14
-        spacing: 12
+        spacing: 11
 
         Row {
-          id: dragHeader
+          id: header
           width: parent.width
           height: 34
-          spacing: 10
+          spacing: 8
 
           Text {
-            width: parent.width - closeButton.width - 12
+            width: parent.width - 42
             anchors.verticalCenter: parent.verticalCenter
             text: root.mediaTitle
             color: "$text"
-            font.pixelSize: 14
+            font.pixelSize: 13
             font.bold: true
             elide: Text.ElideRight
             maximumLineCount: 1
           }
 
           Rectangle {
-            id: closeButton
-            width: 32
-            height: 30
-            radius: 10
+            width: 30
+            height: 28
+            radius: 12
             color: closeMouse.containsMouse ? "$card" : "transparent"
             border.color: "$border"
             border.width: 1
-            z: 5
+            z: 10
 
             Text {
               anchors.centerIn: parent
               text: "×"
               color: "$muted"
-              font.pixelSize: 18
+              font.pixelSize: 17
               font.bold: true
             }
 
@@ -273,141 +279,181 @@ ShellRoot {
               onClicked: Qt.quit()
             }
           }
+        }
 
-          MouseArea {
-            id: dragArea
-            anchors.fill: parent
-            anchors.rightMargin: 42
-            hoverEnabled: true
-            cursorShape: root.dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor
 
-            onPressed: function(mouse) {
-              root.dragging = true
-              root.pressX = mouse.x
-              root.pressY = mouse.y
-              root.dragStartX = root.savedX
-              root.dragStartY = root.savedY
+        Rectangle {
+          width: parent.width
+          height: 7
+          radius: 4
+          color: "$card"
+          border.color: "$border"
+          border.width: 1
+
+          Rectangle {
+            width: parent.width * root.progress
+            height: parent.height
+            radius: parent.radius
+            color: "$accent"
+          }
+        }
+
+        Row {
+          width: parent.width
+          height: 50
+          spacing: 10
+
+          Rectangle {
+            width: 54
+            height: 46
+            radius: 18
+            color: prevMouse.containsMouse ? "$accent" : "$card"
+            border.color: "$border"
+            border.width: 1
+
+            Text {
+              anchors.centerIn: parent
+              text: ""
+              color: "$text"
+              font.pixelSize: 16
+              font.bold: true
             }
 
-            onPositionChanged: function(mouse) {
-              if (!root.dragging)
-                return
+            MouseArea {
+              id: prevMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                prevProc.running = false
+                prevProc.running = true
+              }
+            }
+          }
 
-              root.savedX = root.dragStartX + Math.round(mouse.x - root.pressX)
-              root.savedY = root.dragStartY + Math.round(mouse.y - root.pressY)
-              root.clampPosition()
+          Rectangle {
+            width: 120
+            height: 46
+            radius: 18
+            color: playMouse.containsMouse ? "$accent" : "$card"
+            border.color: "$border"
+            border.width: 1
+
+            Text {
+              anchors.centerIn: parent
+              text: root.playerStatus === "Playing" ? "" : ""
+              color: "$text"
+              font.pixelSize: 18
+              font.bold: true
             }
 
-            onReleased: {
-              root.dragging = false
-              root.snapToNearestCorner()
+            MouseArea {
+              id: playMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                playProc.running = false
+                playProc.running = true
+                refreshProc.running = false
+                refreshProc.running = true
+              }
+            }
+          }
+
+          Rectangle {
+            width: 54
+            height: 46
+            radius: 18
+            color: nextMouse.containsMouse ? "$accent" : "$card"
+            border.color: "$border"
+            border.width: 1
+
+            Text {
+              anchors.centerIn: parent
+              text: ""
+              color: "$text"
+              font.pixelSize: 16
+              font.bold: true
             }
 
-            onCanceled: {
-              root.dragging = false
-              root.snapToNearestCorner()
+            MouseArea {
+              id: nextMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                nextProc.running = false
+                nextProc.running = true
+              }
             }
           }
         }
 
         Row {
           width: parent.width
-          height: 48
-          spacing: 9
+          height: 32
+          spacing: 10
 
-          MediaButton {
-            label: ""
-            textColor: "$text"
-            bg: "$card"
-            hoverBg: "$accent"
-            borderColor: "$border"
-            onClicked: {
-              prevProc.running = false
-              prevProc.running = true
+          Rectangle {
+            width: 129
+            height: 30
+            radius: 15
+            color: shuffleMouse.containsMouse ? "$accent" : "$card"
+            border.color: "$border"
+            border.width: 1
+
+            Text {
+              anchors.centerIn: parent
+              text: "  Shuffle"
+              color: "$text"
+              font.pixelSize: 12
+              font.bold: true
+            }
+
+            MouseArea {
+              id: shuffleMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                shuffleProc.running = false
+                shuffleProc.running = true
+              }
             }
           }
 
-          MediaButton {
-            label: " / "
-            wide: true
-            textColor: "$text"
-            bg: "$card"
-            hoverBg: "$accent"
-            borderColor: "$border"
-            onClicked: {
-              playProc.running = false
-              playProc.running = true
+          Rectangle {
+            width: 129
+            height: 30
+            radius: 15
+            color: repeatCycleMouse.containsMouse ? "$accent" : "$card"
+            border.color: "$border"
+            border.width: 1
+
+            Text {
+              anchors.centerIn: parent
+              text: "  Repeat"
+              color: "$text"
+              font.pixelSize: 12
+              font.bold: true
+            }
+
+            MouseArea {
+              id: repeatCycleMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                repeatCycleProc.running = false
+                repeatCycleProc.running = true
+              }
             }
           }
-
-          MediaButton {
-            label: ""
-            textColor: "$text"
-            bg: "$card"
-            hoverBg: "$accent"
-            borderColor: "$border"
-            onClicked: {
-              nextProc.running = false
-              nextProc.running = true
-            }
-          }
-
-          MediaButton {
-            label: "Open"
-            wide: true
-            textColor: "$text"
-            bg: "$card"
-            hoverBg: "$accent"
-            borderColor: "$border"
-            onClicked: {
-              openProc.running = false
-              openProc.running = true
-            }
-          }
-        }
-
-        Text {
-          text: "drag title bar • snaps to nearest corner"
-          color: "$muted"
-          font.pixelSize: 11
         }
       }
     }
   }
-
-  component MediaButton: Rectangle {
-    signal clicked()
-
-    property string label: ""
-    property string textColor: "#ffffff"
-    property string bg: "#222222"
-    property string hoverBg: "#444444"
-    property string borderColor: "#555555"
-    property bool wide: false
-
-    width: wide ? 82 : 52
-    height: 42
-    radius: 12
-    color: mouse.containsMouse ? hoverBg : bg
-    border.color: borderColor
-    border.width: 1
-
-    Text {
-      anchors.centerIn: parent
-      text: label
-      color: textColor
-      font.pixelSize: label === "Open" ? 13 : 15
-      font.bold: true
-    }
-
-    MouseArea {
-      id: mouse
-      anchors.fill: parent
-      hoverEnabled: true
-      cursorShape: Qt.PointingHandCursor
-      onClicked: parent.clicked()
-    }
-  }
 }
 QML
-quickshell -p "$MENU_QML" >/tmp/splinter-media-menu.log 2>&1 &
+quickshell -p "$MENU_QML" 2>&1 | tee /tmp/splinter-media-menu.log &
