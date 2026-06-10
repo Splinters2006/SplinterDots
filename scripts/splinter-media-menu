@@ -2,9 +2,10 @@
 set -euo pipefail
 
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-SETTINGS_FILE="$CONFIG_HOME/dotfiles/settings.conf"
 MENU_DIR="$CONFIG_HOME/quickshell/splinter-media-menu"
 MENU_QML="$MENU_DIR/shell.qml"
+SETTINGS_FILE="$CONFIG_HOME/dotfiles/settings.conf"
+TOOLS_FILE="$CONFIG_HOME/dotfiles/tools.conf"
 
 mkdir -p "$MENU_DIR"
 
@@ -12,11 +13,32 @@ setting() {
   local key="$1"
   local fallback="$2"
 
-  if [ -f "$SETTINGS_FILE" ]; then
-    awk -F= -v k="$key" '$1 == k { sub(/^[^=]*=/, ""); print; found=1 } END { if (!found) exit 1 }' "$SETTINGS_FILE" 2>/dev/null || printf '%s' "$fallback"
-  else
-    printf '%s' "$fallback"
+  if [[ -f "$SETTINGS_FILE" ]]; then
+    local line
+    line="$(grep -E "^${key}=" "$SETTINGS_FILE" | tail -n1 || true)"
+    if [[ -n "$line" ]]; then
+      printf '%s\n' "${line#*=}"
+      return
+    fi
   fi
+
+  printf '%s\n' "$fallback"
+}
+
+tool_setting() {
+  local key="$1"
+  local fallback="$2"
+
+  if [[ -f "$TOOLS_FILE" ]]; then
+    local line
+    line="$(grep -E "^${key}=" "$TOOLS_FILE" | tail -n1 || true)"
+    if [[ -n "$line" ]]; then
+      printf '%s\n' "${line#*=}"
+      return
+    fi
+  fi
+
+  printf '%s\n' "$fallback"
 }
 
 theme="$(setting DOTFILES_THEME dark)"
@@ -24,79 +46,56 @@ accent="$(setting DOTFILES_ACCENT "#89b4fa")"
 accent="${accent//\'/}"
 accent="${accent//\"/}"
 
+music_corner="$(tool_setting SPLINTER_MUSIC_CORNER top-right)"
+music_monitor="$(tool_setting SPLINTER_MUSIC_MONITOR "")"
+
 case "$theme" in
   light)
-    surface="#f7f9fc"
-    card="#e9eef7"
-    text="#0f172a"
-    muted="#475569"
-    border="#cbd5e1"
-    overlay="#ffffff"
-    ;;
-  cyber)
-    surface="#1a2344"
-    card="#243156"
-    text="#eefcff"
-    muted="#9cd7e0"
-    border="#36557a"
-    overlay="#10172f"
-    ;;
-  dracula)
-    surface="#3a3f5a"
-    card="#49506f"
-    text="#f8f8f2"
-    muted="#d0b7ff"
-    border="#6b7394"
-    overlay="#262938"
-    ;;
-  everforest)
-    surface="#414c52"
-    card="#4a565c"
-    text="#e6dac0"
-    muted="#c5b79d"
-    border="#677277"
-    overlay="#2c3438"
+    bg="#f6f3ff"
+    card="#ffffffcc"
+    text="#181825"
+    muted="#6c7086"
+    border="#d8c7ff"
+    overlay="#ffffff88"
     ;;
   *)
-    surface="#222a3b"
-    card="#2c3548"
-    text="#e2e8f0"
-    muted="#a8b3c7"
+    bg="#151021"
+    card="#293246cc"
+    text="#f8fafc"
+    muted="#cbd5e1"
     border="#475569"
-    overlay="#151b28"
+    overlay="#10182088"
     ;;
 esac
 
 if pgrep -u "$UID" -f "$MENU_QML" >/dev/null 2>&1; then
   pkill -u "$UID" -f "$MENU_QML" || true
-  sleep 0.08
+
+  if [[ "${SPLINTER_FORCE_OPEN:-0}" != "1" ]]; then
+    exit 0
+  fi
+
+  sleep 0.12
 fi
 
 cat > "$MENU_QML" <<QML
 import QtQuick
-import QtQuick.Window
+import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 
 ShellRoot {
-  Window {
+  PanelWindow {
     id: root
     visible: true
-    title: "Splinter Media Controls"
 
-    width: 290
-    height: 150
-
-    minimumWidth: 290
-    maximumWidth: 290
-    minimumHeight: 150
-    maximumHeight: 150
-
-    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.MSWindowsFixedSizeDialogHint
+    implicitWidth: 300
+    implicitHeight: 154
     color: "transparent"
 
-    x: Screen.width - width - 18
-    y: 52
+    property string corner: "$music_corner"
+    property string wantedScreen: "$music_monitor"
 
     property string mediaTitle: "No media playing"
     property string playerStatus: "Stopped"
@@ -107,17 +106,49 @@ ShellRoot {
     property bool shuffleEnabled: false
     property string loopMode: "none"
 
+    function pickScreen() {
+      if (wantedScreen.length === 0)
+        return Quickshell.screens[0]
+
+      for (var i = 0; i < Quickshell.screens.length; i++) {
+        if (Quickshell.screens[i].name === wantedScreen)
+          return Quickshell.screens[i]
+      }
+
+      return Quickshell.screens[0]
+    }
+
+    screen: pickScreen()
+
+    anchors {
+      top: corner.indexOf("top") === 0
+      bottom: corner.indexOf("bottom") === 0
+      left: corner.indexOf("left") >= 0
+      right: corner.indexOf("right") >= 0
+    }
+
+    margins {
+      top: corner.indexOf("top") === 0 ? 54 : 0
+      bottom: corner.indexOf("bottom") === 0 ? 18 : 0
+      left: corner.indexOf("left") >= 0 ? 18 : 0
+      right: corner.indexOf("right") >= 0 ? 18 : 0
+    }
+
+    exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
     Process {
       id: refreshProc
       command: [
         "sh",
         "-c",
-        "title=\$(playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null || true); status=\$(playerctl status 2>/dev/null || echo Stopped); length=\$(playerctl metadata mpris:length 2>/dev/null || echo 0); pos=\$(playerctl position 2>/dev/null || echo 0); art=\$(playerctl metadata mpris:artUrl 2>/dev/null || true); shuffle=\$(playerctl shuffle 2>/dev/null || echo false); loop=\$(playerctl loop 2>/dev/null || echo None); printf '%s|%s|%s|%s|%s|%s|%s\\n' \"\$title\" \"\$status\" \"\$length\" \"\$pos\" \"\$art\" \"\$shuffle\" \"\$loop\""
+        "{ playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null || true; playerctl status 2>/dev/null || echo Stopped; playerctl metadata mpris:length 2>/dev/null || echo 0; playerctl position 2>/dev/null || echo 0; playerctl metadata mpris:artUrl 2>/dev/null || true; playerctl shuffle 2>/dev/null || echo false; playerctl loop 2>/dev/null || echo None; } | paste -sd '|' -"
       ]
 
       stdout: StdioCollector {
         onStreamFinished: {
-          var line = this.text.split("\n")[0]
+          var line = this.text.split("\\n")[0]
           var parts = line.split("|")
 
           root.mediaTitle = parts[0] && parts[0].length > 0 ? parts[0] : "No media playing"
@@ -148,13 +179,43 @@ ShellRoot {
       }
     }
 
-    Process { id: prevProc; command: ["sh", "-c", "playerctl previous"] }
-    Process { id: playProc; command: ["sh", "-c", "playerctl play-pause"] }
-    Process { id: nextProc; command: ["sh", "-c", "playerctl next"] }
-    Process { id: shuffleProc; command: ["sh", "-c", "playerctl shuffle toggle"] }
+    Process {
+      id: prevProc
+      command: ["sh", "-c", "playerctl previous"]
+    }
+
+    Process {
+      id: playProc
+      command: ["sh", "-c", "playerctl play-pause"]
+    }
+
+    Process {
+      id: nextProc
+      command: ["sh", "-c", "playerctl next"]
+    }
+
+    Process {
+      id: shuffleProc
+      command: ["sh", "-c", "playerctl shuffle toggle"]
+    }
+
     Process {
       id: repeatCycleProc
-      command: ["sh", "-c", "state=\$(playerctl loop 2>/dev/null || echo None); case \"\$state\" in None) playerctl loop Playlist ;; Playlist) playerctl loop Track ;; Track) playerctl loop None ;; *) playerctl loop None ;; esac"]
+      command: [
+        "sh",
+        "-c",
+        "state=\$(playerctl loop 2>/dev/null || echo None); case \"\$state\" in None|none|Off|off) playerctl loop Playlist ;; Playlist|playlist) playerctl loop Track ;; Track|track) playerctl loop None ;; *) playerctl loop None ;; esac"
+      ]
+    }
+
+    Process {
+      id: cycleCornerProc
+      command: ["sh", "-c", "nohup $HOME/.local/bin/splinter-music-cycle-corner >/tmp/splinter-music-cycle-corner.log 2>&1 &"]
+    }
+
+    Process {
+      id: cycleMonitorProc
+      command: ["sh", "-c", "nohup $HOME/.local/bin/splinter-music-cycle-monitor >/tmp/splinter-music-cycle-monitor.log 2>&1 &"]
     }
 
     Timer {
@@ -168,103 +229,156 @@ ShellRoot {
       }
     }
 
+    Timer {
+      id: delayedRefreshTimer
+      interval: 250
+      running: false
+      repeat: false
+      onTriggered: {
+        refreshProc.running = false
+        refreshProc.running = true
+      }
+    }
+
     Component.onCompleted: {
       refreshProc.running = true
     }
 
     Rectangle {
       anchors.fill: parent
-      radius: 0
-      color: "$surface"
-      border.color: "$accent"
-      border.width: 1
+      radius: 18
       clip: true
+      color: "$bg"
+      border.color: "$border"
+      border.width: 1
 
       Image {
+        id: albumArtImage
         anchors.fill: parent
         source: root.artUrl
         fillMode: Image.PreserveAspectCrop
         horizontalAlignment: Image.AlignHCenter
         verticalAlignment: Image.AlignVCenter
-        visible: root.artUrl.length > 0
+        cache: false
         asynchronous: true
-        cache: true
         smooth: true
+        visible: false
+      }
+
+      Rectangle {
+        id: albumArtMask
+        anchors.fill: parent
+        radius: 18
+        visible: false
+      }
+
+      OpacityMask {
+        anchors.fill: parent
+        source: albumArtImage
+        maskSource: albumArtMask
+        visible: root.artUrl.length > 0
       }
 
       Rectangle {
         anchors.fill: parent
         color: "$overlay"
-        opacity: root.artUrl.length > 0 ? 0.50 : 0.90
       }
 
-      Rectangle {
-        anchors.fill: parent
-        anchors.margins: 1
-        radius: 0
-        color: "transparent"
-        border.color: "$border"
-        border.width: 1
-        opacity: 0.65
-      }
+      Row {
+        z: 999
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 8
+        anchors.rightMargin: 8
+        spacing: 6
 
-      Column {
-        anchors.fill: parent
-        anchors.margins: 12
-        spacing: 8
-
-        Row {
-          width: parent.width
-          height: 26
-          spacing: 8
+        Rectangle {
+          width: 24
+          height: 24
+          radius: 8
+          color: monitorMouse.containsMouse ? "$accent" : "$card"
+          border.color: "$border"
+          border.width: 1
 
           Text {
-            width: parent.width - 34
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.mediaTitle
+            anchors.centerIn: parent
+            text: "󰍺"
             color: "$text"
-            font.pixelSize: 11
+            font.pixelSize: 12
             font.bold: true
-            elide: Text.ElideRight
-            maximumLineCount: 1
           }
 
-          Rectangle {
-            width: 24
-            height: 24
-            radius: 10
-            color: closeMouse.containsMouse ? "$card" : "transparent"
-            border.color: "$border"
-            border.width: 1
-
-            Text {
-              anchors.centerIn: parent
-              text: "×"
-              color: "$muted"
-              font.pixelSize: 15
-              font.bold: true
-            }
-
-            MouseArea {
-              id: closeMouse
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: Qt.quit()
+          MouseArea {
+            id: monitorMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              cycleMonitorProc.running = false
+              cycleMonitorProc.running = true
             }
           }
         }
 
         Rectangle {
-          width: parent.width
-          height: 5
-          radius: 3
-          color: "$card"
+          width: 24
+          height: 24
+          radius: 8
+          color: cornerMouse.containsMouse ? "$accent" : "$card"
           border.color: "$border"
           border.width: 1
 
+          Text {
+            anchors.centerIn: parent
+            text: "󰁌"
+            color: "$text"
+            font.pixelSize: 12
+            font.bold: true
+          }
+
+          MouseArea {
+            id: cornerMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              cycleCornerProc.running = false
+              cycleCornerProc.running = true
+            }
+          }
+        }
+      }
+
+      Column {
+        anchors.fill: parent
+        anchors.margins: 12
+        spacing: 10
+
+        Item {
+          width: parent.width
+          height: 24
+
+          Text {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.rightMargin: 62
+            text: root.mediaTitle
+            color: "$text"
+            font.pixelSize: 13
+            font.bold: true
+            elide: Text.ElideRight
+          }
+        }
+
+        Rectangle {
+          width: parent.width
+          height: 6
+          radius: 3
+          color: "$border"
+
           Rectangle {
-            width: parent.width * root.progress
+            width: Math.max(8, parent.width * root.progress)
             height: parent.height
             radius: parent.radius
             color: "$accent"
@@ -280,7 +394,7 @@ ShellRoot {
             width: 44
             height: 36
             radius: 13
-            color: root.shuffleEnabled ? "$accent" : (shuffleMouse.containsMouse ? "$card" : "$card")
+            color: root.shuffleEnabled ? "$accent" : "$card"
             border.color: "$border"
             border.width: 1
 
@@ -293,7 +407,6 @@ ShellRoot {
             }
 
             MouseArea {
-              id: shuffleMouse
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
@@ -301,8 +414,8 @@ ShellRoot {
                 root.shuffleEnabled = !root.shuffleEnabled
                 shuffleProc.running = false
                 shuffleProc.running = true
-                refreshProc.running = false
-                refreshProc.running = true
+                delayedRefreshTimer.running = false
+                delayedRefreshTimer.running = true
               }
             }
           }
@@ -311,7 +424,7 @@ ShellRoot {
             width: 44
             height: 36
             radius: 13
-            color: prevMouse.containsMouse ? "$accent" : "$card"
+            color: "$card"
             border.color: "$border"
             border.width: 1
 
@@ -324,13 +437,14 @@ ShellRoot {
             }
 
             MouseArea {
-              id: prevMouse
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: {
                 prevProc.running = false
                 prevProc.running = true
+                delayedRefreshTimer.running = false
+                delayedRefreshTimer.running = true
               }
             }
           }
@@ -339,7 +453,7 @@ ShellRoot {
             width: 68
             height: 36
             radius: 13
-            color: playMouse.containsMouse ? "$accent" : "$card"
+            color: "$accent"
             border.color: "$border"
             border.width: 1
 
@@ -352,15 +466,14 @@ ShellRoot {
             }
 
             MouseArea {
-              id: playMouse
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: {
                 playProc.running = false
                 playProc.running = true
-                refreshProc.running = false
-                refreshProc.running = true
+                delayedRefreshTimer.running = false
+                delayedRefreshTimer.running = true
               }
             }
           }
@@ -369,7 +482,7 @@ ShellRoot {
             width: 44
             height: 36
             radius: 13
-            color: nextMouse.containsMouse ? "$accent" : "$card"
+            color: "$card"
             border.color: "$border"
             border.width: 1
 
@@ -382,13 +495,14 @@ ShellRoot {
             }
 
             MouseArea {
-              id: nextMouse
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: {
                 nextProc.running = false
                 nextProc.running = true
+                delayedRefreshTimer.running = false
+                delayedRefreshTimer.running = true
               }
             }
           }
@@ -397,20 +511,19 @@ ShellRoot {
             width: 44
             height: 36
             radius: 13
-            color: root.loopMode !== "none" ? "$accent" : (repeatCycleMouse.containsMouse ? "$card" : "$card")
+            color: root.loopMode !== "none" ? "$accent" : "$card"
             border.color: "$border"
             border.width: 1
 
             Text {
               anchors.centerIn: parent
-              text: root.loopMode === "track" ? "¹" : (root.loopMode === "playlist" ? "" : "")
+              text: root.loopMode === "track" ? "󰑘" : (root.loopMode === "playlist" ? "" : "")
               color: root.loopMode === "none" ? "$muted" : "$text"
               font.pixelSize: root.loopMode === "track" ? 17 : 13
               font.bold: true
             }
 
             MouseArea {
-              id: repeatCycleMouse
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
@@ -425,8 +538,8 @@ ShellRoot {
 
                 repeatCycleProc.running = false
                 repeatCycleProc.running = true
-                refreshProc.running = false
-                refreshProc.running = true
+                delayedRefreshTimer.running = false
+                delayedRefreshTimer.running = true
               }
             }
           }

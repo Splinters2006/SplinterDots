@@ -31,7 +31,7 @@ Variants {
         right: 10
       }
 
-      implicitHeight: 40
+      implicitHeight: 35
       color: "transparent"
 
       Process {
@@ -62,7 +62,7 @@ Variants {
 
       Rectangle {
         anchors.fill: parent
-        radius: 28
+        radius: 10
         color: "#ea241b2e"
         border.width: 1
         border.color: "#392a49"
@@ -86,9 +86,9 @@ Variants {
                 model: 5
 
                 delegate: Rectangle {
-                  width: 32
-                  height: 32
-                  radius: 24
+                  width: 27
+                  height: 27
+                  radius: 6
                   color: "#392a49"
                   border.color: "#ddb0cd"
                   border.width: 1
@@ -120,31 +120,152 @@ Variants {
             Layout.alignment: Qt.AlignCenter
             spacing: 7
 
-            Text {
-              id: txt_center_0
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ffebf6"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
+        Item {
+            id: center_0
+            width: dateBubble.width
+            height: 35
+            clip: false
 
-              Process {
-                id: proc_center_0
-                command: ["sh", "-c", "date +\"%a %d %b  %H:%M\""]
-                running: true
+            property string displayText: ""
+
+            Process {
+                id: timeProc
+                command: ["sh", "-c", "date '+%a %d %b · %H:%M'"]
+
                 stdout: StdioCollector {
-                  onStreamFinished: txt_center_0.text = " " + this.text.split("\\n").join("").trim()
+                    onStreamFinished: {
+                        center_0.displayText = this.text.trim()
+                    }
                 }
-              }
+            }
 
-              Timer {
+            Process {
+                id: openCalendarProc
+                command: ["sh", "-c", "$HOME/.local/bin/splinter-calendar-menu"]
+            }
+
+            Timer {
                 interval: 1000
                 running: true
                 repeat: true
-                onTriggered: { proc_center_0.running = false; proc_center_0.running = true }
-              }
+                onTriggered: {
+                    timeProc.running = false
+                    timeProc.running = true
+                }
             }
 
+            Component.onCompleted: {
+                timeProc.running = true
+            }
+
+            Rectangle {
+                id: dateBubble
+                height: Math.max(22, 35 - 10)
+                radius: Math.max(10, 10 - 4)
+                color: "#392a49"
+                border.color: "#ddb0cd"
+                border.width: 1
+                width: textItem.implicitWidth + 20
+
+                anchors.verticalCenter: parent.verticalCenter
+
+                Text {
+                    id: textItem
+                    anchors.centerIn: parent
+                    text: center_0.displayText
+                    color: "#ffebf6"
+                    font.pixelSize: Math.max(10, 12 - 1)
+                    font.bold: true
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        openCalendarProc.running = false
+                        openCalendarProc.running = true
+                    }
+                }
+            }
+        }
+        
+
+        Item {
+            id: center_1
+            width: 150
+            height: 35
+            clip: false
+
+            property string rawBars: "000000000000000000"
+
+            Process {
+                id: cavaProc
+                command: ["sh", "-c", "$HOME/.local/bin/splinter-cava-read"]
+
+                stdout: StdioCollector {
+                    onStreamFinished: {
+                        var raw = this.text.trim()
+                        if (raw.length >= 18) {
+                            center_1.rawBars = raw.substring(0, 18)
+                        }
+                    }
+                }
+            }
+
+            Timer {
+                interval: 33
+                running: true
+                repeat: true
+                onTriggered: {
+                    cavaProc.running = false
+                    cavaProc.running = true
+                }
+            }
+
+            Component.onCompleted: {
+                cavaProc.running = true
+            }
+
+            Rectangle {
+                id: visualizerBubble
+                width: parent.width
+                height: Math.max(22, 35 - 10)
+                anchors.verticalCenter: parent.verticalCenter
+                radius: Math.max(10, 10 - 4)
+                color: "#392a49"
+                border.color: "#ddb0cd"
+                border.width: 1
+                clip: true
+
+                Row {
+                    anchors.centerIn: parent
+                    height: parent.height - 8
+                    spacing: 3
+
+                    Repeater {
+                        model: 18
+
+                        Rectangle {
+                            width: 5
+                            radius: 3
+                            anchors.bottom: parent.bottom
+                            color: "#89b4fa"
+
+                            height: Math.max(3, (parent.height * Number(center_1.rawBars.charAt(index))) / 8)
+
+                            Behavior on height {
+                                NumberAnimation {
+                                    duration: 70
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
           }
 
           Item { Layout.fillWidth: true }
@@ -155,8 +276,8 @@ Variants {
 
             Item {
               id: media_right_0
-              width: 32
-              height: 40
+              width: 27
+              height: 35
 
               Process {
                 id: proc_right_0_media_menu
@@ -165,9 +286,9 @@ Variants {
 
               Rectangle {
                 anchors.centerIn: parent
-                width: 32
-                height: 32
-                radius: 24
+                width: 27
+                height: 27
+                radius: 6
                 color: mediaMouse.containsMouse ? "#89b4fa" : "#392a49"
                 border.color: "#89b4fa"
                 border.width: 1

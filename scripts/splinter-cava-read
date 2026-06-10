@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+FRAME_FILE="/tmp/splinterbar-cava-frame"
+
+if ! pgrep -u "$UID" -f "splinter-cava-daemon" >/dev/null 2>&1; then
+  nohup "$HOME/.local/bin/splinter-cava-daemon" >/tmp/splinter-cava-daemon.log 2>&1 &
+  sleep 0.15
+fi
+
+if [[ -f "$FRAME_FILE" ]]; then
+  tr -cd '0-8' < "$FRAME_FILE" | head -c 18
+else
+  printf '000000000000000000'
+fi

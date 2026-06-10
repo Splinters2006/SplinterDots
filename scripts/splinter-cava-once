@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+CAVA_DIR="$CONFIG_HOME/cava"
+CAVA_CONFIG="$CAVA_DIR/splinterbar-cava.conf"
+TMP_OUT="/tmp/splinterbar-cava.raw"
+
+mkdir -p "$CAVA_DIR"
+
+cat > "$CAVA_CONFIG" <<'CAVACONF'
+[general]
+bars = 18
+framerate = 120
+autosens = 1
+sensitivity = 250
+
+[input]
+method = pipewire
+source = auto
+
+[output]
+method = raw
+raw_target = /dev/stdout
+data_format = ascii
+ascii_max_range = 8
+bar_delimiter = 10
+
+[smoothing]
+monstercat = 1
+waves = 0
+noise_reduction = 0.35
+CAVACONF
+
+if ! command -v cava >/dev/null 2>&1; then
+  printf '000000000000000000'
+  exit 0
+fi
+
+timeout 0.25s cava -p "$CAVA_CONFIG" > "$TMP_OUT" 2>/tmp/splinterbar-cava.err || true
+
+python - <<'PY'
+from pathlib import Path
+
+path = Path("/tmp/splinterbar-cava.raw")
+data = path.read_bytes() if path.exists() else b""
+
+# CAVA may output either:
+# 1) one full frame per line, e.g. 123456...
+# 2) one bar value per line, e.g. 1\n2\n3...
+digits = []
+
+for b in data:
+    if 0 <= b <= 8:
+        digits.append(str(b))
+    elif 48 <= b <= 56:
+        digits.append(chr(b))
+
+if len(digits) >= 18:
+    out = "".join(digits[-18:])
+else:
+    out = "0" * 18
+
+print(out[-18:].ljust(18, "0"), end="")
+PY

@@ -1,0 +1,348 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+MENU_DIR="$CONFIG_HOME/quickshell/splinter-calendar-menu"
+MENU_QML="$MENU_DIR/shell.qml"
+SETTINGS_FILE="$CONFIG_HOME/dotfiles/settings.conf"
+
+mkdir -p "$MENU_DIR"
+
+setting() {
+  local key="$1"
+  local fallback="$2"
+
+  if [[ -f "$SETTINGS_FILE" ]]; then
+    local line
+    line="$(grep -E "^${key}=" "$SETTINGS_FILE" | tail -n1 || true)"
+    if [[ -n "$line" ]]; then
+      printf '%s\n' "${line#*=}"
+      return
+    fi
+  fi
+
+  printf '%s\n' "$fallback"
+}
+
+theme="$(setting DOTFILES_THEME dark)"
+accent="$(setting DOTFILES_ACCENT "#89b4fa")"
+accent="${accent//\'/}"
+accent="${accent//\"/}"
+
+case "$theme" in
+  light)
+    bg="#f6f3ff"
+    card="#ffffff"
+    text="#181825"
+    muted="#6c7086"
+    border="#d8c7ff"
+    ;;
+  *)
+    bg="#1e102b"
+    card="#2b1b3a"
+    text="#f5eaff"
+    muted="#c8b7d8"
+    border="#5c456f"
+    ;;
+esac
+
+# Calendar size
+cal_w=292
+cal_h=292
+gap=12
+
+# Read cursor position and monitor geometry from Hyprland.
+read -r screen_name anchor_vertical margin_top margin_bottom margin_left <<POS
+$(python - <<'PY'
+import json
+import subprocess
+
+CAL_W = 292
+CAL_H = 292
+GAP = 12
+
+def run_json(cmd):
+    try:
+        return json.loads(subprocess.check_output(cmd, text=True))
+    except Exception:
+        return None
+
+cursor = run_json(["hyprctl", "cursorpos", "-j"]) or {}
+monitors = run_json(["hyprctl", "monitors", "-j"]) or []
+
+cx = int(cursor.get("x", 0))
+cy = int(cursor.get("y", 0))
+
+chosen = None
+for m in monitors:
+    mx = int(m.get("x", 0))
+    my = int(m.get("y", 0))
+    mw = int(m.get("width", 1920))
+    mh = int(m.get("height", 1080))
+    if mx <= cx < mx + mw and my <= cy < my + mh:
+        chosen = m
+        break
+
+if chosen is None:
+    chosen = monitors[0] if monitors else {
+        "name": "",
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080,
+    }
+
+name = chosen.get("name", "")
+mx = int(chosen.get("x", 0))
+my = int(chosen.get("y", 0))
+mw = int(chosen.get("width", 1920))
+mh = int(chosen.get("height", 1080))
+
+local_x = cx - mx
+local_y = cy - my
+
+# Horizontal: center calendar around where the date/time widget was clicked.
+left = local_x - CAL_W // 2
+left = max(8, min(left, mw - CAL_W - 8))
+
+# Vertical:
+# If click is in top half, assume top bar => calendar below it.
+# If click is in bottom half, assume bottom bar => calendar above it.
+if local_y < mh / 2:
+    anchor = "top"
+    top = min(local_y + 32 + GAP, mh - CAL_H - 8)
+    bottom = 0
+else:
+    anchor = "bottom"
+    top = 0
+    bottom = min((mh - local_y) + 32 + GAP, mh - CAL_H - 8)
+
+print(name, anchor, int(top), int(bottom), int(left))
+PY
+)
+POS
+
+if pgrep -u "$UID" -f "$MENU_QML" >/dev/null 2>&1; then
+  pkill -u "$UID" -f "$MENU_QML" || true
+  exit 0
+fi
+
+cat > "$MENU_QML" <<QML
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+
+ShellRoot {
+  PanelWindow {
+    id: root
+    visible: true
+
+    implicitWidth: $cal_w
+    implicitHeight: $cal_h
+
+    property date today: new Date()
+    property int monthOffset: 0
+    property string wantedScreen: "$screen_name"
+
+    function pickScreen() {
+      if (wantedScreen.length === 0)
+        return Quickshell.screens[0]
+
+      for (var i = 0; i < Quickshell.screens.length; i++) {
+        if (Quickshell.screens[i].name === wantedScreen)
+          return Quickshell.screens[i]
+      }
+
+      return Quickshell.screens[0]
+    }
+
+    screen: pickScreen()
+
+    anchors {
+      left: true
+      top: "$anchor_vertical" === "top"
+      bottom: "$anchor_vertical" === "bottom"
+    }
+
+    margins {
+      left: $margin_left
+      top: $margin_top
+      bottom: $margin_bottom
+    }
+
+    exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+    color: "transparent"
+
+    function shownDate() {
+      return new Date(today.getFullYear(), today.getMonth() + monthOffset, 1)
+    }
+
+    function daysInMonth(year, month) {
+      return new Date(year, month + 1, 0).getDate()
+    }
+
+    function firstDayOffset(year, month) {
+      var day = new Date(year, month, 1).getDay()
+      return day === 0 ? 6 : day - 1
+    }
+
+    function dayForCell(index) {
+      var d = shownDate()
+      var offset = firstDayOffset(d.getFullYear(), d.getMonth())
+      return index - offset + 1
+    }
+
+    function isToday(day) {
+      var d = shownDate()
+      return day === today.getDate()
+        && d.getMonth() === today.getMonth()
+        && d.getFullYear() === today.getFullYear()
+    }
+
+    Rectangle {
+      anchors.fill: parent
+      radius: 18
+      clip: true
+      color: "$bg"
+      border.color: "$border"
+      border.width: 1
+
+      Column {
+        anchors.fill: parent
+        anchors.margins: 14
+        spacing: 10
+
+        Row {
+          width: parent.width
+          height: 32
+          spacing: 8
+
+          Rectangle {
+            width: 32
+            height: 32
+            radius: 10
+            color: prevMouse.containsMouse ? "$accent" : "$card"
+            border.color: "$border"
+            border.width: 1
+
+            Text {
+              anchors.centerIn: parent
+              text: "‹"
+              color: "$text"
+              font.pixelSize: 22
+              font.bold: true
+            }
+
+            MouseArea {
+              id: prevMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.monthOffset -= 1
+            }
+          }
+
+          Text {
+            width: parent.width - 72
+            height: parent.height
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            text: Qt.formatDateTime(root.shownDate(), "MMMM yyyy")
+            color: "$text"
+            font.pixelSize: 15
+            font.bold: true
+          }
+
+          Rectangle {
+            width: 32
+            height: 32
+            radius: 10
+            color: nextMouse.containsMouse ? "$accent" : "$card"
+            border.color: "$border"
+            border.width: 1
+
+            Text {
+              anchors.centerIn: parent
+              text: "›"
+              color: "$text"
+              font.pixelSize: 22
+              font.bold: true
+            }
+
+            MouseArea {
+              id: nextMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.monthOffset += 1
+            }
+          }
+
+        }
+
+        Rectangle {
+          width: parent.width
+          height: 1
+          color: "$border"
+        }
+
+        Grid {
+          width: parent.width
+          columns: 7
+          rowSpacing: 6
+          columnSpacing: 6
+
+          Repeater {
+            model: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+            Text {
+              width: (parent.width - 36) / 7
+              height: 20
+              text: modelData
+              color: "$muted"
+              font.pixelSize: 11
+              font.bold: true
+              horizontalAlignment: Text.AlignHCenter
+              verticalAlignment: Text.AlignVCenter
+            }
+          }
+
+          Repeater {
+            model: 42
+
+            Rectangle {
+              width: (parent.width - 36) / 7
+              height: 26
+              radius: 8
+
+              property date d: root.shownDate()
+              property int dayNumber: root.dayForCell(index)
+              property int maxDays: root.daysInMonth(d.getFullYear(), d.getMonth())
+              property bool activeDay: dayNumber >= 1 && dayNumber <= maxDays
+              property bool todayCell: activeDay && root.isToday(dayNumber)
+
+              color: todayCell ? "$accent" : "transparent"
+              border.color: todayCell ? "$accent" : "transparent"
+              border.width: 1
+
+              Text {
+                anchors.centerIn: parent
+                text: parent.activeDay ? parent.dayNumber : ""
+                color: "$text"
+                opacity: parent.activeDay ? 1.0 : 0.0
+                font.pixelSize: parent.todayCell ? 13 : 12
+                font.bold: parent.todayCell
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+QML
+
+quickshell -p "$MENU_QML" > /tmp/splinter-calendar-menu.log 2>&1 &

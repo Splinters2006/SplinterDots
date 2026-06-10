@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+CAVA_DIR="$CONFIG_HOME/cava"
+CAVA_CONFIG="$CAVA_DIR/splinterbar-cava.conf"
+FRAME_FILE="/tmp/splinterbar-cava-frame"
+
+mkdir -p "$CAVA_DIR"
+
+cat > "$CAVA_CONFIG" <<'CAVACONF'
+[general]
+bars = 18
+framerate = 120
+autosens = 1
+sensitivity = 300
+
+[input]
+method = pipewire
+source = auto
+
+[output]
+method = raw
+raw_target = /dev/stdout
+data_format = ascii
+ascii_max_range = 8
+bar_delimiter = 10
+
+[smoothing]
+monstercat = 1
+waves = 0
+noise_reduction = 0.25
+CAVACONF
+
+printf '000000000000000000' > "$FRAME_FILE"
+
+python - "$CAVA_CONFIG" "$FRAME_FILE" <<'PY'
+import subprocess
+import sys
+from pathlib import Path
+
+config = sys.argv[1]
+frame_file = Path(sys.argv[2])
+
+proc = subprocess.Popen(
+    ["cava", "-p", config],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.DEVNULL,
+)
+
+digits = []
+
+while True:
+    b = proc.stdout.read(1)
+    if not b:
+        break
+
+    value = b[0]
+
+    if 0 <= value <= 8:
+        digits.append(str(value))
+    elif 48 <= value <= 56:
+        digits.append(chr(value))
+
+    if len(digits) >= 18:
+        frame = "".join(digits[-18:])
+        frame_file.write_text(frame)
+        digits.clear()
+PY

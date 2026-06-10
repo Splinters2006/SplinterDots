@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+TOOLS_FILE="$CONFIG_HOME/dotfiles/tools.conf"
+mkdir -p "$(dirname "$TOOLS_FILE")"
+
+mapfile -t monitors < <(hyprctl monitors 2>/dev/null | grep '^Monitor ' | awk '{print $2}')
+
+if [[ "${#monitors[@]}" -eq 0 ]]; then
+  pkill -u "$UID" -f "splinter-media-menu/shell.qml" || true
+  sleep 0.08
+  ~/.local/bin/splinter-media-menu
+  exit 0
+fi
+
+current=""
+if [[ -f "$TOOLS_FILE" ]]; then
+  line="$(grep -E '^SPLINTER_MUSIC_MONITOR=' "$TOOLS_FILE" | tail -n1 || true)"
+  [[ -n "$line" ]] && current="${line#*=}"
+fi
+
+next="${monitors[0]}"
+for i in "${!monitors[@]}"; do
+  if [[ "${monitors[$i]}" == "$current" ]]; then
+    next="${monitors[$(( (i + 1) % ${#monitors[@]} ))]}"
+    break
+  fi
+done
+
+tmp="$(mktemp)"
+[[ -f "$TOOLS_FILE" ]] && grep -v '^SPLINTER_MUSIC_MONITOR=' "$TOOLS_FILE" > "$tmp" || true
+{
+  cat "$tmp"
+  echo "SPLINTER_MUSIC_MONITOR=$next"
+} > "$TOOLS_FILE"
+rm -f "$tmp"
+
+pkill -u "$UID" -f "splinter-media-menu/shell.qml" || true
+sleep 0.08
+~/.local/bin/splinter-media-menu

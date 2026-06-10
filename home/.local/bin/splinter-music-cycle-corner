@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+TOOLS_FILE="$CONFIG_HOME/dotfiles/tools.conf"
+mkdir -p "$(dirname "$TOOLS_FILE")"
+
+current="top-right"
+if [[ -f "$TOOLS_FILE" ]]; then
+  line="$(grep -E '^SPLINTER_MUSIC_CORNER=' "$TOOLS_FILE" | tail -n1 || true)"
+  [[ -n "$line" ]] && current="${line#*=}"
+fi
+
+case "$current" in
+  top-right) next="bottom-right" ;;
+  bottom-right) next="bottom-left" ;;
+  bottom-left) next="top-left" ;;
+  *) next="top-right" ;;
+esac
+
+tmp="$(mktemp)"
+[[ -f "$TOOLS_FILE" ]] && grep -v '^SPLINTER_MUSIC_CORNER=' "$TOOLS_FILE" > "$tmp" || true
+{
+  cat "$tmp"
+  echo "SPLINTER_MUSIC_CORNER=$next"
+} > "$TOOLS_FILE"
+rm -f "$tmp"
+
+pkill -u "$UID" -f "splinter-media-menu/shell.qml" || true
+sleep 0.08
+~/.local/bin/splinter-media-menu

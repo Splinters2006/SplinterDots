@@ -68,3 +68,4 @@ unzip
 pamixer
 hyprpicker
 easyeffects
+cava

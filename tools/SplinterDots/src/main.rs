@@ -2587,6 +2587,33 @@ misc               = 313244
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
+
+        ui.horizontal(|ui| {
+            ui.label("Bar position");
+
+            let mut pos = self
+                .values
+                .get("DOTFILES_BAR_POSITION")
+                .cloned()
+                .unwrap_or_else(|| "top".to_string());
+
+            let top_clicked = ui.selectable_label(pos == "top", "Top").clicked();
+            let bottom_clicked = ui.selectable_label(pos == "bottom", "Bottom").clicked();
+
+            if top_clicked {
+                pos = "top".to_string();
+            }
+
+            if bottom_clicked {
+                pos = "bottom".to_string();
+            }
+
+            if self.values.get("DOTFILES_BAR_POSITION") != Some(&pos) {
+                self.values.insert("DOTFILES_BAR_POSITION".to_string(), pos);
+            }
+        });
+
+        ui.add_space(8.0);
                     if primary_button(ui, &theme, "Save and restart bar").clicked() {
                         self.sync_widget_toggles_from_layout();
                         self.save_and_restart_bar();
@@ -3489,22 +3516,8 @@ fn bar_widget_qml(
 ) -> String {
     match widget {
         "workspaces" => workspaces_qml(id, palette, height, radius, font_size, workspace_count, icon_font),
-        "clock" => {
-            let mut clock_format = value_or(values, "DOTFILES_WIDGET_CLOCK_FORMAT");
-            if is_true(&value_or(values, "DOTFILES_WIDGET_CLOCK_SECONDS")) && !clock_format.contains("%S") {
-                clock_format.push_str(":%S");
-            }
-            command_text_qml(
-                id,
-                palette,
-                font_size,
-                icon_font,
-                &format!("date +{}", shell_escape(&clock_format)),
-                1000,
-                Some(icons.clock),
-            )
-        }
-        "date" => command_text_qml(id, palette, font_size, icon_font, "date '+%a %d %b'", 60_000, Some(icons.clock)),
+            "visualizer" => visualizer_widget_qml(id, palette, height, radius, font_size),
+            "datetime" => datetime_widget_qml(id, palette, height, radius, font_size),
         "window-title" => command_text_qml(id, palette, font_size, icon_font, "hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' | cut -c1-60", status_ms, None),
         "submap" => command_text_qml(id, palette, font_size, icon_font, "hyprctl submap 2>/dev/null | grep -v '^$' | sed 's/^/󰌌 /'", status_ms, None),
 
@@ -3707,6 +3720,200 @@ fn workspaces_qml(
     .replace("__TEXT__", &palette.text)
     .replace("__MUTED__", &palette.muted)
 }
+
+
+
+
+
+fn datetime_widget_qml(
+    id: &str,
+    palette: &Palette,
+    height: i64,
+    radius: i64,
+    font_size: i64,
+) -> String {
+    format!(
+        r#"
+        Item {{
+            id: {id}
+            width: dateBubble.width
+            height: {height}
+            clip: false
+
+            property string displayText: ""
+
+            Process {{
+                id: timeProc
+                command: ["sh", "-c", "date '+%a %d %b · %H:%M'"]
+
+                stdout: StdioCollector {{
+                    onStreamFinished: {{
+                        {id}.displayText = this.text.trim()
+                    }}
+                }}
+            }}
+
+            Process {{
+                id: openCalendarProc
+                command: ["sh", "-c", "$HOME/.local/bin/splinter-calendar-menu"]
+            }}
+
+            Timer {{
+                interval: 1000
+                running: true
+                repeat: true
+                onTriggered: {{
+                    timeProc.running = false
+                    timeProc.running = true
+                }}
+            }}
+
+            Component.onCompleted: {{
+                timeProc.running = true
+            }}
+
+            Rectangle {{
+                id: dateBubble
+                height: Math.max(22, {height} - 10)
+                radius: Math.max(10, {radius} - 4)
+                color: "{card}"
+                border.color: "{border}"
+                border.width: 1
+                width: textItem.implicitWidth + 20
+
+                anchors.verticalCenter: parent.verticalCenter
+
+                Text {{
+                    id: textItem
+                    anchors.centerIn: parent
+                    text: {id}.displayText
+                    color: "{text}"
+                    font.pixelSize: Math.max(10, {font_size} - 1)
+                    font.bold: true
+                }}
+
+                MouseArea {{
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {{
+                        openCalendarProc.running = false
+                        openCalendarProc.running = true
+                    }}
+                }}
+            }}
+        }}
+        "#,
+        id = id,
+        height = height,
+        radius = radius,
+        font_size = font_size,
+        card = palette.surface,
+        border = palette.muted,        text = palette.text,
+
+    )
+}
+
+
+
+
+
+
+
+fn visualizer_widget_qml(
+    id: &str,
+    palette: &Palette,
+    height: i64,
+    radius: i64,
+    _font_size: i64,
+) -> String {
+    format!(
+        r#"
+        Item {{
+            id: {id}
+            width: 150
+            height: {height}
+            clip: false
+
+            property string rawBars: "000000000000000000000000000000000000"
+
+            Process {{
+                id: cavaProc
+                command: ["sh", "-c", "$HOME/.local/bin/splinter-cava-read"]
+
+                stdout: StdioCollector {{
+                    onStreamFinished: {{
+                        var raw = this.text.trim()
+                        if (raw.length >= 18) {{
+                            {id}.rawBars = raw.substring(0, 18)
+                        }}
+                    }}
+                }}
+            }}
+
+            Timer {{
+                interval: 45
+                running: true
+                repeat: true
+                onTriggered: {{
+                    cavaProc.running = false
+                    cavaProc.running = true
+                }}
+            }}
+
+            Component.onCompleted: {{
+                cavaProc.running = true
+            }}
+
+            Rectangle {{
+                id: visualizerBubble
+                width: parent.width
+                height: Math.max(22, {height} - 10)
+                anchors.verticalCenter: parent.verticalCenter
+                radius: Math.max(10, {radius} - 4)
+                color: "{surface}"
+                border.color: "{muted}"
+                border.width: 1
+                clip: true
+
+                Row {{
+                    anchors.centerIn: parent
+                    height: parent.height - 8
+                    spacing: 3
+
+                    Repeater {{
+                        model: 18
+
+                        Rectangle {{
+                            width: 5
+                            radius: 3
+                            anchors.bottom: parent.bottom
+                            color: "{accent}"
+
+                            height: Math.max(3, (parent.height * parseInt({id}.rawBars.substring(index * 2, index * 2 + 2), 16)) / 32)
+
+                            Behavior on height {{
+                                NumberAnimation {{
+                                    duration: 115
+                                    easing.type: Easing.OutCubic
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }}
+        "#,
+        id = id,
+        height = height,
+        radius = radius,
+        surface = palette.surface,
+        muted = palette.muted,
+        accent = palette.accent,
+    )
+}
+
+
 
 
 fn media_controls_qml(
@@ -4751,11 +4958,18 @@ struct BarWidgetChoice {
 fn bar_widget_choices() -> &'static [BarWidgetChoice] {
     &[
         BarWidgetChoice { id: "workspaces",         label: "Workspaces",            setting: "DOTFILES_WIDGET_WORKSPACES" },
-        BarWidgetChoice { id: "clock",              label: "Clock",                 setting: "DOTFILES_WIDGET_CLOCK" },
-        BarWidgetChoice { id: "date",               label: "Date",                  setting: "DOTFILES_WIDGET_CLOCK" },
-        BarWidgetChoice { id: "calendar",           label: "Calendar",              setting: "DOTFILES_WIDGET_CLOCK" },
+        BarWidgetChoice {
+            id: "datetime",
+            label: "Date & Time",
+            setting: "DOTFILES_WIDGET_DATETIME",
+        },
         BarWidgetChoice { id: "easyeffects",        label: "EasyEffects",          setting: "DOTFILES_WIDGET_EASYEFFECTS" },
         BarWidgetChoice { id: "media_controls",     label: "Media Controls",       setting: "DOTFILES_WIDGET_MEDIA" },
+        BarWidgetChoice {
+            id: "visualizer",
+            label: "Visualizer",
+            setting: "DOTFILES_WIDGET_VISUALIZER",
+        },
         BarWidgetChoice { id: "volume",             label: "Volume",                setting: "DOTFILES_WIDGET_VOLUME" },
         BarWidgetChoice { id: "microphone",         label: "Microphone",            setting: "DOTFILES_WIDGET_MICROPHONE" },
         BarWidgetChoice { id: "network",            label: "Network",               setting: "DOTFILES_WIDGET_NETWORK" },
@@ -4793,6 +5007,14 @@ fn split_csv(value: &str) -> Vec<String> {
         .map(|item| item.to_string())
         .collect()
 }
+
+fn normalize_bar_widget_id(id: &str) -> &str {
+    match id.trim() {
+        "clock" | "date" | "calendar" => "datetime",
+        other => other,
+    }
+}
+
 
 fn parse_widget_zone(value: &str) -> Vec<String> {
     value
