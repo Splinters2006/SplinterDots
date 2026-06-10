@@ -86,21 +86,35 @@ ShellRoot {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
+    // Start top-left internally so we can move with margins.
     anchors {
       top: true
-      right: true
-    }
-
-    margins {
-      top: 52
-      right: 18
+      left: true
     }
 
     exclusiveZone: 0
     implicitWidth: 340
     implicitHeight: 164
 
+    property int popupW: 340
+    property int popupH: 164
+
+    // Default position: top-right.
+    property int savedX: screen.width - popupW - 18
+    property int savedY: 52
+
+    property bool dragging: false
+    property real pressX: 0
+    property real pressY: 0
+    property int dragStartX: 0
+    property int dragStartY: 0
+
     property string mediaTitle: "No media playing"
+
+    margins {
+      left: root.savedX
+      top: root.savedY
+    }
 
     Process {
       id: refreshProc
@@ -144,6 +158,56 @@ ShellRoot {
       }
     }
 
+    function clampPosition() {
+      root.savedX = Math.max(8, Math.min(root.savedX, root.screen.width - root.popupW - 8))
+      root.savedY = Math.max(8, Math.min(root.savedY, root.screen.height - root.popupH - 8))
+    }
+
+    function snapToNearestCorner() {
+      const leftX = 18
+      const rightX = root.screen.width - root.popupW - 18
+      const topY = 52
+      const bottomY = root.screen.height - root.popupH - 18
+
+      const centerX = root.savedX + root.popupW / 2
+      const centerY = root.savedY + root.popupH / 2
+
+      root.savedX = centerX < root.screen.width / 2 ? leftX : rightX
+      root.savedY = centerY < root.screen.height / 2 ? topY : bottomY
+
+      savePosProc.command = ["sh", "-c", "mkdir -p '$CONFIG_HOME/quickshell/splinter-media-menu'; printf '%s\\n%s\\n' '" + root.savedX + "' '" + root.savedY + "' > '$CONFIG_HOME/quickshell/splinter-media-menu/position'"]
+      savePosProc.running = false
+      savePosProc.running = true
+    }
+
+    Process {
+      id: savePosProc
+    }
+
+    Process {
+      id: loadPosProc
+      command: ["sh", "-c", "cat '$CONFIG_HOME/quickshell/splinter-media-menu/position' 2>/dev/null || true"]
+      stdout: StdioCollector {
+        onStreamFinished: {
+          const parts = this.text.trim().split("\\n")
+          if (parts.length >= 2) {
+            const x = parseInt(parts[0])
+            const y = parseInt(parts[1])
+
+            if (!isNaN(x) && !isNaN(y)) {
+              root.savedX = x
+              root.savedY = y
+              root.clampPosition()
+            }
+          }
+        }
+      }
+    }
+
+    Component.onCompleted: {
+      loadPosProc.running = true
+    }
+
     Rectangle {
       anchors.fill: parent
       radius: 18
@@ -167,6 +231,7 @@ ShellRoot {
         spacing: 12
 
         Row {
+          id: dragHeader
           width: parent.width
           height: 34
           spacing: 10
@@ -190,6 +255,7 @@ ShellRoot {
             color: closeMouse.containsMouse ? "$card" : "transparent"
             border.color: "$border"
             border.width: 1
+            z: 5
 
             Text {
               anchors.centerIn: parent
@@ -205,6 +271,41 @@ ShellRoot {
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: Qt.quit()
+            }
+          }
+
+          MouseArea {
+            id: dragArea
+            anchors.fill: parent
+            anchors.rightMargin: 42
+            hoverEnabled: true
+            cursorShape: root.dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+
+            onPressed: function(mouse) {
+              root.dragging = true
+              root.pressX = mouse.x
+              root.pressY = mouse.y
+              root.dragStartX = root.savedX
+              root.dragStartY = root.savedY
+            }
+
+            onPositionChanged: function(mouse) {
+              if (!root.dragging)
+                return
+
+              root.savedX = root.dragStartX + Math.round(mouse.x - root.pressX)
+              root.savedY = root.dragStartY + Math.round(mouse.y - root.pressY)
+              root.clampPosition()
+            }
+
+            onReleased: {
+              root.dragging = false
+              root.snapToNearestCorner()
+            }
+
+            onCanceled: {
+              root.dragging = false
+              root.snapToNearestCorner()
             }
           }
         }
@@ -266,7 +367,7 @@ ShellRoot {
         }
 
         Text {
-          text: "playerctl media controls"
+          text: "drag title bar • snaps to nearest corner"
           color: "$muted"
           font.pixelSize: 11
         }
@@ -309,5 +410,4 @@ ShellRoot {
   }
 }
 QML
-
 quickshell -p "$MENU_QML" >/tmp/splinter-media-menu.log 2>&1 &
