@@ -214,7 +214,7 @@ Variants {
             }
 
             Timer {
-                interval: 33
+                interval: 45
                 running: true
                 repeat: true
                 onTriggered: {
@@ -256,7 +256,7 @@ Variants {
 
                             Behavior on height {
                                 NumberAnimation {
-                                    duration: 70
+                                    duration: 90
                                     easing.type: Easing.OutCubic
                                 }
                             }

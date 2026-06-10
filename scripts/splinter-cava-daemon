@@ -12,8 +12,8 @@ cat > "$CAVA_CONFIG" <<'CAVACONF'
 [general]
 bars = 18
 framerate = 120
-autosens = 1
-sensitivity = 300
+autosens = 0
+sensitivity = 100
 
 [input]
 method = pipewire
@@ -24,15 +24,15 @@ method = raw
 raw_target = /dev/stdout
 data_format = ascii
 ascii_max_range = 8
-bar_delimiter = 10
+bar_delimiter = 255
 
 [smoothing]
 monstercat = 1
 waves = 0
-noise_reduction = 0.25
+noise_reduction = 0.55
 CAVACONF
 
-printf '000000000000000000' > "$FRAME_FILE"
+printf '000000000000000000000000000000000000' > "$FRAME_FILE"
 
 python - "$CAVA_CONFIG" "$FRAME_FILE" <<'PY'
 import subprocess
@@ -48,22 +48,59 @@ proc = subprocess.Popen(
     stderr=subprocess.DEVNULL,
 )
 
-digits = []
+values = []
+previous = [0.0] * 18
+moving_peak = 16.0
+
+TARGET_MAX = 44
+MIN_PEAK = 10.0
+ATTACK = 0.35
+DECAY = 0.985
+BAR_SMOOTH = 0.55
 
 while True:
-    b = proc.stdout.read(1)
-    if not b:
+    chunk = proc.stdout.read(128)
+    if not chunk:
         break
 
-    value = b[0]
+    for b in chunk:
+        # Skip delimiter and line-like separators.
+        if b in (255, 10, 13):
+            continue
 
-    if 0 <= value <= 8:
-        digits.append(str(value))
-    elif 48 <= value <= 56:
-        digits.append(chr(value))
+        # CAVA raw ascii can be real byte values 0-64.
+        if 0 <= b <= 64:
+            values.append(float(b))
 
-    if len(digits) >= 18:
-        frame = "".join(digits[-18:])
-        frame_file.write_text(frame)
-        digits.clear()
+        # Or printable ASCII digits 0-8 on some builds/configs.
+        elif 48 <= b <= 56:
+            values.append(float(b - 48))
+
+        while len(values) >= 18:
+            frame_values = values[:18]
+            values = values[18:]
+
+            frame_peak = max(frame_values)
+
+            if frame_peak > moving_peak:
+                moving_peak = moving_peak * (1.0 - ATTACK) + frame_peak * ATTACK
+            else:
+                moving_peak = max(MIN_PEAK, moving_peak * DECAY)
+
+            scaled = []
+            for i, value in enumerate(frame_values):
+                normalized = (value / moving_peak) * TARGET_MAX
+                normalized = max(0.0, min(64.0, normalized))
+
+                smoothed = previous[i] * (1.0 - BAR_SMOOTH) + normalized * BAR_SMOOTH
+                previous[i] = smoothed
+
+                scaled.append(int(round(smoothed)))
+
+            # 18 bars * 2 hex chars = 36 chars
+            frame = "".join(str(max(0, min(8, int(round((v / 64) * 8))))) for v in scaled)
+
+            tmp = frame_file.with_suffix(".tmp")
+            tmp.write_text(frame)
+            tmp.replace(frame_file)
 PY

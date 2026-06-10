@@ -3835,7 +3835,7 @@ fn visualizer_widget_qml(
             height: {height}
             clip: false
 
-            property string rawBars: "000000000000000000000000000000000000"
+            property string rawBars: "000000000000000000"
 
             Process {{
                 id: cavaProc
@@ -3890,11 +3890,11 @@ fn visualizer_widget_qml(
                             anchors.bottom: parent.bottom
                             color: "{accent}"
 
-                            height: Math.max(3, (parent.height * parseInt({id}.rawBars.substring(index * 2, index * 2 + 2), 16)) / 32)
+                            height: Math.max(3, (parent.height * Number({id}.rawBars.charAt(index))) / 8)
 
                             Behavior on height {{
                                 NumberAnimation {{
-                                    duration: 115
+                                    duration: 90
                                     easing.type: Easing.OutCubic
                                 }}
                             }}

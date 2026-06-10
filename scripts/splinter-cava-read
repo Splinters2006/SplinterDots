@@ -9,7 +9,9 @@ if ! pgrep -u "$UID" -f "splinter-cava-daemon" >/dev/null 2>&1; then
 fi
 
 if [[ -f "$FRAME_FILE" ]]; then
-  tr -cd '0-8' < "$FRAME_FILE" | head -c 18
+  frame="$(tr -cd '0-8' < "$FRAME_FILE" | head -c 18)"
 else
-  printf '000000000000000000'
+  frame=""
 fi
+
+printf '%-18.18s' "$frame" | tr ' ' '0'
