@@ -57,15 +57,15 @@ Variants {
         interval: 40
         running: true
         repeat: true
-        onTriggered: stateProc.running = true
+        onTriggered: { stateProc.running = false; stateProc.running = true }
       }
 
       Rectangle {
         anchors.fill: parent
         radius: 28
-        color: "#ea2d353b"
+        color: "#ea241b2e"
         border.width: 1
-        border.color: "#3d484d"
+        border.color: "#392a49"
 
         RowLayout {
           anchors.fill: parent
@@ -74,95 +74,166 @@ Variants {
           spacing: 14
 
           Row {
-            Layout.alignment: Qt.AlignVCenter
-            spacing: 6
+            Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+            spacing: 7
 
-            Repeater {
-              model: 5
-              Rectangle {
-                width: (index + 1) === root.activeWorkspace ? 38 : 26
-                height: (index + 1) === root.activeWorkspace ? 38 : 26
-                anchors.verticalCenter: parent.verticalCenter
-                radius: 24
-                color: (index + 1) === root.activeWorkspace ? "#89b4fa" : "#3d484d"
-                opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.72
+            Row {
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: 6
 
-                Text {
-                  anchors.centerIn: parent
-                  text: index + 1
-                  color: (index + 1) === root.activeWorkspace ? "#232a2e" : "#d3c6aa"
-                  font.bold: true
-                  font.pixelSize: 11
-                  font.family: "Symbols Nerd Font"
-                }
+              Repeater {
+                model: 5
+                Rectangle {
+                  width: (index + 1) === root.activeWorkspace ? 38 : 26
+                  height: (index + 1) === root.activeWorkspace ? 38 : 26
+                  anchors.verticalCenter: parent.verticalCenter
+                  radius: 24
+                  color: (index + 1) === root.activeWorkspace ? "#89b4fa" : "#392a49"
+                  opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.72
 
-                MouseArea {
-                  anchors.fill: parent
-                  onClicked: switchWorkspace.running = true
-                  hoverEnabled: true
-                  onEntered: parent.opacity = 1.0
-                  onExited: parent.opacity = (index + 1) === root.activeWorkspace ? 1.0 : 0.72
-                }
+                  Text {
+                    anchors.centerIn: parent
+                    text: index + 1
+                    color: (index + 1) === root.activeWorkspace ? "#191420" : "#ffebf6"
+                    font.bold: true
+                    font.pixelSize: 11
+                    font.family: "Symbols Nerd Font"
+                  }
 
-                Process {
-                  id: switchWorkspace
-                  command: ["hyprctl", "dispatch", "workspace", String(index + 1)]
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: { workspaceProc_left_0.running = false; workspaceProc_left_0.running = true }
+                    onEntered: parent.opacity = 1.0
+                    onExited: parent.opacity = (index + 1) === root.activeWorkspace ? 1.0 : 0.72
+                  }
+
+                  Process {
+                    id: workspaceProc_left_0
+                    command: ["hyprctl", "dispatch", "workspace", String(index + 1)]
+                  }
                 }
               }
             }
+
           }
+
           Item { Layout.fillWidth: true }
 
-          Text {
-            id: clock
+          Row {
             Layout.alignment: Qt.AlignCenter
-            color: "#d3c6aa"
-            font.bold: true
-            font.pixelSize: 12
-            font.family: "Symbols Nerd Font"
-            text: "..."
+            spacing: 7
 
-            Process {
-              id: dateProc
-              command: ["date", "+%a %d %b  %H:%M"]
-              running: true
-              stdout: StdioCollector {
-                onStreamFinished: clock.text = " " + this.text.trim()
+            Text {
+              id: txt_center_0
+              anchors.verticalCenter: parent.verticalCenter
+              color: "#ffebf6"
+              font.pixelSize: 12
+              font.family: "Symbols Nerd Font"
+              text: ""
+
+              Process {
+                id: proc_center_0
+                command: ["sh", "-c", "date +\"%a %d %b  %H:%M\""]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: txt_center_0.text = " " + this.text.split("\\n").join("").trim()
+                }
+              }
+
+              Timer {
+                interval: 1000
+                running: true
+                repeat: true
+                onTriggered: { proc_center_0.running = false; proc_center_0.running = true }
               }
             }
 
-            Timer {
-              interval: 1000
-              running: true
-              repeat: true
-              onTriggered: dateProc.running = true
+
+            Text {
+              id: txt_center_1
+              anchors.verticalCenter: parent.verticalCenter
+              color: "#ffebf6"
+              font.pixelSize: 12
+              font.family: "Symbols Nerd Font"
+              text: ""
+
+              Process {
+                id: proc_center_1
+                command: ["sh", "-c", "playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null | cut -c1-28 | sed 's/^/ /'"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: txt_center_1.text = "" + this.text.split("\\n").join("").trim()
+                }
+              }
+
+              Timer {
+                interval: 1500
+                running: true
+                repeat: true
+                onTriggered: { proc_center_1.running = false; proc_center_1.running = true }
+              }
             }
+
           }
+
           Item { Layout.fillWidth: true }
 
-          Text {
-            id: status
+          Row {
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-            color: "#a89984"
-            font.pixelSize: 12
-            font.family: "Symbols Nerd Font"
-            text: ""
+            spacing: 7
 
-            Process {
-              id: statusProc
-              command: ["sh", "-c", "printf ' '; wpctl get-volume \"@DEFAULT_AUDIO_SINK@\" 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"\"; else print v\"%\"}'; nmcli -t -f GENERAL.STATE device show 2>/dev/null | grep -q ':100' && printf '  󰤨 on' || printf '  󰤨 off'; bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && if [ \"$bat\" -le 20 ]; then printf '  󰁹 %s%%!' \"$bat\"; else printf '  󰁹 %s%%' \"$bat\"; fi"]
-              running: true
-              stdout: StdioCollector {
-                onStreamFinished: status.text = this.text.replace(/\n/g, "").trim()
+            Text {
+              id: txt_right_0
+              anchors.verticalCenter: parent.verticalCenter
+              color: "#ffebf6"
+              font.pixelSize: 12
+              font.family: "Symbols Nerd Font"
+              text: ""
+
+              Process {
+                id: proc_right_0
+                command: ["sh", "-c", "top -bn1 | awk -F'[, ]+' '/Cpu\\(s\\)/{print \" \" int($2+$4) \"%\"}'"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: txt_right_0.text = "" + this.text.split("\\n").join("").trim()
+                }
+              }
+
+              Timer {
+                interval: 1500
+                running: true
+                repeat: true
+                onTriggered: { proc_right_0.running = false; proc_right_0.running = true }
               }
             }
 
-            Timer {
-              interval: 1500
-              running: true
-              repeat: true
-              onTriggered: statusProc.running = true
+
+            Text {
+              id: txt_right_1
+              anchors.verticalCenter: parent.verticalCenter
+              color: "#ffebf6"
+              font.pixelSize: 12
+              font.family: "Symbols Nerd Font"
+              text: ""
+
+              Process {
+                id: proc_right_1
+                command: ["sh", "-c", "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf ' on' || printf ' off'"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: txt_right_1.text = "" + this.text.split("\\n").join("").trim()
+                }
+              }
+
+              Timer {
+                interval: 1500
+                running: true
+                repeat: true
+                onTriggered: { proc_right_1.running = false; proc_right_1.running = true }
+              }
             }
+
           }
         }
       }

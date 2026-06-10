@@ -46,3 +46,5 @@ fi
 if [ "${DOTFILES_ENABLE_STARSHIP:-1}" = "1" ] && command -v starship >/dev/null 2>&1; then
   eval "$(starship init zsh)"
 fi
+alias spdbuild='cd ~/SplinterDots && cargo build --release --manifest-path Cargo.toml -p SplinterDots && (pkill -f SplinterDots || true) && ./target/release/SplinterDots'
+alias spdbuild='cd ~/SplinterDots && cargo build --release --manifest-path Cargo.toml -p SplinterDots && (pkill -f SplinterDots || true) && ./target/release/SplinterDots'

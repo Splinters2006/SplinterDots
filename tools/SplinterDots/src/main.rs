@@ -34,9 +34,9 @@ const SETTINGS_KEYS: &[(&str, &str)] = &[
     ("DOTFILES_BAR_STATUS_MS", "1500"),
     ("DOTFILES_BAR_ICON_PACK", "nerd"),
     ("DOTFILES_BAR_ICON_FONT", "Symbols Nerd Font"),
-    ("DOTFILES_BAR_LEFT_WIDGETS", "workspaces"),
-    ("DOTFILES_BAR_CENTER_WIDGETS", "clock"),
-    ("DOTFILES_BAR_RIGHT_WIDGETS", "volume,network,battery"),
+    ("DOTFILES_BAR_LEFT_WIDGETS", ""),
+    ("DOTFILES_BAR_CENTER_WIDGETS", ""),
+    ("DOTFILES_BAR_RIGHT_WIDGETS", ""),
     ("DOTFILES_BAR_SHOW_WORKSPACES", "true"),
     ("DOTFILES_BAR_SHOW_CLOCK", "true"),
     ("DOTFILES_BAR_SHOW_VOLUME", "true"),
@@ -2276,7 +2276,7 @@ misc               = 313244
     }
 
     fn widget_zone_editor(&mut self, ui: &mut egui::Ui, theme: &AppTheme, title: &str, zone: &str) {
-        let key = format!("DOTFILES_BAR_{}", zone.to_uppercase());
+        let key = format!("DOTFILES_BAR_{}_WIDGETS", zone.to_uppercase());
         let mut widgets = split_csv(&self.value(&key));
         let mut drop_index: Option<usize> = None;
 
@@ -2330,7 +2330,7 @@ misc               = 313244
 
                     let card_response = Frame {
                         fill: if is_dragged {
-                            theme.card_hover
+                            theme.panel_soft
                         } else {
                             theme.card
                         },
@@ -2352,16 +2352,41 @@ misc               = 313244
                             );
 
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                if ui.small_button("×").clicked() {
+                                let remove = ui.add(
+                                    egui::Button::new(
+                                        RichText::new("×")
+                                            .color(theme.danger)
+                                            .strong()
+                                            .size(16.0),
+                                    )
+                                    .min_size(Vec2::new(26.0, 24.0)),
+                                );
+
+                                if remove.clicked() {
                                     remove_index = Some(index);
+                                    ui.ctx().request_repaint();
                                 }
                             });
                         });
                     })
-                    .response
-                    .interact(egui::Sense::click_and_drag());
+                    .response;
 
-                    if card_response.drag_started() {
+                    // Only the left/middle part of the card is draggable.
+                    // The right side is reserved for the remove button.
+                    let mut drag_rect = card_response.rect;
+                    drag_rect.max.x = (drag_rect.max.x - 46.0).max(drag_rect.min.x);
+
+                    let drag_response = ui.interact(
+                        drag_rect,
+                        ui.make_persistent_id(format!("bar_widget_drag_{zone}_{index}")),
+                        egui::Sense::click_and_drag(),
+                    );
+
+                    if drag_response.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                    }
+
+                    if drag_response.drag_started() {
                         self.dragged_bar_widget = Some((zone.to_string(), index));
                     }
 
@@ -2383,8 +2408,11 @@ misc               = 313244
 
                 if let Some(index) = remove_index {
                     if index < widgets.len() {
+                        let removed = widget_label(&widgets[index]);
                         widgets.remove(index);
                         self.set_value(&key, widgets.join(","));
+                        self.sync_widget_toggles_from_layout();
+                        self.status = format!("Removed {removed} widget");
                     }
                 }
 
@@ -2417,40 +2445,107 @@ misc               = 313244
             .response;
 
             let mouse_released = ui.input(|input| input.pointer.any_released());
+            let pointer_pos = ui.input(|input| input.pointer.interact_pos());
+            let pointer_inside_zone = pointer_pos
+                .map(|pos| zone_response.rect.contains(pos))
+                .unwrap_or(false);
 
-            if mouse_released {
-                if zone_response.hovered() {
-                    if let Some((from_zone, from_index)) = self.dragged_bar_widget.take() {
-                        let from_key = format!("DOTFILES_BAR_{}", from_zone.to_uppercase());
-                        let mut from_widgets = split_csv(&self.value(&from_key));
-                        let mut to_widgets = split_csv(&self.value(&key));
+            if mouse_released && pointer_inside_zone {
+                if let Some((from_zone, from_index)) = self.dragged_bar_widget.take() {
+                    let from_key = format!("DOTFILES_BAR_{}_WIDGETS", from_zone.to_uppercase());
+                    let mut from_widgets = split_csv(&self.value(&from_key));
+                    let mut to_widgets = split_csv(&self.value(&key));
 
-                        if from_index < from_widgets.len() {
-                            let moved = from_widgets.remove(from_index);
+                    if from_index < from_widgets.len() {
+                        let moved = from_widgets.remove(from_index);
 
-                            let mut insert_at = drop_index.unwrap_or(to_widgets.len());
+                        let mut insert_at = drop_index.unwrap_or(to_widgets.len());
 
-                            if from_zone == zone {
-                                to_widgets = from_widgets.clone();
+                        if from_zone == zone {
+                            to_widgets = from_widgets.clone();
 
-                                if from_index < insert_at {
-                                    insert_at = insert_at.saturating_sub(1);
-                                }
+                            if from_index < insert_at {
+                                insert_at = insert_at.saturating_sub(1);
                             }
-
-                            insert_at = insert_at.min(to_widgets.len());
-                            to_widgets.insert(insert_at, moved);
-
-                            self.set_value(&from_key, from_widgets.join(","));
-                            self.set_value(&key, to_widgets.join(","));
-                            self.status = "Bar widget moved".to_string();
                         }
+
+                        insert_at = insert_at.min(to_widgets.len());
+                        to_widgets.insert(insert_at, moved);
+
+                        self.set_value(&from_key, from_widgets.join(","));
+                        self.set_value(&key, to_widgets.join(","));
+                        self.status = "Bar widget moved".to_string();
                     }
-                } else {
-                    self.dragged_bar_widget = None;
                 }
             }
         });
+    }
+
+
+    fn persist_bar_layout(&mut self) {
+        self.sync_widget_toggles_from_layout();
+
+        match write_local_conf(&self.paths, &self.values) {
+            Ok(()) => {
+                self.status = "Bar layout saved".to_string();
+            }
+            Err(err) => {
+                self.status = format!("Could not save bar layout: {err}");
+            }
+        }
+    }
+
+    fn paint_dragged_bar_widget(&self, ui: &mut egui::Ui, theme: &AppTheme) {
+        let Some((zone, index)) = self.dragged_bar_widget.as_ref() else {
+            return;
+        };
+
+        let key = format!("DOTFILES_BAR_{}_WIDGETS", zone.to_uppercase());
+        let widgets = split_csv(&self.value(&key));
+
+        let Some(widget) = widgets.get(*index) else {
+            return;
+        };
+
+        let Some(pointer_pos) = ui.input(|input| input.pointer.interact_pos()) else {
+            return;
+        };
+
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+
+        let label = widget_label(widget);
+        let preview_size = Vec2::new(190.0, 42.0);
+        let preview_pos = pointer_pos + egui::vec2(22.0, 18.0);
+        let rect = egui::Rect::from_min_size(preview_pos, preview_size);
+
+        let painter = ui.ctx().layer_painter(egui::LayerId::new(
+            egui::Order::Tooltip,
+            egui::Id::new("splinter-dragged-bar-widget-preview"),
+        ));
+
+        painter.rect(
+            rect,
+            CornerRadius::same(16),
+            theme.card_hover,
+            Stroke::new(2.0, theme.accent),
+            egui::StrokeKind::Inside,
+        );
+
+        painter.text(
+            rect.left_center() + egui::vec2(14.0, 0.0),
+            egui::Align2::LEFT_CENTER,
+            "󰍢",
+            FontId::proportional(18.0),
+            theme.muted,
+        );
+
+        painter.text(
+            rect.left_center() + egui::vec2(42.0, 0.0),
+            egui::Align2::LEFT_CENTER,
+            label,
+            FontId::proportional(15.0),
+            theme.text,
+        );
     }
 
 
@@ -2486,6 +2581,8 @@ misc               = 313244
                     self.widget_zone_editor(&mut columns[1], &theme, "Center", "center");
                     self.widget_zone_editor(&mut columns[2], &theme, "Right", "right");
                 });
+
+                self.paint_dragged_bar_widget(ui, &theme);
 
                 ui.add_space(8.0);
 
@@ -3345,15 +3442,11 @@ fn build_bar_zone_qml(
     status_ms: i64,
     icon_font: &str,
 ) -> String {
-    let key = format!("DOTFILES_BAR_{}", zone.to_uppercase());
+    let key = format!("DOTFILES_BAR_{}_WIDGETS", zone.to_uppercase());
     let raw = value_or(values, &key);
 
     let widgets = if raw.trim().is_empty() {
-        match zone {
-            "left" => vec!["workspaces".to_string()],
-            "center" => vec!["clock".to_string()],
-            _ => vec!["volume".to_string(), "network".to_string(), "battery".to_string()],
-        }
+        Vec::new()
     } else {
         split_csv(&raw)
     };
