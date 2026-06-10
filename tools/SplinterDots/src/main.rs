@@ -3525,15 +3525,7 @@ fn bar_widget_qml(
         "temp" => command_text_qml(id, palette, font_size, icon_font, "sensors 2>/dev/null | awk '/Package id 0|Tctl|temp1/{gsub(/[+°C]/, \"\", $2); print \" \" int($2) \"°C\"; exit}'", status_ms, None),
         "disk" => command_text_qml(id, palette, font_size, icon_font, "df -h / 2>/dev/null | awk 'NR==2{print \"󰋊 \" $5}'", status_ms, None),
         "gpu" => command_text_qml(id, palette, font_size, icon_font, "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | awk '{print \"󰢮 \" $1 \"%\"}'", status_ms, None),
-
-        "media" => {
-            let max_len = clamp_i(value_or(values, "DOTFILES_WIDGET_MEDIA_LENGTH"), 28, 8, 80);
-            command_text_qml(id, palette, font_size, icon_font, &format!("playerctl metadata --format '{{{{artist}}}} - {{{{title}}}}' 2>/dev/null | cut -c1-{max_len} | sed 's/^/ /'"), status_ms, None)
-        }
-        "media-prev" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "playerctl previous"),
-        "media-play" => command_button_qml(id, palette, height, radius, font_size, icon_font, " ", "playerctl play-pause"),
-        "media-next" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "playerctl next"),
-        "media_controller" => media_controller_qml(id, palette, height, radius, font_size, icon_font),
+        "media_controls" | "media" | "media_controller" | "media-controller" | "media_prev" | "media-play" | "media-next" => media_controls_qml(id, palette, height, radius, font_size, icon_font),
 
         "launcher" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰀻", "wofi --show drun"),
         "power" => command_button_qml(id, palette, height, radius, font_size, icon_font, "⏻", "wlogout || systemctl poweroff"),
@@ -3656,30 +3648,6 @@ fn command_button_qml(
     .replace("__COMMAND__", &json_string(command))
 }
 
-fn media_controller_qml(
-    id: &str,
-    palette: &Palette,
-    height: i64,
-    radius: i64,
-    font_size: i64,
-    icon_font: &str,
-) -> String {
-    format!(
-        r#"
-            Row {{
-              anchors.verticalCenter: parent.verticalCenter
-              spacing: 4
-{prev}
-{play}
-{next}
-            }}
-"#,
-        prev = command_button_qml(&format!("{id}_prev"), palette, height, radius, font_size, icon_font, "", "playerctl previous"),
-        play = command_button_qml(&format!("{id}_play"), palette, height, radius, font_size, icon_font, "", "playerctl play-pause"),
-        next = command_button_qml(&format!("{id}_next"), palette, height, radius, font_size, icon_font, "", "playerctl next"),
-    )
-}
-
 fn workspaces_qml(
     id: &str,
     palette: &Palette,
@@ -3689,60 +3657,125 @@ fn workspaces_qml(
     workspace_count: i64,
     icon_font: &str,
 ) -> String {
-    r#"
-            Row {
+    let item_id = qml_id(id, "workspaces");
+
+    format!(
+        r#"
+            Row {{
+              id: __ID__
               anchors.verticalCenter: parent.verticalCenter
-              spacing: 6
+              spacing: 5
 
-              Repeater {
+              Repeater {{
                 model: __WORKSPACE_COUNT__
-                Rectangle {
-                  width: (index + 1) === root.activeWorkspace ? __ACTIVE_W__ : __INACTIVE_W__
-                  height: (index + 1) === root.activeWorkspace ? __ACTIVE_H__ : __INACTIVE_H__
-                  anchors.verticalCenter: parent.verticalCenter
-                  radius: __BUTTON_RADIUS__
-                  color: (index + 1) === root.activeWorkspace ? "__ACCENT__" : "__SURFACE__"
-                  opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.72
 
-                  Text {
+                delegate: Rectangle {{
+                  width: __BUTTON_SIZE__
+                  height: __BUTTON_SIZE__
+                  radius: __BUTTON_RADIUS__
+                  color: "__SURFACE__"
+                  border.color: "__MUTED__"
+                  border.width: 1
+
+                  Text {{
                     anchors.centerIn: parent
-                    text: index + 1
-                    color: (index + 1) === root.activeWorkspace ? "__ACTIVE_TEXT__" : "__TEXT__"
-                    font.bold: true
+                    text: modelData + 1
+                    color: "__TEXT__"
                     font.pixelSize: __FONT_SIZE__
                     font.family: "__ICON_FONT__"
-                  }
+                  }}
 
-                  MouseArea {
+                  MouseArea {{
                     anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: { __PROC_ID__.running = false; __PROC_ID__.running = true }
-                    onEntered: parent.opacity = 1.0
-                    onExited: parent.opacity = (index + 1) === root.activeWorkspace ? 1.0 : 0.72
-                  }
-
-                  Process {
-                    id: __PROC_ID__
-                    command: ["hyprctl", "dispatch", "workspace", String(index + 1)]
-                  }
-                }
-              }
-            }
-"#
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {{
+                      Hyprland.dispatch("workspace " + (modelData + 1))
+                    }}
+                  }}
+                }}
+              }}
+            }}
+"#,
+    )
+    .replace("__ID__", &item_id)
     .replace("__WORKSPACE_COUNT__", &workspace_count.to_string())
-    .replace("__ACTIVE_W__", &(height - 2).to_string())
-    .replace("__INACTIVE_W__", &(height - 14).to_string())
-    .replace("__ACTIVE_H__", &(height - 2).to_string())
-    .replace("__INACTIVE_H__", &(height - 14).to_string())
-    .replace("__BUTTON_RADIUS__", &(radius - 4).max(3).to_string().as_str())
-    .replace("__ACCENT__", &palette.accent)
+    .replace("__BUTTON_SIZE__", &(height - 8).max(20).to_string())
+    .replace("__BUTTON_RADIUS__", &(radius - 4).max(4).to_string())
+    .replace("__FONT_SIZE__", &font_size.to_string())
+    .replace("__ICON_FONT__", &qml_string_escape(icon_font))
     .replace("__SURFACE__", &palette.surface)
-    .replace("__ACTIVE_TEXT__", &palette.active_text)
     .replace("__TEXT__", &palette.text)
-    .replace("__FONT_SIZE__", &(font_size - 1).to_string())
-    .replace("__ICON_FONT__", icon_font)
-    .replace("__PROC_ID__", &qml_id(id, "workspaceProc"))
+    .replace("__MUTED__", &palette.muted)
 }
+
+
+fn media_controls_qml(
+    id: &str,
+    palette: &Palette,
+    height: i64,
+    radius: i64,
+    font_size: i64,
+    icon_font: &str,
+) -> String {
+    let item_id = qml_id(id, "media");
+    let menu_proc = qml_id(&format!("{id}_menu_proc"), "proc");
+    let button_size = (height - 8).max(22);
+
+    format!(
+        r#"
+            Item {{
+              id: __ID__
+              width: __BUTTON_SIZE__
+              height: __HEIGHT__
+
+              Process {{
+                id: __MENU_PROC__
+                command: ["sh", "-c", "splinter-media-menu"]
+              }}
+
+              Rectangle {{
+                id: mediaButton
+                anchors.centerIn: parent
+                width: __BUTTON_SIZE__
+                height: __BUTTON_SIZE__
+                radius: __BUTTON_RADIUS__
+                color: "__SURFACE__"
+                border.color: "__ACCENT__"
+                border.width: 1
+
+                Text {{
+                  anchors.centerIn: parent
+                  text: ""
+                  color: "__TEXT__"
+                  font.family: "__ICON_FONT__"
+                  font.pixelSize: __FONT_SIZE__
+                }}
+
+                MouseArea {{
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  acceptedButtons: Qt.LeftButton
+                  onClicked: {{
+                    __MENU_PROC__.running = false
+                    __MENU_PROC__.running = true
+                  }}
+                }}
+              }}
+            }}
+"#,
+    )
+    .replace("__ID__", &item_id)
+    .replace("__MENU_PROC__", &menu_proc)
+    .replace("__HEIGHT__", &height.to_string())
+    .replace("__BUTTON_SIZE__", &button_size.to_string())
+    .replace("__BUTTON_RADIUS__", &(radius - 4).max(4).to_string())
+    .replace("__FONT_SIZE__", &font_size.to_string())
+    .replace("__ICON_FONT__", &qml_string_escape(icon_font))
+    .replace("__SURFACE__", &palette.surface)
+    .replace("__TEXT__", &palette.text)
+    .replace("__ACCENT__", &palette.accent)
+}
+
 
 fn qml_id(id: &str, prefix: &str) -> String {
     let safe = id
@@ -4719,14 +4752,8 @@ fn bar_widget_choices() -> &'static [BarWidgetChoice] {
         BarWidgetChoice { id: "clock",              label: "Clock",                 setting: "DOTFILES_WIDGET_CLOCK" },
         BarWidgetChoice { id: "date",               label: "Date",                  setting: "DOTFILES_WIDGET_CLOCK" },
         BarWidgetChoice { id: "calendar",           label: "Calendar",              setting: "DOTFILES_WIDGET_CLOCK" },
-
-        BarWidgetChoice { id: "media",              label: "Now Playing",           setting: "DOTFILES_WIDGET_MEDIA" },
-        BarWidgetChoice { id: "media_prev",         label: "Media Previous",        setting: "DOTFILES_WIDGET_MEDIA" },
-        BarWidgetChoice { id: "media_playpause",    label: "Media Play/Pause",      setting: "DOTFILES_WIDGET_MEDIA" },
-        BarWidgetChoice { id: "media_next",         label: "Media Next",            setting: "DOTFILES_WIDGET_MEDIA" },
-        BarWidgetChoice { id: "media_controls",     label: "Playerctl Controls",    setting: "DOTFILES_WIDGET_MEDIA" },
-
         BarWidgetChoice { id: "easyeffects",        label: "EasyEffects",          setting: "DOTFILES_WIDGET_EASYEFFECTS" },
+        BarWidgetChoice { id: "media_controls",     label: "Media Controls",       setting: "DOTFILES_WIDGET_MEDIA" },
         BarWidgetChoice { id: "volume",             label: "Volume",                setting: "DOTFILES_WIDGET_VOLUME" },
         BarWidgetChoice { id: "microphone",         label: "Microphone",            setting: "DOTFILES_WIDGET_MICROPHONE" },
         BarWidgetChoice { id: "network",            label: "Network",               setting: "DOTFILES_WIDGET_NETWORK" },

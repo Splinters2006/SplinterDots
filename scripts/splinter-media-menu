@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+SETTINGS_FILE="$CONFIG_HOME/dotfiles/settings.conf"
+MENU_DIR="$CONFIG_HOME/quickshell/splinter-media-menu"
+MENU_QML="$MENU_DIR/shell.qml"
+
+mkdir -p "$MENU_DIR"
+
+setting() {
+  local key="$1"
+  local fallback="$2"
+
+  if [ -f "$SETTINGS_FILE" ]; then
+    awk -F= -v k="$key" '$1 == k { sub(/^[^=]*=/, ""); print; found=1 } END { if (!found) exit 1 }' "$SETTINGS_FILE" 2>/dev/null || printf '%s' "$fallback"
+  else
+    printf '%s' "$fallback"
+  fi
+}
+
+theme="$(setting DOTFILES_THEME dark)"
+accent="$(setting DOTFILES_ACCENT '#89b4fa')"
+
+case "$theme" in
+  light)
+    bg="#f8fafc"
+    surface="#ffffff"
+    card="#eef2ff"
+    text="#0f172a"
+    muted="#64748b"
+    border="#cbd5e1"
+    ;;
+  cyber)
+    bg="#040814"
+    surface="#121a3a"
+    card="#1a244e"
+    text="#e8fcff"
+    muted="#87cdda"
+    border="#254d66"
+    ;;
+  dracula)
+    bg="#282a36"
+    surface="#313244"
+    card="#44475a"
+    text="#f8f8f2"
+    muted="#bd93f9"
+    border="#6272a4"
+    ;;
+  everforest)
+    bg="#232a2e"
+    surface="#343f44"
+    card="#3d484d"
+    text="#d3c6aa"
+    muted="#a89984"
+    border="#586363"
+    ;;
+  *)
+    bg="#0a0c12"
+    surface="#141824"
+    card="#1e2436"
+    text="#e2e8f0"
+    muted="#94a3b8"
+    border="#334155"
+    ;;
+esac
+
+# Toggle the popup if it is already open.
+if pgrep -u "$UID" -f "$MENU_QML" >/dev/null 2>&1; then
+  pkill -u "$UID" -f "$MENU_QML" || true
+  exit 0
+fi
+
+cat > "$MENU_QML" <<QML
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import Quickshell.Wayland
+
+ShellRoot {
+  PanelWindow {
+    id: root
+    visible: true
+    color: "transparent"
+
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+
+    anchors {
+      top: true
+      right: true
+    }
+
+    margins {
+      top: 52
+      right: 18
+    }
+
+    exclusiveZone: 0
+    implicitWidth: 340
+    implicitHeight: 164
+
+    property string mediaTitle: "No media playing"
+
+    Process {
+      id: refreshProc
+      command: ["sh", "-c", "playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null || echo 'No media playing'"]
+      stdout: StdioCollector {
+        onStreamFinished: {
+          const clean = this.text.split("\\n").join("").trim()
+          root.mediaTitle = clean.length > 0 ? clean : "No media playing"
+        }
+      }
+    }
+
+    Process {
+      id: prevProc
+      command: ["sh", "-c", "playerctl previous"]
+    }
+
+    Process {
+      id: playProc
+      command: ["sh", "-c", "playerctl play-pause"]
+    }
+
+    Process {
+      id: nextProc
+      command: ["sh", "-c", "playerctl next"]
+    }
+
+    Process {
+      id: openProc
+      command: ["sh", "-c", "spotify >/dev/null 2>&1 &"]
+    }
+
+    Timer {
+      interval: 1000
+      running: true
+      repeat: true
+      triggeredOnStart: true
+      onTriggered: {
+        refreshProc.running = false
+        refreshProc.running = true
+      }
+    }
+
+    Rectangle {
+      anchors.fill: parent
+      radius: 18
+      color: "$surface"
+      border.color: "$accent"
+      border.width: 1
+
+      Rectangle {
+        anchors.fill: parent
+        anchors.margins: 1
+        radius: 17
+        color: "transparent"
+        border.color: "$border"
+        border.width: 1
+        opacity: 0.55
+      }
+
+      Column {
+        anchors.fill: parent
+        anchors.margins: 14
+        spacing: 12
+
+        Row {
+          width: parent.width
+          height: 34
+          spacing: 10
+
+          Text {
+            width: parent.width - closeButton.width - 12
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.mediaTitle
+            color: "$text"
+            font.pixelSize: 14
+            font.bold: true
+            elide: Text.ElideRight
+            maximumLineCount: 1
+          }
+
+          Rectangle {
+            id: closeButton
+            width: 32
+            height: 30
+            radius: 10
+            color: closeMouse.containsMouse ? "$card" : "transparent"
+            border.color: "$border"
+            border.width: 1
+
+            Text {
+              anchors.centerIn: parent
+              text: "×"
+              color: "$muted"
+              font.pixelSize: 18
+              font.bold: true
+            }
+
+            MouseArea {
+              id: closeMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: Qt.quit()
+            }
+          }
+        }
+
+        Row {
+          width: parent.width
+          height: 48
+          spacing: 9
+
+          MediaButton {
+            label: ""
+            textColor: "$text"
+            bg: "$card"
+            hoverBg: "$accent"
+            borderColor: "$border"
+            onClicked: {
+              prevProc.running = false
+              prevProc.running = true
+            }
+          }
+
+          MediaButton {
+            label: " / "
+            wide: true
+            textColor: "$text"
+            bg: "$card"
+            hoverBg: "$accent"
+            borderColor: "$border"
+            onClicked: {
+              playProc.running = false
+              playProc.running = true
+            }
+          }
+
+          MediaButton {
+            label: ""
+            textColor: "$text"
+            bg: "$card"
+            hoverBg: "$accent"
+            borderColor: "$border"
+            onClicked: {
+              nextProc.running = false
+              nextProc.running = true
+            }
+          }
+
+          MediaButton {
+            label: "Open"
+            wide: true
+            textColor: "$text"
+            bg: "$card"
+            hoverBg: "$accent"
+            borderColor: "$border"
+            onClicked: {
+              openProc.running = false
+              openProc.running = true
+            }
+          }
+        }
+
+        Text {
+          text: "playerctl media controls"
+          color: "$muted"
+          font.pixelSize: 11
+        }
+      }
+    }
+  }
+
+  component MediaButton: Rectangle {
+    signal clicked()
+
+    property string label: ""
+    property string textColor: "#ffffff"
+    property string bg: "#222222"
+    property string hoverBg: "#444444"
+    property string borderColor: "#555555"
+    property bool wide: false
+
+    width: wide ? 82 : 52
+    height: 42
+    radius: 12
+    color: mouse.containsMouse ? hoverBg : bg
+    border.color: borderColor
+    border.width: 1
+
+    Text {
+      anchors.centerIn: parent
+      text: label
+      color: textColor
+      font.pixelSize: label === "Open" ? 13 : 15
+      font.bold: true
+    }
+
+    MouseArea {
+      id: mouse
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: parent.clicked()
+    }
+  }
+}
+QML
+
+quickshell -p "$MENU_QML" >/tmp/splinter-media-menu.log 2>&1 &

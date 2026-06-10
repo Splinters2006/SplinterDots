@@ -78,39 +78,35 @@ Variants {
             spacing: 7
 
             Row {
+              id: workspaces_left_0
               anchors.verticalCenter: parent.verticalCenter
-              spacing: 6
+              spacing: 5
 
               Repeater {
                 model: 5
-                Rectangle {
-                  width: (index + 1) === root.activeWorkspace ? 38 : 26
-                  height: (index + 1) === root.activeWorkspace ? 38 : 26
-                  anchors.verticalCenter: parent.verticalCenter
+
+                delegate: Rectangle {
+                  width: 32
+                  height: 32
                   radius: 24
-                  color: (index + 1) === root.activeWorkspace ? "#89b4fa" : "#392a49"
-                  opacity: (index + 1) === root.activeWorkspace ? 1.0 : 0.72
+                  color: "#392a49"
+                  border.color: "#ddb0cd"
+                  border.width: 1
 
                   Text {
                     anchors.centerIn: parent
-                    text: index + 1
-                    color: (index + 1) === root.activeWorkspace ? "#191420" : "#ffebf6"
-                    font.bold: true
-                    font.pixelSize: 11
+                    text: modelData + 1
+                    color: "#ffebf6"
+                    font.pixelSize: 12
                     font.family: "Symbols Nerd Font"
                   }
 
                   MouseArea {
                     anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: { workspaceProc_left_0.running = false; workspaceProc_left_0.running = true }
-                    onEntered: parent.opacity = 1.0
-                    onExited: parent.opacity = (index + 1) === root.activeWorkspace ? 1.0 : 0.72
-                  }
-
-                  Process {
-                    id: workspaceProc_left_0
-                    command: ["hyprctl", "dispatch", "workspace", String(index + 1)]
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                      Hyprland.dispatch("workspace " + (modelData + 1))
+                    }
                   }
                 }
               }
@@ -149,32 +145,6 @@ Variants {
               }
             }
 
-
-            Text {
-              id: txt_center_1
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ffebf6"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: proc_center_1
-                command: ["sh", "-c", "playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null | cut -c1-28 | sed 's/^/ /'"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_center_1.text = "" + this.text.split("\\n").join("").trim()
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { proc_center_1.running = false; proc_center_1.running = true }
-              }
-            }
-
           }
 
           Item { Layout.fillWidth: true }
@@ -183,54 +153,43 @@ Variants {
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             spacing: 7
 
-            Text {
-              id: txt_right_0
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ffebf6"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
+            Item {
+              id: media_right_0
+              width: 32
+              height: 40
 
               Process {
-                id: proc_right_0
-                command: ["sh", "-c", "top -bn1 | awk -F'[, ]+' '/Cpu\\(s\\)/{print \" \" int($2+$4) \"%\"}'"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_right_0.text = "" + this.text.split("\\n").join("").trim()
+                id: proc_right_0_menu_proc
+                command: ["sh", "-c", "splinter-media-menu"]
+              }
+
+              Rectangle {
+                id: mediaButton
+                anchors.centerIn: parent
+                width: 32
+                height: 32
+                radius: 24
+                color: "#392a49"
+                border.color: "#89b4fa"
+                border.width: 1
+
+                Text {
+                  anchors.centerIn: parent
+                  text: ""
+                  color: "#ffebf6"
+                  font.family: "Symbols Nerd Font"
+                  font.pixelSize: 12
                 }
-              }
 
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { proc_right_0.running = false; proc_right_0.running = true }
-              }
-            }
-
-
-            Text {
-              id: txt_right_1
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ffebf6"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: proc_right_1
-                command: ["sh", "-c", "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf ' on' || printf ' off'"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_right_1.text = "" + this.text.split("\\n").join("").trim()
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  acceptedButtons: Qt.LeftButton
+                  onClicked: {
+                    proc_right_0_menu_proc.running = false
+                    proc_right_0_menu_proc.running = true
+                  }
                 }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { proc_right_1.running = false; proc_right_1.running = true }
               }
             }
 
