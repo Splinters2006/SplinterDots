@@ -119,9 +119,7 @@ Variants {
 
           Row {
             Layout.alignment: Qt.AlignCenter
-            // Keep the midpoint between the center widgets so they fan out
-            // symmetrically instead of reading as one tight cluster.
-            spacing: Math.max(14, 14 * 2)
+            spacing: 7
 
         Item {
             id: datetime_center_0
@@ -192,7 +190,7 @@ Variants {
                 }
             }
         }
-
+        
 
         Item {
             id: visualizer_center_1
@@ -268,7 +266,7 @@ Variants {
                 }
             }
         }
-
+        
           }
 
           Item { Layout.fillWidth: true }
