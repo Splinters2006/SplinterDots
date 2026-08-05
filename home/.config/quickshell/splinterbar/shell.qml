@@ -31,7 +31,7 @@ Variants {
         right: 10
       }
 
-      implicitHeight: 35
+      implicitHeight: 34
       color: "transparent"
 
       Process {
@@ -54,7 +54,7 @@ Variants {
       }
 
       Timer {
-        interval: 40
+        interval: 120
         running: true
         repeat: true
         onTriggered: { stateProc.running = false; stateProc.running = true }
@@ -62,7 +62,7 @@ Variants {
 
       Rectangle {
         anchors.fill: parent
-        radius: 10
+        radius: 8
         color: "#ea282828"
         border.width: 1
         border.color: "#3c3836"
@@ -86,9 +86,9 @@ Variants {
                 model: 5
 
                 delegate: Rectangle {
-                  width: 27
-                  height: 27
-                  radius: 6
+                  width: 26
+                  height: 26
+                  radius: 4
                   color: "#3c3836"
                   border.color: "#bdae93"
                   border.width: 1
@@ -121,26 +121,26 @@ Variants {
             spacing: 7
 
         Item {
-            id: center_0
-            width: dateBubble.width
-            height: 35
+            id: datetime_center_0
+            width: dateBubble_center_0.width
+            height: 34
             clip: false
 
             property string displayText: ""
 
             Process {
-                id: timeProc
+                id: timeProc_center_0
                 command: ["sh", "-c", "date '+%a %d %b · %H:%M'"]
 
                 stdout: StdioCollector {
                     onStreamFinished: {
-                        center_0.displayText = this.text.trim()
+                        datetime_center_0.displayText = this.text.trim()
                     }
                 }
             }
 
             Process {
-                id: openCalendarProc
+                id: calendarProc_center_0
                 command: ["sh", "-c", "$HOME/.local/bin/splinter-calendar-menu"]
             }
 
@@ -149,30 +149,30 @@ Variants {
                 running: true
                 repeat: true
                 onTriggered: {
-                    timeProc.running = false
-                    timeProc.running = true
+                    timeProc_center_0.running = false
+                    timeProc_center_0.running = true
                 }
             }
 
             Component.onCompleted: {
-                timeProc.running = true
+                timeProc_center_0.running = true
             }
 
             Rectangle {
-                id: dateBubble
-                height: Math.max(22, 35 - 10)
-                radius: Math.max(10, 10 - 4)
+                id: dateBubble_center_0
+                height: Math.max(22, 34 - 10)
+                radius: Math.max(10, 8 - 4)
                 color: "#3c3836"
                 border.color: "#bdae93"
                 border.width: 1
-                width: textItem.implicitWidth + 20
+                width: dateText_center_0.implicitWidth + 20
 
                 anchors.verticalCenter: parent.verticalCenter
 
                 Text {
-                    id: textItem
+                    id: dateText_center_0
                     anchors.centerIn: parent
-                    text: center_0.displayText
+                    text: datetime_center_0.displayText
                     color: "#ebdbb2"
                     font.pixelSize: Math.max(10, 12 - 1)
                     font.bold: true
@@ -183,8 +183,8 @@ Variants {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        openCalendarProc.running = false
-                        openCalendarProc.running = true
+                        calendarProc_center_0.running = false
+                        calendarProc_center_0.running = true
                     }
                 }
             }
@@ -192,22 +192,22 @@ Variants {
         
 
         Item {
-            id: center_1
+            id: visualizer_center_1
             width: 150
-            height: 35
+            height: 34
             clip: false
 
             property string rawBars: "000000000000000000"
 
             Process {
-                id: cavaProc
+                id: cavaProc_center_1
                 command: ["sh", "-c", "$HOME/.local/bin/splinter-cava-read"]
 
                 stdout: StdioCollector {
                     onStreamFinished: {
                         var raw = this.text.trim()
                         if (raw.length >= 18) {
-                            center_1.rawBars = raw.substring(0, 18)
+                            visualizer_center_1.rawBars = raw.substring(0, 18)
                         }
                     }
                 }
@@ -218,21 +218,21 @@ Variants {
                 running: true
                 repeat: true
                 onTriggered: {
-                    cavaProc.running = false
-                    cavaProc.running = true
+                    cavaProc_center_1.running = false
+                    cavaProc_center_1.running = true
                 }
             }
 
             Component.onCompleted: {
-                cavaProc.running = true
+                cavaProc_center_1.running = true
             }
 
             Rectangle {
-                id: visualizerBubble
+                id: visualizerBubble_center_1
                 width: parent.width
-                height: Math.max(22, 35 - 10)
+                height: Math.max(22, 34 - 10)
                 anchors.verticalCenter: parent.verticalCenter
-                radius: Math.max(10, 10 - 4)
+                radius: Math.max(10, 8 - 4)
                 color: "#3c3836"
                 border.color: "#bdae93"
                 border.width: 1
@@ -252,7 +252,7 @@ Variants {
                             anchors.bottom: parent.bottom
                             color: "#89b4fa"
 
-                            height: Math.max(3, (parent.height * Number(center_1.rawBars.charAt(index))) / 8)
+                            height: Math.max(3, (parent.height * Number(visualizer_center_1.rawBars.charAt(index))) / 8)
 
                             Behavior on height {
                                 NumberAnimation {
@@ -276,8 +276,8 @@ Variants {
 
             Item {
               id: media_right_0
-              width: 27
-              height: 35
+              width: 26
+              height: 34
 
               Process {
                 id: proc_right_0_media_menu
@@ -286,10 +286,10 @@ Variants {
 
               Rectangle {
                 anchors.centerIn: parent
-                width: 27
-                height: 27
-                radius: 6
-                color: mediaMouse.containsMouse ? "#89b4fa" : "#3c3836"
+                width: 26
+                height: 26
+                radius: 4
+                color: mediaMouse_right_0.containsMouse ? "#89b4fa" : "#3c3836"
                 border.color: "#89b4fa"
                 border.width: 1
 
@@ -302,7 +302,7 @@ Variants {
                 }
 
                 MouseArea {
-                  id: mediaMouse
+                  id: mediaMouse_right_0
                   anchors.fill: parent
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor

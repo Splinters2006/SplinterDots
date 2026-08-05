@@ -5,3 +5,16 @@ __pycache__/
 *.bak
 *.tmp
 *~
+
+# Local identity, credentials, and machine-specific overrides
+home/.gitconfig
+home/.config/git/git-user.inc
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.*

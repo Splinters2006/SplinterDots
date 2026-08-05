@@ -208,10 +208,16 @@ install_aur_packages() {
 
   if [ "$DRY_RUN" -eq 1 ]; then
     log "[dry-run] yay ${yay_args[*]} ${aur_packages[*]}"
+    log "[dry-run] sudo chmod a+wr /opt/spotify"
+    log "[dry-run] sudo chmod a+wr /opt/spotify/Apps -R"
     return
   fi
 
   yay "${yay_args[@]}" "${aur_packages[@]}"
+
+  # Spicetify needs write access to Spotify's installation and app files.
+  sudo chmod a+wr /opt/spotify
+  sudo chmod a+wr /opt/spotify/Apps -R
 }
 
 remove_managed_start_hyprland_shadow() {

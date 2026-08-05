@@ -19,7 +19,7 @@ const SETTINGS_KEYS: &[(&str, &str)] = &[
     ("DOTFILES_ACCENT", "#89b4fa"),
     ("DOTFILES_WALLPAPER", ""),
     ("DOTFILES_WALLPAPER_DIR", "~/Pictures/Wallpapers"),
-    ("DOTFILES_TERMINAL", "/home/mira/.local/bin/splinter-kitty"),
+    ("DOTFILES_TERMINAL", "splinter-kitty"),
     ("DOTFILES_FILE_MANAGER", "thunar"),
     ("DOTFILES_APP_LAUNCHER", "wofi --show drun"),
     ("DOTFILES_BAR_POSITION", "top"),
@@ -388,7 +388,7 @@ impl Paths {
 
 
 fn apply_preview_theme(theme: &str) {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/mira".to_string());
+    let home = std::env::var("HOME").unwrap_or_default();
     let kitty_script = format!("{}/.local/bin/splinter-apply-kitty-theme", home);
 
     let _ = std::process::Command::new(&kitty_script)
@@ -397,7 +397,7 @@ fn apply_preview_theme(theme: &str) {
 }
 
 fn apply_kitty_theme(theme: &str) {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/mira".to_string());
+    let home = std::env::var("HOME").unwrap_or_default();
     let script = format!("{}/.local/bin/splinter-apply-kitty-theme", home);
 
     let _ = std::process::Command::new(script)
@@ -2926,29 +2926,23 @@ fn shell_quote(value: &str) -> String {
 
 fn default_keybinds() -> Vec<Keybind> {
     vec![
-        sc("Terminal", "Return", "app", "$terminal"),
         sc("File manager", "E", "app", "$fileManager"),
-        sc("App launcher", "D", "app", "$menu"),
+        sc("App launcher", "R", "app", "$menu"),
         sc("Browser", "B", "app", "$browser"),
-        sc("Close window", "C", "desktop", "killactive"),
-        sc("Exit desktop", "M", "desktop", "exit"),
+        sc("Close window", "Q", "desktop", "killactive"),
         sc("Fullscreen", "F", "desktop", "fullscreen"),
-        sc("Floating mode", "V", "desktop", "togglefloating"),
-        sc("Split direction", "J", "desktop", "layoutmsg, togglesplit"),
+        sc("Floating mode", "SPACE", "desktop", "togglefloating"),
         sc(
             "Screenshot region",
-            "S",
+            "SHIFT, S",
             "app",
             "splinter-screenshot region",
         ),
-        sc(
-            "Screenshot full screen",
-            "SHIFT, S",
-            "app",
-            "splinter-screenshot full",
-        ),
         sc("SplinterDots", "W", "app", "dotctl center"),
         sc("Reload desktop", "SHIFT, R", "app", "hyprctl reload"),
+        sc("Terminal", "T", "app", "kitty"),
+        sc("Spotify", "S", "app", "spotify"),
+        sc("Vesktop", "D", "app", "vesktop"),
     ]
 }
 

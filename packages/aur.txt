@@ -2,6 +2,10 @@
 # Keep this file for packages not available in the official Arch repos.
 
 zen-browser-bin
+spotify
+vesktop
+spicetify-cli
+overskride
 
 # Examples you may want later:
 # brave-bin
