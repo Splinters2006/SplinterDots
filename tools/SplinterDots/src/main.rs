@@ -3022,7 +3022,10 @@ fn write_keybinds(
     for keybind in keybinds {
         let key = lua_key_combo(&keybind.key);
         if keybind.kind == "app" {
-            lines.push(format!("hl.bind({key}, hl.dsp.exec_cmd({:?}))", keybind.value));
+            lines.push(format!(
+                "hl.bind({key}, hl.dsp.exec_cmd({}))",
+                lua_app_command(&keybind.value)
+            ));
         } else {
             let dispatcher = match keybind.value.as_str() {
                 "killactive" => "hl.dsp.window.close()".to_string(),
@@ -3053,6 +3056,16 @@ fn write_keybinds(
     ]);
 
     fs::write(&paths.hypr_keybinds, lines.join("\n") + "\n").map_err(err_string)
+}
+
+fn lua_app_command(value: &str) -> String {
+    match value {
+        "$terminal" => "terminal".to_string(),
+        "$fileManager" => "fileManager".to_string(),
+        "$menu" => "menu".to_string(),
+        "$browser" => "browser".to_string(),
+        command => format!("{command:?}"),
+    }
 }
 
 fn lua_key_combo(key: &str) -> String {
@@ -5697,5 +5710,14 @@ mod tests {
         assert!(bluetooth.contains("overskride"));
         assert!(volume.contains("MouseArea"));
         assert!(bluetooth.contains("MouseArea"));
+    }
+
+    #[test]
+    fn lua_keybind_app_variables_are_not_written_as_literal_shell_variables() {
+        assert_eq!(lua_app_command("$terminal"), "terminal");
+        assert_eq!(lua_app_command("$fileManager"), "fileManager");
+        assert_eq!(lua_app_command("$menu"), "menu");
+        assert_eq!(lua_app_command("$browser"), "browser");
+        assert_eq!(lua_app_command("spotify"), "\"spotify\"");
     }
 }
