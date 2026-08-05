@@ -3488,7 +3488,9 @@ __LEFT_SECTION__
 
           Row {
             Layout.alignment: Qt.AlignCenter
-            spacing: 7
+            // Keep the midpoint between the center widgets so they fan out
+            // symmetrically instead of reading as one tight cluster.
+            spacing: Math.max(14, __SPACING__ * 2)
 __CENTER_SECTION__
           }
 

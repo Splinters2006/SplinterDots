@@ -119,7 +119,9 @@ Variants {
 
           Row {
             Layout.alignment: Qt.AlignCenter
-            spacing: 7
+            // Keep the midpoint between the center widgets so they fan out
+            // symmetrically instead of reading as one tight cluster.
+            spacing: Math.max(14, 14 * 2)
 
         Item {
             id: datetime_center_0
@@ -191,16 +193,9 @@ Variants {
             }
         }
 
-          }
-
-          Item { Layout.fillWidth: true }
-
-          Row {
-            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-            spacing: 7
 
         Item {
-            id: visualizer_right_0
+            id: visualizer_center_1
             width: 150
             height: 34
             clip: false
@@ -208,14 +203,14 @@ Variants {
             property string rawBars: "000000000000000000"
 
             Process {
-                id: cavaProc_right_0
+                id: cavaProc_center_1
                 command: ["sh", "-c", "$HOME/.local/bin/splinter-cava-read"]
 
                 stdout: StdioCollector {
                     onStreamFinished: {
                         var raw = this.text.trim()
                         if (raw.length >= 18) {
-                            visualizer_right_0.rawBars = raw.substring(0, 18)
+                            visualizer_center_1.rawBars = raw.substring(0, 18)
                         }
                     }
                 }
@@ -226,17 +221,17 @@ Variants {
                 running: true
                 repeat: true
                 onTriggered: {
-                    cavaProc_right_0.running = false
-                    cavaProc_right_0.running = true
+                    cavaProc_center_1.running = false
+                    cavaProc_center_1.running = true
                 }
             }
 
             Component.onCompleted: {
-                cavaProc_right_0.running = true
+                cavaProc_center_1.running = true
             }
 
             Rectangle {
-                id: visualizerBubble_right_0
+                id: visualizerBubble_center_1
                 width: parent.width
                 height: Math.max(22, 34 - 10)
                 anchors.verticalCenter: parent.verticalCenter
@@ -260,7 +255,7 @@ Variants {
                             anchors.bottom: parent.bottom
                             color: "#89b4fa"
 
-                            height: Math.max(3, (parent.height * Number(visualizer_right_0.rawBars.charAt(index))) / 8)
+                            height: Math.max(3, (parent.height * Number(visualizer_center_1.rawBars.charAt(index))) / 8)
 
                             Behavior on height {
                                 NumberAnimation {
@@ -274,21 +269,28 @@ Variants {
             }
         }
 
+          }
+
+          Item { Layout.fillWidth: true }
+
+          Row {
+            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+            spacing: 7
 
             Rectangle {
-              id: volume_right_1
+              id: volume_right_0
               property string volumeText: " --%"
               width: 86
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: volumeMouse_right_1.containsMouse ? "#89b4fa" : "#3c3836"
+              color: volumeMouse_right_0.containsMouse ? "#89b4fa" : "#3c3836"
               border.color: "#89b4fa"
               border.width: 1
 
               Text {
                 anchors.centerIn: parent
-                text: volume_right_1.volumeText
+                text: volume_right_0.volumeText
                 color: "#ebdbb2"
                 font.pixelSize: 12
                 font.family: "Symbols Nerd Font"
@@ -296,27 +298,27 @@ Variants {
               }
 
               Process {
-                id: volumeStatus_right_1
+                id: volumeStatus_right_0
                 command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'"]
                 running: true
                 stdout: StdioCollector {
-                  onStreamFinished: volume_right_1.volumeText = this.text.split("\\n").join("").trim()
+                  onStreamFinished: volume_right_0.volumeText = this.text.split("\\n").join("").trim()
                 }
               }
 
               Process {
-                id: volumeClick_right_1
+                id: volumeClick_right_0
                 command: ["sh", "-c", "pavucontrol"]
               }
 
               MouseArea {
-                id: volumeMouse_right_1
+                id: volumeMouse_right_0
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                  volumeClick_right_1.running = false
-                  volumeClick_right_1.running = true
+                  volumeClick_right_0.running = false
+                  volumeClick_right_0.running = true
                 }
               }
 
@@ -325,27 +327,27 @@ Variants {
                 running: true
                 repeat: true
                 onTriggered: {
-                  volumeStatus_right_1.running = false
-                  volumeStatus_right_1.running = true
+                  volumeStatus_right_0.running = false
+                  volumeStatus_right_0.running = true
                 }
               }
             }
 
 
             Rectangle {
-              id: bluetooth_right_2
+              id: bluetooth_right_1
               property bool powered: false
               width: 86
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: bluetoothMouse_right_2.containsMouse ? "#89b4fa" : "#3c3836"
+              color: bluetoothMouse_right_1.containsMouse ? "#89b4fa" : "#3c3836"
               border.color: powered ? "#89b4fa" : "#bdae93"
               border.width: 1
 
               Text {
                 anchors.centerIn: parent
-                text: bluetooth_right_2.powered ? " Bluetooth" : " Off"
+                text: bluetooth_right_1.powered ? " Bluetooth" : " Off"
                 color: "#ebdbb2"
                 font.pixelSize: 12
                 font.family: "Symbols Nerd Font"
@@ -353,27 +355,27 @@ Variants {
               }
 
               Process {
-                id: bluetoothStatus_right_2
+                id: bluetoothStatus_right_1
                 command: ["sh", "-c", "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf 1 || printf 0"]
                 running: true
                 stdout: StdioCollector {
-                  onStreamFinished: bluetooth_right_2.powered = this.text.trim() === "1"
+                  onStreamFinished: bluetooth_right_1.powered = this.text.trim() === "1"
                 }
               }
 
               Process {
-                id: bluetoothClick_right_2
+                id: bluetoothClick_right_1
                 command: ["sh", "-c", "overskride"]
               }
 
               MouseArea {
-                id: bluetoothMouse_right_2
+                id: bluetoothMouse_right_1
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                  bluetoothClick_right_2.running = false
-                  bluetoothClick_right_2.running = true
+                  bluetoothClick_right_1.running = false
+                  bluetoothClick_right_1.running = true
                 }
               }
 
@@ -382,15 +384,15 @@ Variants {
                 running: true
                 repeat: true
                 onTriggered: {
-                  bluetoothStatus_right_2.running = false
-                  bluetoothStatus_right_2.running = true
+                  bluetoothStatus_right_1.running = false
+                  bluetoothStatus_right_1.running = true
                 }
               }
             }
 
 
             Rectangle {
-              id: easyeffects_right_3
+              id: easyeffects_right_2
               property bool effectsEnabled: false
               width: 62
               height: 26
@@ -402,7 +404,7 @@ Variants {
 
               Text {
                 anchors.centerIn: parent
-                text: easyeffects_right_3.effectsEnabled ? "󰓃 FX ON" : "󰓃 FX OFF"
+                text: easyeffects_right_2.effectsEnabled ? "󰓃 FX ON" : "󰓃 FX OFF"
                 color: "#ebdbb2"
                 font.pixelSize: 12
                 font.family: "Symbols Nerd Font"
@@ -414,27 +416,27 @@ Variants {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                  easyeffectsToggle_right_3.running = false
-                  easyeffectsToggle_right_3.running = true
+                  easyeffectsToggle_right_2.running = false
+                  easyeffectsToggle_right_2.running = true
                 }
               }
 
               Process {
-                id: easyeffectsStatus_right_3
+                id: easyeffectsStatus_right_2
                 command: ["sh", "-c", "pgrep -x easyeffects >/dev/null && printf 1 || printf 0"]
                 running: true
                 stdout: StdioCollector {
-                  onStreamFinished: easyeffects_right_3.effectsEnabled = this.text.trim() === "1"
+                  onStreamFinished: easyeffects_right_2.effectsEnabled = this.text.trim() === "1"
                 }
               }
 
               Process {
-                id: easyeffectsToggle_right_3
+                id: easyeffectsToggle_right_2
                 command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then pkill -x easyeffects; else easyeffects --service-mode >/dev/null 2>&1 & fi; sleep 0.4; printf done"]
                 stdout: StdioCollector {
                   onStreamFinished: {
-                    easyeffectsStatus_right_3.running = false
-                    easyeffectsStatus_right_3.running = true
+                    easyeffectsStatus_right_2.running = false
+                    easyeffectsStatus_right_2.running = true
                   }
                 }
               }
@@ -444,20 +446,20 @@ Variants {
                 running: true
                 repeat: true
                 onTriggered: {
-                  easyeffectsStatus_right_3.running = false
-                  easyeffectsStatus_right_3.running = true
+                  easyeffectsStatus_right_2.running = false
+                  easyeffectsStatus_right_2.running = true
                 }
               }
             }
 
 
             Item {
-              id: media_right_4
+              id: media_right_3
               width: 26
               height: 34
 
               Process {
-                id: proc_right_4_media_menu
+                id: proc_right_3_media_menu
                 command: ["sh", "-c", "$HOME/.local/bin/splinter-media-menu"]
               }
 
@@ -466,7 +468,7 @@ Variants {
                 width: 26
                 height: 26
                 radius: 4
-                color: mediaMouse_right_4.containsMouse ? "#89b4fa" : "#3c3836"
+                color: mediaMouse_right_3.containsMouse ? "#89b4fa" : "#3c3836"
                 border.color: "#89b4fa"
                 border.width: 1
 
@@ -479,15 +481,15 @@ Variants {
                 }
 
                 MouseArea {
-                  id: mediaMouse_right_4
+                  id: mediaMouse_right_3
                   anchors.fill: parent
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
                   acceptedButtons: Qt.LeftButton
 
                   onClicked: {
-                    proc_right_4_media_menu.running = false
-                    proc_right_4_media_menu.running = true
+                    proc_right_3_media_menu.running = false
+                    proc_right_3_media_menu.running = true
                   }
                 }
               }
