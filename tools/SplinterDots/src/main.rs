@@ -135,7 +135,7 @@ impl Tab {
     fn subtitle(self) -> &'static str {
         match self {
             Tab::Overview => "Your desktop at a glance",
-            Tab::Hyprland => "Safe visual and behavior settings",
+            Tab::Hyprland => "Visual and behavior settings",
             Tab::Keybinds => "",
             Tab::Appearance => "Theme, accent, and wallpaper",
             Tab::Addons => "Download optional fonts, icons, tools, and extras",
@@ -1609,14 +1609,6 @@ misc               = 313244
         let theme = self.app_theme();
 
         Self::card(&theme, ui, |ui| {
-            ui.label(RichText::new("Safe Hyprland settings").size(18.0).strong());
-            ui.label(
-                RichText::new("Only beginner-friendly switches, dropdowns, and number controls are shown here.")
-                    .color(theme.muted),
-            );
-
-            ui.add_space(8.0);
-            ui.label(RichText::new("Search settings").color(theme.muted));
             ui.add_sized(
                 [ui.available_width(), 42.0],
                 egui::TextEdit::singleline(&mut self.hypr_search)
