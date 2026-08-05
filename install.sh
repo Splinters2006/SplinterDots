@@ -373,8 +373,8 @@ ensure_wallpaper_directory() {
 }
 
 ensure_hyprland_generated_config() {
-  local repo_file="$ROOT_DIR/home/.config/hypr/dotfiles-generated.conf"
-  local user_file="$HOME_DIR/.config/hypr/dotfiles-generated.conf"
+  local repo_file="$ROOT_DIR/home/.config/hypr/dotfiles-generated.lua"
+  local user_file="$HOME_DIR/.config/hypr/dotfiles-generated.lua"
 
   if [ "$DRY_RUN" -eq 1 ]; then
     log "[dry-run] ensure $repo_file exists"
@@ -387,18 +387,18 @@ ensure_hyprland_generated_config() {
 
   if [ ! -e "$repo_file" ]; then
     cat > "$repo_file" <<'EOF'
-# This file is created automatically by the SplinterDots installer.
-# SplinterDots can write Hyprland settings here.
-# It is safe if this file is empty.
+-- This file is created automatically by the SplinterDots installer.
+-- SplinterDots can write Hyprland settings here.
+hl.config({})
 EOF
     log "created: $repo_file"
   fi
 
   if [ ! -e "$user_file" ] && [ ! -L "$user_file" ]; then
     cat > "$user_file" <<'EOF'
-# This file is created automatically by the SplinterDots installer.
-# SplinterDots can write Hyprland settings here.
-# It is safe if this file is empty.
+-- This file is created automatically by the SplinterDots installer.
+-- SplinterDots can write Hyprland settings here.
+hl.config({})
 EOF
     log "created: $user_file"
   fi
@@ -427,10 +427,32 @@ link_file() {
   action_log "link: $dest"
 }
 
+remove_legacy_hyprland_links() {
+  local rel dest expected
+  local legacy_files=(
+    "hyprland.conf"
+    "colors.conf"
+    "dotfiles-generated.conf"
+    "keybindings.conf"
+    "user.conf"
+    "conf/splinter-tools-workspace.conf"
+  )
+
+  for rel in "${legacy_files[@]}"; do
+    dest="$HOME_DIR/.config/hypr/$rel"
+    expected="$ROOT_DIR/home/.config/hypr/$rel"
+    if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$expected" ]; then
+      run rm "$dest"
+      action_log "remove legacy Hyprland link: $dest"
+    fi
+  done
+}
+
 log "Dotfiles root: $ROOT_DIR"
 load_settings
 ensure_wallpaper_directory
 ensure_hyprland_generated_config
+remove_legacy_hyprland_links
 
 if [ "$UPDATE_DOTFILES" -eq 1 ]; then
   update_dotfiles

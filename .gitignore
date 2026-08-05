@@ -18,3 +18,6 @@ home/.config/git/git-user.inc
 *.pfx
 credentials.json
 secrets.*
+
+# Hyprland may recreate this legacy stub while migrating to Lua.
+home/.config/hypr/hyprland.conf

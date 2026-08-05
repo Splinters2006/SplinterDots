@@ -1,0 +1,4 @@
+accent = "rgba(89b4faff)"
+inactive = "rgba(665c54ff)"
+background = "rgba(282828ff)"
+text = "rgba(ebdbb2ff)"

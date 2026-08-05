@@ -359,9 +359,9 @@ impl Paths {
             hypr_values_json: dotfiles_dir.join("hyprland-values.json"),
             disabled_file: dotfiles_dir.join("welcome-disabled"),
             dotfiles_dir,
-            hypr_colors: hypr_dir.join("colors.conf"),
-            hypr_keybinds: hypr_dir.join("keybindings.conf"),
-            hypr_generated: hypr_dir.join("dotfiles-generated.conf"),
+            hypr_colors: hypr_dir.join("colors.lua"),
+            hypr_keybinds: hypr_dir.join("keybindings.lua"),
+            hypr_generated: hypr_dir.join("dotfiles-generated.lua"),
             hypr_dir,
             quickshell_file: quickshell_dir.join("shell.qml"),
             quickshell_dir,
@@ -3023,71 +3023,62 @@ fn write_keybinds(
     ensure_dir(&paths.hypr_dir)?;
 
     let mut lines = vec![
-        "$mainMod = SUPER".to_string(),
-        format!("$terminal = {}", value_or(values, "DOTFILES_TERMINAL")),
-        format!(
-            "$fileManager = {}",
-            value_or(values, "DOTFILES_FILE_MANAGER")
-        ),
-        format!("$menu = {}", value_or(values, "DOTFILES_APP_LAUNCHER")),
-        format!("$browser = {}", value_or(values, "DOTFILES_BROWSER")),
+        "local mainMod = \"SUPER\"".to_string(),
+        format!("local terminal = {:?}", value_or(values, "DOTFILES_TERMINAL")),
+        format!("local fileManager = {:?}", value_or(values, "DOTFILES_FILE_MANAGER")),
+        format!("local menu = {:?}", value_or(values, "DOTFILES_APP_LAUNCHER")),
+        format!("local browser = {:?}", value_or(values, "DOTFILES_BROWSER")),
         String::new(),
-        "# Hold Super + left mouse button to drag windows.".to_string(),
-        "bindm = $mainMod, mouse:272, movewindow".to_string(),
-        "# Hold Super + right mouse button to resize windows.".to_string(),
-        "bindm = $mainMod, mouse:273, resizewindow".to_string(),
+        "hl.bind(mainMod .. \" + mouse:272\", hl.dsp.window.drag(), { mouse = true })".to_string(),
+        "hl.bind(mainMod .. \" + mouse:273\", hl.dsp.window.resize(), { mouse = true })".to_string(),
         String::new(),
     ];
 
     for keybind in keybinds {
-        let (modifier, key) = hypr_key_parts(&keybind.key);
+        let key = lua_key_combo(&keybind.key);
         if keybind.kind == "app" {
-            lines.push(format!(
-                "bind = {modifier}, {key}, exec, {}",
-                keybind.value
-            ));
+            lines.push(format!("hl.bind({key}, hl.dsp.exec_cmd({:?}))", keybind.value));
         } else {
-            lines.push(format!("bind = {modifier}, {key}, {}", keybind.value));
+            let dispatcher = match keybind.value.as_str() {
+                "killactive" => "hl.dsp.window.close()".to_string(),
+                "fullscreen" => "hl.dsp.window.fullscreen()".to_string(),
+                "togglefloating" => "hl.dsp.window.float({ action = \"toggle\" })".to_string(),
+                value => format!("hl.dsp.exec_cmd({:?})", format!("hyprctl dispatch {value}")),
+            };
+            lines.push(format!("hl.bind({key}, {dispatcher})"));
         }
     }
 
     lines.extend([
         "".to_string(),
-        "bind = $mainMod, left, movefocus, l".to_string(),
-        "bind = $mainMod, right, movefocus, r".to_string(),
-        "bind = $mainMod, up, movefocus, u".to_string(),
-        "bind = $mainMod, down, movefocus, d".to_string(),
+        "hl.bind(mainMod .. \" + left\", hl.dsp.focus({ direction = \"left\" }))".to_string(),
+        "hl.bind(mainMod .. \" + right\", hl.dsp.focus({ direction = \"right\" }))".to_string(),
+        "hl.bind(mainMod .. \" + up\", hl.dsp.focus({ direction = \"up\" }))".to_string(),
+        "hl.bind(mainMod .. \" + down\", hl.dsp.focus({ direction = \"down\" }))".to_string(),
         "".to_string(),
-        "bind = $mainMod SHIFT, left, movewindow, l".to_string(),
-        "bind = $mainMod SHIFT, right, movewindow, r".to_string(),
-        "bind = $mainMod SHIFT, up, movewindow, u".to_string(),
-        "bind = $mainMod SHIFT, down, movewindow, d".to_string(),
+        "hl.bind(mainMod .. \" + SHIFT + left\", hl.dsp.window.move({ direction = \"left\" }))".to_string(),
+        "hl.bind(mainMod .. \" + SHIFT + right\", hl.dsp.window.move({ direction = \"right\" }))".to_string(),
+        "hl.bind(mainMod .. \" + SHIFT + up\", hl.dsp.window.move({ direction = \"up\" }))".to_string(),
+        "hl.bind(mainMod .. \" + SHIFT + down\", hl.dsp.window.move({ direction = \"down\" }))".to_string(),
         "".to_string(),
+        "for i = 1, 9 do".to_string(),
+        "    hl.bind(mainMod .. \" + \" .. i, hl.dsp.focus({ workspace = i }))".to_string(),
+        "    hl.bind(mainMod .. \" + SHIFT + \" .. i, hl.dsp.window.move({ workspace = i }))".to_string(),
+        "end".to_string(),
     ]);
-
-    for i in 1..=9 {
-        lines.push(format!("bind = $mainMod, {i}, workspace, {i}"));
-    }
-    lines.push(String::new());
-    for i in 1..=9 {
-        lines.push(format!("bind = $mainMod SHIFT, {i}, movetoworkspace, {i}"));
-    }
 
     fs::write(&paths.hypr_keybinds, lines.join("\n") + "\n").map_err(err_string)
 }
 
-fn hypr_key_parts(key: &str) -> (String, String) {
+fn lua_key_combo(key: &str) -> String {
     let key = key.trim();
     if key.to_uppercase().starts_with("SHIFT,") {
-        (
-            "$mainMod SHIFT".to_string(),
-            key.split_once(',')
-                .map(|(_, k)| k.trim())
-                .unwrap_or("")
-                .to_string(),
+        format!(
+            "mainMod .. \" + SHIFT + {}\"",
+            key.split_once(',').map(|(_, k)| k.trim()).unwrap_or("")
         )
     } else {
-        ("$mainMod".to_string(), key.to_string())
+        format!("mainMod .. \" + {key}\"")
     }
 }
 
@@ -3120,11 +3111,13 @@ fn write_hyprland_settings(
     }
 
     let mut lines = vec![
-        "# Generated by SplinterDots.".to_string(),
-        "# This file is safe to regenerate.".to_string(),
+        "-- Generated by SplinterDots.".to_string(),
+        "-- This file is safe to regenerate.".to_string(),
         String::new(),
+        "hl.config({".to_string(),
     ];
-    render_hypr_node(&root, 0, &mut lines);
+    render_hypr_node(&root, 4, &mut lines);
+    lines.push("})".to_string());
 
     fs::write(&paths.hypr_generated, lines.join("\n") + "\n").map_err(err_string)
 }
@@ -3156,13 +3149,36 @@ fn render_hypr_node(node: &HyprNode, indent: usize, lines: &mut Vec<String>) {
         let prefix = " ".repeat(indent);
         if child.children.is_empty() {
             if let Some(value) = &child.value {
-                lines.push(format!("{prefix}{key} = {value}"));
+                lines.push(format!(
+                    "{prefix}{} = {},",
+                    lua_hypr_key(key),
+                    lua_hypr_value(value)
+                ));
             }
         } else {
-            lines.push(format!("{prefix}{key} {{"));
+            lines.push(format!("{prefix}{} = {{", lua_hypr_key(key)));
             render_hypr_node(child, indent + 4, lines);
-            lines.push(format!("{prefix}}}"));
+            lines.push(format!("{prefix}}},"));
         }
+    }
+}
+
+fn lua_hypr_value(value: &str) -> String {
+    if matches!(value, "true" | "false") || value.parse::<f64>().is_ok() {
+        value.to_string()
+    } else {
+        format!("{value:?}")
+    }
+}
+
+fn lua_hypr_key(key: &str) -> String {
+    let key = key.replace('-', "_");
+    if key.chars().all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+        && !key.starts_with(|ch: char| ch.is_ascii_digit())
+    {
+        key
+    } else {
+        format!("[{key:?}]")
     }
 }
 
@@ -3309,7 +3325,7 @@ fn write_colors(paths: &Paths, values: &HashMap<String, String>) -> Result<(), S
     let palette = theme_palette(values);
 
     let colors = format!(
-        "$accent = {}\n$inactive = {}\n$background = {}\n$text = {}\n",
+        "accent = {:?}\ninactive = {:?}\nbackground = {:?}\ntext = {:?}\n",
         hex_to_hypr_rgba(&palette.accent),
         hex_to_hypr_rgba(&palette.inactive_border),
         hex_to_hypr_rgba(&palette.background),

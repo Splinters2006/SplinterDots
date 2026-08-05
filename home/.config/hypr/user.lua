@@ -1,0 +1,4 @@
+-- Optional local Hyprland overrides.
+-- SplinterDots may write user-friendly changes to:
+-- ~/.config/hypr/keybindings.lua
+-- ~/.config/hypr/colors.lua
