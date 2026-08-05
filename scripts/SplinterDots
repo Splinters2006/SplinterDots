@@ -8,6 +8,11 @@ MANIFEST="$ROOT_DIR/Cargo.toml"
 MAIN_RS="$ROOT_DIR/tools/SplinterDots/src/main.rs"
 APP_TOML="$ROOT_DIR/tools/SplinterDots/Cargo.toml"
 
+if command -v rustup >/dev/null 2>&1 && ! rustup show active-toolchain >/dev/null 2>&1; then
+  echo "No Rust toolchain is configured; installing stable..."
+  rustup default stable
+fi
+
 if ! command -v cargo >/dev/null 2>&1; then
   echo "Cargo is required for SplinterDots."
   echo "Install the dotfiles packages with: dotctl packages"

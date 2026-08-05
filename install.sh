@@ -144,6 +144,26 @@ install_packages() {
   sudo pacman "${pacman_args[@]}" "${packages[@]}"
 }
 
+ensure_rust_toolchain() {
+  if ! command -v rustup >/dev/null 2>&1; then
+    log "Skipping Rust toolchain setup: rustup was not found."
+    return
+  fi
+
+  if rustup show active-toolchain >/dev/null 2>&1; then
+    log "A Rust toolchain is already configured."
+    return
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] rustup default stable"
+    return
+  fi
+
+  log "Installing the stable Rust toolchain..."
+  rustup default stable
+}
+
 install_yay() {
   if command -v yay >/dev/null 2>&1; then
     log "yay is already installed."
@@ -418,6 +438,7 @@ fi
 
 if [ "$INSTALL_PACKAGES" -eq 1 ]; then
   install_packages
+  ensure_rust_toolchain
 fi
 
 if [ "$INSTALL_AUR" -eq 1 ]; then
