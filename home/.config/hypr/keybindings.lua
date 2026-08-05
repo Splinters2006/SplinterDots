@@ -7,9 +7,9 @@ local browser = "zen-browser"
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd("$fileManager"))
-hl.bind(mainMod .. " + R", hl.dsp.exec_cmd("$menu"))
-hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("$browser"))
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
+hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(menu))
+hl.bind(mainMod .. " + B", hl.dsp.exec_cmd(browser))
 hl.bind(mainMod .. " + Q", hl.dsp.window.close())
 hl.bind(mainMod .. " + F", hl.dsp.window.fullscreen())
 hl.bind(mainMod .. " + SPACE", hl.dsp.window.float({ action = "toggle" }))

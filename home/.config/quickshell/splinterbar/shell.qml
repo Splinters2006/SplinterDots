@@ -78,334 +78,38 @@ Variants {
             Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
             spacing: 7
 
-            Rectangle {
-              id: easyeffects_left_0
-              property bool effectsEnabled: false
-              width: 62
-              height: 26
+            Row {
+              id: workspaces_left_0
               anchors.verticalCenter: parent.verticalCenter
-              radius: 6
-              color: effectsEnabled ? "#89b4fa" : "#3c3836"
-              border.color: effectsEnabled ? "#89b4fa" : "#bdae93"
-              border.width: 1
+              spacing: 5
 
-              Text {
-                anchors.centerIn: parent
-                text: easyeffects_left_0.effectsEnabled ? "󰓃 FX ON" : "󰓃 FX OFF"
-                color: "#ebdbb2"
-                font.pixelSize: 12
-                font.family: "Symbols Nerd Font"
-                font.bold: true
-              }
+              Repeater {
+                model: 5
 
-              MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  easyeffectsToggle_left_0.running = false
-                  easyeffectsToggle_left_0.running = true
-                }
-              }
+                delegate: Rectangle {
+                  width: 26
+                  height: 26
+                  radius: 4
+                  color: "#3c3836"
+                  border.color: "#bdae93"
+                  border.width: 1
 
-              Process {
-                id: easyeffectsStatus_left_0
-                command: ["sh", "-c", "pgrep -x easyeffects >/dev/null && printf 1 || printf 0"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: easyeffects_left_0.effectsEnabled = this.text.trim() === "1"
-                }
-              }
+                  Text {
+                    anchors.centerIn: parent
+                    text: modelData + 1
+                    color: "#ebdbb2"
+                    font.pixelSize: 12
+                    font.family: "Symbols Nerd Font"
+                  }
 
-              Process {
-                id: easyeffectsToggle_left_0
-                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then pkill -x easyeffects; else easyeffects --gapplication-service >/dev/null 2>&1 & fi; sleep 0.4; printf done"]
-                stdout: StdioCollector {
-                  onStreamFinished: {
-                    easyeffectsStatus_left_0.running = false
-                    easyeffectsStatus_left_0.running = true
+                  MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                      Hyprland.dispatch("workspace " + (modelData + 1))
+                    }
                   }
                 }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: {
-                  easyeffectsStatus_left_0.running = false
-                  easyeffectsStatus_left_0.running = true
-                }
-              }
-            }
-
-
-            Text {
-              id: txt_left_1
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ebdbb2"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: statusProc_left_1
-                command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_left_1.text = this.text.split("\\n").join("").trim()
-                }
-              }
-
-              Process {
-                id: clickProc_left_1
-                command: ["sh", "-c", "pavucontrol"]
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  clickProc_left_1.running = false
-                  clickProc_left_1.running = true
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: {
-                  statusProc_left_1.running = false
-                  statusProc_left_1.running = true
-                }
-              }
-            }
-
-
-            Text {
-              id: txt_left_2
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ebdbb2"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: proc_left_2
-                command: ["sh", "-c", "printf \"microphone\""]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_left_2.text = "" + this.text.split("\\n").join("").trim()
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { proc_left_2.running = false; proc_left_2.running = true }
-              }
-            }
-
-
-            Text {
-              id: txt_left_3
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ebdbb2"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: proc_left_3
-                command: ["sh", "-c", "nmcli -t -f DEVICE,STATE device 2>/dev/null | awk -F: '$2==\"connected\"{print \"󰤨 \" $1; exit}'"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_left_3.text = "" + this.text.split("\\n").join("").trim()
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { proc_left_3.running = false; proc_left_3.running = true }
-              }
-            }
-
-
-            Text {
-              id: txt_left_4
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ebdbb2"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: statusProc_left_4
-                command: ["sh", "-c", "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf ' on' || printf ' off'"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_left_4.text = this.text.split("\\n").join("").trim()
-                }
-              }
-
-              Process {
-                id: clickProc_left_4
-                command: ["sh", "-c", "overskride"]
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  clickProc_left_4.running = false
-                  clickProc_left_4.running = true
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: {
-                  statusProc_left_4.running = false
-                  statusProc_left_4.running = true
-                }
-              }
-            }
-
-
-            Text {
-              id: txt_left_5
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ebdbb2"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: proc_left_5
-                command: ["sh", "-c", "bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && printf '󰁹 %s%%' \"$bat\""]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_left_5.text = "" + this.text.split("\\n").join("").trim()
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { proc_left_5.running = false; proc_left_5.running = true }
-              }
-            }
-
-
-            Text {
-              id: txt_left_6
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ebdbb2"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: proc_left_6
-                command: ["sh", "-c", "brightnessctl -m 2>/dev/null | awk -F, '{print \"󰃠 \" $4}'"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_left_6.text = "" + this.text.split("\\n").join("").trim()
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { proc_left_6.running = false; proc_left_6.running = true }
-              }
-            }
-
-
-            Text {
-              id: txt_left_7
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ebdbb2"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: proc_left_7
-                command: ["sh", "-c", "top -bn1 | awk -F'[, ]+' '/Cpu\\(s\\)/{print \" \" int($2+$4) \"%\"}'"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_left_7.text = "" + this.text.split("\\n").join("").trim()
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { proc_left_7.running = false; proc_left_7.running = true }
-              }
-            }
-
-
-            Text {
-              id: txt_left_8
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ebdbb2"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: proc_left_8
-                command: ["sh", "-c", "free -m | awk '/^Mem/{printf \" %dMB\", $3}'"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_left_8.text = "" + this.text.split("\\n").join("").trim()
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { proc_left_8.running = false; proc_left_8.running = true }
-              }
-            }
-
-
-            Text {
-              id: txt_left_9
-              anchors.verticalCenter: parent.verticalCenter
-              color: "#ebdbb2"
-              font.pixelSize: 12
-              font.family: "Symbols Nerd Font"
-              text: ""
-
-              Process {
-                id: proc_left_9
-                command: ["sh", "-c", "sensors 2>/dev/null | awk '/Package id 0|Tctl|temp1/{gsub(/[+°C]/, \"\", $2); print \" \" int($2) \"°C\"; exit}'"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_left_9.text = "" + this.text.split("\\n").join("").trim()
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { proc_left_9.running = false; proc_left_9.running = true }
               }
             }
 
@@ -417,6 +121,152 @@ Variants {
             Layout.alignment: Qt.AlignCenter
             spacing: 7
 
+        Item {
+            id: datetime_center_0
+            width: dateBubble_center_0.width
+            height: 34
+            clip: false
+
+            property string displayText: ""
+
+            Process {
+                id: timeProc_center_0
+                command: ["sh", "-c", "date '+%a %d %b · %H:%M'"]
+
+                stdout: StdioCollector {
+                    onStreamFinished: {
+                        datetime_center_0.displayText = this.text.trim()
+                    }
+                }
+            }
+
+            Process {
+                id: calendarProc_center_0
+                command: ["sh", "-c", "$HOME/.local/bin/splinter-calendar-menu"]
+            }
+
+            Timer {
+                interval: 1000
+                running: true
+                repeat: true
+                onTriggered: {
+                    timeProc_center_0.running = false
+                    timeProc_center_0.running = true
+                }
+            }
+
+            Component.onCompleted: {
+                timeProc_center_0.running = true
+            }
+
+            Rectangle {
+                id: dateBubble_center_0
+                height: Math.max(22, 34 - 10)
+                radius: Math.max(10, 8 - 4)
+                color: "#3c3836"
+                border.color: "#bdae93"
+                border.width: 1
+                width: dateText_center_0.implicitWidth + 20
+
+                anchors.verticalCenter: parent.verticalCenter
+
+                Text {
+                    id: dateText_center_0
+                    anchors.centerIn: parent
+                    text: datetime_center_0.displayText
+                    color: "#ebdbb2"
+                    font.pixelSize: Math.max(10, 12 - 1)
+                    font.bold: true
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        calendarProc_center_0.running = false
+                        calendarProc_center_0.running = true
+                    }
+                }
+            }
+        }
+
+
+        Item {
+            id: visualizer_center_1
+            width: 150
+            height: 34
+            clip: false
+
+            property string rawBars: "000000000000000000"
+
+            Process {
+                id: cavaProc_center_1
+                command: ["sh", "-c", "$HOME/.local/bin/splinter-cava-read"]
+
+                stdout: StdioCollector {
+                    onStreamFinished: {
+                        var raw = this.text.trim()
+                        if (raw.length >= 18) {
+                            visualizer_center_1.rawBars = raw.substring(0, 18)
+                        }
+                    }
+                }
+            }
+
+            Timer {
+                interval: 45
+                running: true
+                repeat: true
+                onTriggered: {
+                    cavaProc_center_1.running = false
+                    cavaProc_center_1.running = true
+                }
+            }
+
+            Component.onCompleted: {
+                cavaProc_center_1.running = true
+            }
+
+            Rectangle {
+                id: visualizerBubble_center_1
+                width: parent.width
+                height: Math.max(22, 34 - 10)
+                anchors.verticalCenter: parent.verticalCenter
+                radius: Math.max(10, 8 - 4)
+                color: "#3c3836"
+                border.color: "#bdae93"
+                border.width: 1
+                clip: true
+
+                Row {
+                    anchors.centerIn: parent
+                    height: parent.height - 8
+                    spacing: 3
+
+                    Repeater {
+                        model: 18
+
+                        Rectangle {
+                            width: 5
+                            radius: 3
+                            anchors.bottom: parent.bottom
+                            color: "#89b4fa"
+
+                            height: Math.max(3, (parent.height * Number(visualizer_center_1.rawBars.charAt(index))) / 8)
+
+                            Behavior on height {
+                                NumberAnimation {
+                                    duration: 90
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
           }
 
           Item { Layout.fillWidth: true }
@@ -424,6 +274,162 @@ Variants {
           Row {
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             spacing: 7
+
+            Rectangle {
+              id: volume_right_0
+              property string volumeText: " --%"
+              width: 86
+              height: 26
+              anchors.verticalCenter: parent.verticalCenter
+              radius: 6
+              color: volumeMouse_right_0.containsMouse ? "#89b4fa" : "#3c3836"
+              border.color: "#89b4fa"
+              border.width: 1
+
+              Text {
+                anchors.centerIn: parent
+                text: volume_right_0.volumeText
+                color: "#ebdbb2"
+                font.pixelSize: 12
+                font.family: "Symbols Nerd Font"
+                font.bold: true
+              }
+
+              Process {
+                id: volumeStatus_right_0
+                command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: volume_right_0.volumeText = this.text.split("\\n").join("").trim()
+                }
+              }
+
+              Process {
+                id: volumeClick_right_0
+                command: ["sh", "-c", "pavucontrol"]
+              }
+
+              MouseArea {
+                id: volumeMouse_right_0
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  volumeClick_right_0.running = false
+                  volumeClick_right_0.running = true
+                }
+              }
+
+              Timer {
+                interval: 1500
+                running: true
+                repeat: true
+                onTriggered: {
+                  volumeStatus_right_0.running = false
+                  volumeStatus_right_0.running = true
+                }
+              }
+            }
+
+
+            Rectangle {
+              id: bluetooth_right_1
+              property bool powered: false
+              width: 86
+              height: 26
+              anchors.verticalCenter: parent.verticalCenter
+              radius: 6
+              color: bluetoothMouse_right_1.containsMouse ? "#89b4fa" : "#3c3836"
+              border.color: powered ? "#89b4fa" : "#bdae93"
+              border.width: 1
+
+              Text {
+                anchors.centerIn: parent
+                text: bluetooth_right_1.powered ? " Bluetooth" : " Off"
+                color: "#ebdbb2"
+                font.pixelSize: 12
+                font.family: "Symbols Nerd Font"
+                font.bold: true
+              }
+
+              Process {
+                id: bluetoothStatus_right_1
+                command: ["sh", "-c", "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf 1 || printf 0"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: bluetooth_right_1.powered = this.text.trim() === "1"
+                }
+              }
+
+              Process {
+                id: bluetoothClick_right_1
+                command: ["sh", "-c", "overskride"]
+              }
+
+              MouseArea {
+                id: bluetoothMouse_right_1
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  bluetoothClick_right_1.running = false
+                  bluetoothClick_right_1.running = true
+                }
+              }
+
+              Timer {
+                interval: 1500
+                running: true
+                repeat: true
+                onTriggered: {
+                  bluetoothStatus_right_1.running = false
+                  bluetoothStatus_right_1.running = true
+                }
+              }
+            }
+
+
+            Item {
+              id: media_right_2
+              width: 26
+              height: 34
+
+              Process {
+                id: proc_right_2_media_menu
+                command: ["sh", "-c", "$HOME/.local/bin/splinter-media-menu"]
+              }
+
+              Rectangle {
+                anchors.centerIn: parent
+                width: 26
+                height: 26
+                radius: 4
+                color: mediaMouse_right_2.containsMouse ? "#89b4fa" : "#3c3836"
+                border.color: "#89b4fa"
+                border.width: 1
+
+                Text {
+                  anchors.centerIn: parent
+                  text: ""
+                  color: "#ebdbb2"
+                  font.family: "Symbols Nerd Font"
+                  font.pixelSize: 12
+                }
+
+                MouseArea {
+                  id: mediaMouse_right_2
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  acceptedButtons: Qt.LeftButton
+
+                  onClicked: {
+                    proc_right_2_media_menu.running = false
+                    proc_right_2_media_menu.running = true
+                  }
+                }
+              }
+            }
 
           }
         }
