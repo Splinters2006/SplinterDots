@@ -431,6 +431,68 @@ Variants {
               }
             }
 
+
+            Rectangle {
+              id: easyeffects_right_3
+              property bool effectsEnabled: false
+              width: 62
+              height: 26
+              anchors.verticalCenter: parent.verticalCenter
+              radius: 6
+              color: effectsEnabled ? "#89b4fa" : "#3c3836"
+              border.color: effectsEnabled ? "#89b4fa" : "#bdae93"
+              border.width: 1
+
+              Text {
+                anchors.centerIn: parent
+                text: easyeffects_right_3.effectsEnabled ? "󰓃 FX ON" : "󰓃 FX OFF"
+                color: "#ebdbb2"
+                font.pixelSize: 12
+                font.family: "Symbols Nerd Font"
+                font.bold: true
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  easyeffectsToggle_right_3.running = false
+                  easyeffectsToggle_right_3.running = true
+                }
+              }
+
+              Process {
+                id: easyeffectsStatus_right_3
+                command: ["sh", "-c", "pgrep -x easyeffects >/dev/null && printf 1 || printf 0"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: easyeffects_right_3.effectsEnabled = this.text.trim() === "1"
+                }
+              }
+
+              Process {
+                id: easyeffectsToggle_right_3
+                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then pkill -x easyeffects; else easyeffects --gapplication-service >/dev/null 2>&1 & fi; sleep 0.4; printf done"]
+                stdout: StdioCollector {
+                  onStreamFinished: {
+                    easyeffectsStatus_right_3.running = false
+                    easyeffectsStatus_right_3.running = true
+                  }
+                }
+              }
+
+              Timer {
+                interval: 1500
+                running: true
+                repeat: true
+                onTriggered: {
+                  easyeffectsStatus_right_3.running = false
+                  easyeffectsStatus_right_3.running = true
+                }
+              }
+            }
+
           }
         }
       }
