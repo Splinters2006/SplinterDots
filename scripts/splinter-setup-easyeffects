@@ -16,6 +16,11 @@ if [ -f "$ROOT_DIR/files/easyeffects/output/SplinterDots-Output.json" ]; then
      "$CONFIG_HOME/easyeffects/output/SplinterDots-Output.json"
 fi
 
+if [ -f "$ROOT_DIR/files/easyeffects/output/Dotfiles Audio.json" ]; then
+  cp "$ROOT_DIR/files/easyeffects/output/Dotfiles Audio.json" \
+     "$CONFIG_HOME/easyeffects/output/Dotfiles Audio.json"
+fi
+
 if [ -f "$ROOT_DIR/files/easyeffects/input/SplinterDots-Mic.json" ]; then
   cp "$ROOT_DIR/files/easyeffects/input/SplinterDots-Mic.json" \
      "$CONFIG_HOME/easyeffects/input/SplinterDots-Mic.json"
@@ -31,10 +36,10 @@ if ! pgrep -x easyeffects >/dev/null 2>&1; then
 fi
 
 # Try common CLI forms. Different EasyEffects versions expose slightly different options.
-easyeffects --load-preset SplinterDots-Output >/dev/null 2>&1 || true
+easyeffects --load-preset "Dotfiles Audio" >/dev/null 2>&1 || true
 easyeffects --load-preset SplinterDots-Mic >/dev/null 2>&1 || true
 
 echo "EasyEffects SplinterDots presets installed."
 echo "Open EasyEffects and select:"
-echo "  Output preset: SplinterDots-Output"
+echo "  Output preset: Dotfiles Audio"
 echo "  Input preset:  SplinterDots-Mic"

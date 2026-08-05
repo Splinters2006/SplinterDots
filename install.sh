@@ -508,6 +508,11 @@ link_file "$ROOT_DIR/scripts/splinter-cava-read" "$HOME_DIR/.local/bin/splinter-
 link_file "$ROOT_DIR/scripts/splinter-cava-daemon" "$HOME_DIR/.local/bin/splinter-cava-daemon"
 link_file "$ROOT_DIR/scripts/splinter-apply-kitty-theme" "$HOME_DIR/.local/bin/splinter-apply-kitty-theme"
 link_file "$ROOT_DIR/scripts/splinter-install-addon" "$HOME_DIR/.local/bin/splinter-install-addon"
+link_file "$ROOT_DIR/scripts/splinter-setup-easyeffects" "$HOME_DIR/.local/bin/splinter-setup-easyeffects"
+
+if [ "$INSTALL_PACKAGES" -eq 1 ]; then
+  run "$ROOT_DIR/scripts/splinter-setup-easyeffects"
+fi
 
 log ""
 log "Done. Open a new shell or run: exec \"\$SHELL\""

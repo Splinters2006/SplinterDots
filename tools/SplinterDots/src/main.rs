@@ -3576,7 +3576,7 @@ fn bar_widget_qml(
         "window_title" => window_title_qml(id, palette, font_size),
         "submap" => command_text_qml(id, palette, font_size, icon_font, "hyprctl submap 2>/dev/null | grep -v '^$' | sed 's/^/󰌌 /'", status_ms, None),
 
-        "easyeffects" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰓃", "pgrep -x easyeffects >/dev/null && pkill easyeffects || easyeffects --gapplication-service"),
+        "easyeffects" => easyeffects_widget_qml(id, palette, height, radius, font_size, icon_font, status_ms),
         "volume" => command_text_qml(id, palette, font_size, icon_font, "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'", status_ms, None),
         "mic" => command_text_qml(id, palette, font_size, icon_font, "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \" muted\"; else print \" \" v \"%\"}'", status_ms, None),
         "network" => command_text_qml(id, palette, font_size, icon_font, "nmcli -t -f DEVICE,STATE device 2>/dev/null | awk -F: '$2==\"connected\"{print \"󰤨 \" $1; exit}'", status_ms, None),
@@ -3629,6 +3629,95 @@ fn window_title_qml(id: &str, palette: &Palette, font_size: i64) -> String {
     .replace("__ID__", id)
     .replace("__TEXT__", &palette.text)
     .replace("__FONT_SIZE__", &font_size.to_string())
+}
+
+fn easyeffects_widget_qml(
+    id: &str,
+    palette: &Palette,
+    height: i64,
+    radius: i64,
+    font_size: i64,
+    icon_font: &str,
+    interval: i64,
+) -> String {
+    let item_id = qml_id(id, "easyeffects");
+    let status_id = qml_id(id, "easyeffectsStatus");
+    let toggle_id = qml_id(id, "easyeffectsToggle");
+
+    r#"
+            Rectangle {
+              id: __ID__
+              property bool effectsEnabled: false
+              width: 62
+              height: __HEIGHT__
+              anchors.verticalCenter: parent.verticalCenter
+              radius: __RADIUS__
+              color: effectsEnabled ? "__ACCENT__" : "__SURFACE__"
+              border.color: effectsEnabled ? "__ACCENT__" : "__MUTED__"
+              border.width: 1
+
+              Text {
+                anchors.centerIn: parent
+                text: __ID__.effectsEnabled ? "󰓃 FX ON" : "󰓃 FX OFF"
+                color: "__TEXT__"
+                font.pixelSize: __FONT_SIZE__
+                font.family: "__ICON_FONT__"
+                font.bold: true
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  __TOGGLE_ID__.running = false
+                  __TOGGLE_ID__.running = true
+                }
+              }
+
+              Process {
+                id: __STATUS_ID__
+                command: ["sh", "-c", "pgrep -x easyeffects >/dev/null && printf 1 || printf 0"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: __ID__.effectsEnabled = this.text.trim() === "1"
+                }
+              }
+
+              Process {
+                id: __TOGGLE_ID__
+                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then pkill -x easyeffects; else easyeffects --gapplication-service >/dev/null 2>&1 & fi; sleep 0.4; printf done"]
+                stdout: StdioCollector {
+                  onStreamFinished: {
+                    __STATUS_ID__.running = false
+                    __STATUS_ID__.running = true
+                  }
+                }
+              }
+
+              Timer {
+                interval: __INTERVAL__
+                running: true
+                repeat: true
+                onTriggered: {
+                  __STATUS_ID__.running = false
+                  __STATUS_ID__.running = true
+                }
+              }
+            }
+"#
+    .replace("__ID__", &item_id)
+    .replace("__STATUS_ID__", &status_id)
+    .replace("__TOGGLE_ID__", &toggle_id)
+    .replace("__HEIGHT__", &(height - 8).max(22).to_string())
+    .replace("__RADIUS__", &(radius - 4).max(6).to_string())
+    .replace("__ACCENT__", &palette.accent)
+    .replace("__SURFACE__", &palette.surface)
+    .replace("__MUTED__", &palette.muted)
+    .replace("__TEXT__", &palette.text)
+    .replace("__FONT_SIZE__", &font_size.to_string())
+    .replace("__ICON_FONT__", icon_font)
+    .replace("__INTERVAL__", &interval.max(500).to_string())
 }
 
 fn command_text_qml(
@@ -5494,5 +5583,27 @@ mod tests {
         assert!(qml.contains("Hyprland.activeToplevel.title"));
         assert!(!qml.contains("hyprctl"));
         assert!(!qml.contains("Process {"));
+    }
+
+    #[test]
+    fn easyeffects_widget_reports_and_toggles_process_state() {
+        let palette = theme_palette(&HashMap::new());
+        let qml = easyeffects_widget_qml(
+            "left_0",
+            &palette,
+            35,
+            10,
+            12,
+            "Symbols Nerd Font",
+            1_500,
+        );
+
+        assert!(qml.contains("FX ON"));
+        assert!(qml.contains("FX OFF"));
+        assert!(qml.contains("pgrep -x easyeffects"));
+        assert!(qml.contains("pkill -x easyeffects"));
+        assert!(!qml.contains("__ID__"));
+        assert!(!qml.contains("__STATUS_ID__"));
+        assert!(!qml.contains("__TOGGLE_ID__"));
     }
 }
