@@ -1813,7 +1813,7 @@ misc               = 313244
                             if ui.small_button("+ Add").clicked() {
                                 self.keybinds.push(Keybind {
                                     name: "New keybind".to_string(),
-                                    key: "SUPER, N".to_string(),
+                                    key: "N".to_string(),
                                     kind: "app".to_string(),
                                     value: self.value("DOTFILES_TERMINAL"),
                                 });
@@ -3791,29 +3791,35 @@ fn datetime_widget_qml(
     radius: i64,
     font_size: i64,
 ) -> String {
+    let item_id = qml_id(id, "datetime");
+    let time_proc_id = qml_id(id, "timeProc");
+    let calendar_proc_id = qml_id(id, "calendarProc");
+    let bubble_id = qml_id(id, "dateBubble");
+    let text_id = qml_id(id, "dateText");
+
     format!(
         r#"
         Item {{
-            id: {id}
-            width: dateBubble.width
+            id: {item_id}
+            width: {bubble_id}.width
             height: {height}
             clip: false
 
             property string displayText: ""
 
             Process {{
-                id: timeProc
+                id: {time_proc_id}
                 command: ["sh", "-c", "date '+%a %d %b · %H:%M'"]
 
                 stdout: StdioCollector {{
                     onStreamFinished: {{
-                        {id}.displayText = this.text.trim()
+                        {item_id}.displayText = this.text.trim()
                     }}
                 }}
             }}
 
             Process {{
-                id: openCalendarProc
+                id: {calendar_proc_id}
                 command: ["sh", "-c", "$HOME/.local/bin/splinter-calendar-menu"]
             }}
 
@@ -3822,30 +3828,30 @@ fn datetime_widget_qml(
                 running: true
                 repeat: true
                 onTriggered: {{
-                    timeProc.running = false
-                    timeProc.running = true
+                    {time_proc_id}.running = false
+                    {time_proc_id}.running = true
                 }}
             }}
 
             Component.onCompleted: {{
-                timeProc.running = true
+                {time_proc_id}.running = true
             }}
 
             Rectangle {{
-                id: dateBubble
+                id: {bubble_id}
                 height: Math.max(22, {height} - 10)
                 radius: Math.max(10, {radius} - 4)
                 color: "{card}"
                 border.color: "{border}"
                 border.width: 1
-                width: textItem.implicitWidth + 20
+                width: {text_id}.implicitWidth + 20
 
                 anchors.verticalCenter: parent.verticalCenter
 
                 Text {{
-                    id: textItem
+                    id: {text_id}
                     anchors.centerIn: parent
-                    text: {id}.displayText
+                    text: {item_id}.displayText
                     color: "{text}"
                     font.pixelSize: Math.max(10, {font_size} - 1)
                     font.bold: true
@@ -3856,14 +3862,18 @@ fn datetime_widget_qml(
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {{
-                        openCalendarProc.running = false
-                        openCalendarProc.running = true
+                        {calendar_proc_id}.running = false
+                        {calendar_proc_id}.running = true
                     }}
                 }}
             }}
         }}
         "#,
-        id = id,
+        item_id = item_id,
+        time_proc_id = time_proc_id,
+        calendar_proc_id = calendar_proc_id,
+        bubble_id = bubble_id,
+        text_id = text_id,
         height = height,
         radius = radius,
         font_size = font_size,
@@ -3886,10 +3896,14 @@ fn visualizer_widget_qml(
     radius: i64,
     _font_size: i64,
 ) -> String {
+    let item_id = qml_id(id, "visualizer");
+    let proc_id = qml_id(id, "cavaProc");
+    let bubble_id = qml_id(id, "visualizerBubble");
+
     format!(
         r#"
         Item {{
-            id: {id}
+            id: {item_id}
             width: 150
             height: {height}
             clip: false
@@ -3897,14 +3911,14 @@ fn visualizer_widget_qml(
             property string rawBars: "000000000000000000"
 
             Process {{
-                id: cavaProc
+                id: {proc_id}
                 command: ["sh", "-c", "$HOME/.local/bin/splinter-cava-read"]
 
                 stdout: StdioCollector {{
                     onStreamFinished: {{
                         var raw = this.text.trim()
                         if (raw.length >= 18) {{
-                            {id}.rawBars = raw.substring(0, 18)
+                            {item_id}.rawBars = raw.substring(0, 18)
                         }}
                     }}
                 }}
@@ -3915,17 +3929,17 @@ fn visualizer_widget_qml(
                 running: true
                 repeat: true
                 onTriggered: {{
-                    cavaProc.running = false
-                    cavaProc.running = true
+                    {proc_id}.running = false
+                    {proc_id}.running = true
                 }}
             }}
 
             Component.onCompleted: {{
-                cavaProc.running = true
+                {proc_id}.running = true
             }}
 
             Rectangle {{
-                id: visualizerBubble
+                id: {bubble_id}
                 width: parent.width
                 height: Math.max(22, {height} - 10)
                 anchors.verticalCenter: parent.verticalCenter
@@ -3949,7 +3963,7 @@ fn visualizer_widget_qml(
                             anchors.bottom: parent.bottom
                             color: "{accent}"
 
-                            height: Math.max(3, (parent.height * Number({id}.rawBars.charAt(index))) / 8)
+                            height: Math.max(3, (parent.height * Number({item_id}.rawBars.charAt(index))) / 8)
 
                             Behavior on height {{
                                 NumberAnimation {{
@@ -3963,7 +3977,9 @@ fn visualizer_widget_qml(
             }}
         }}
         "#,
-        id = id,
+        item_id = item_id,
+        proc_id = proc_id,
+        bubble_id = bubble_id,
         height = height,
         radius = radius,
         surface = palette.surface,
@@ -3985,6 +4001,7 @@ fn media_controls_qml(
 ) -> String {
     let item_id = qml_id(id, "media");
     let proc_id = qml_id(&format!("{id}_media_menu"), "proc");
+    let mouse_id = qml_id(id, "mediaMouse");
     let button_size = (height - 8).max(22);
 
     format!(
@@ -3996,7 +4013,7 @@ fn media_controls_qml(
 
               Process {{
                 id: __PROC_ID__
-                command: ["bash", "-lc", "echo clicked >> /tmp/splinter-media-button.log; exec $HOME/.local/bin/splinter-media-menu >> /tmp/splinter-media-button.log 2>&1"]
+                command: ["sh", "-c", "$HOME/.local/bin/splinter-media-menu"]
               }}
 
               Rectangle {{
@@ -4004,7 +4021,7 @@ fn media_controls_qml(
                 width: __BUTTON_SIZE__
                 height: __BUTTON_SIZE__
                 radius: __BUTTON_RADIUS__
-                color: mediaMouse.containsMouse ? "__ACCENT__" : "__SURFACE__"
+                color: __MOUSE_ID__.containsMouse ? "__ACCENT__" : "__SURFACE__"
                 border.color: "__ACCENT__"
                 border.width: 1
 
@@ -4017,7 +4034,7 @@ fn media_controls_qml(
                 }}
 
                 MouseArea {{
-                  id: mediaMouse
+                  id: __MOUSE_ID__
                   anchors.fill: parent
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
@@ -4034,6 +4051,7 @@ fn media_controls_qml(
     )
     .replace("__ID__", &item_id)
     .replace("__PROC_ID__", &proc_id)
+    .replace("__MOUSE_ID__", &mouse_id)
     .replace("__HEIGHT__", &height.to_string())
     .replace("__BUTTON_SIZE__", &button_size.to_string())
     .replace("__BUTTON_RADIUS__", &(radius - 4).max(4).to_string())
@@ -5406,4 +5424,31 @@ fn run_quiet(program: &str, args: &[&str]) {
 
 fn err_string<E: std::fmt::Display>(err: E) -> String {
     err.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn repeated_widgets_generate_unique_qml_ids() {
+        let palette = theme_palette(&HashMap::new());
+        let qml = [
+            media_controls_qml("left_0", &palette, 35, 10, 12, "Symbols Nerd Font"),
+            media_controls_qml("right_0", &palette, 35, 10, 12, "Symbols Nerd Font"),
+            datetime_widget_qml("left_1", &palette, 35, 10, 12),
+            datetime_widget_qml("right_1", &palette, 35, 10, 12),
+            visualizer_widget_qml("left_2", &palette, 35, 10, 12),
+            visualizer_widget_qml("right_2", &palette, 35, 10, 12),
+        ]
+        .join("\n");
+
+        let mut ids = HashSet::new();
+        for line in qml.lines() {
+            if let Some(id) = line.trim().strip_prefix("id: ") {
+                assert!(ids.insert(id.to_string()), "duplicate QML id: {id}");
+            }
+        }
+    }
 }

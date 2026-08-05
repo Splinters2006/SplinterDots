@@ -19,6 +19,7 @@ usage() {
 Usage: ./install.sh [options]
 
 Options:
+  --apply         Apply dotfiles without installing or updating packages
   --dry-run       Show actions without changing files
   --packages      Install recommended Arch packages with pacman
   --aur           Install yay, then install packages from packages/aur.txt
@@ -30,6 +31,11 @@ Options:
   -h, --help      Show this help
 EOF
 }
+
+if [ "$#" -eq 0 ]; then
+  usage
+  exit 0
+fi
 
 log() {
   printf '%s\n' "$*"
@@ -53,6 +59,9 @@ run() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --apply)
+      :
+      ;;
     --dry-run)
       DRY_RUN=1
       ;;
@@ -441,9 +450,14 @@ if [ -L "$HOME_DIR/.local/bin/start-hyprland" ] && [ "$(readlink "$HOME_DIR/.loc
   run rm "$HOME_DIR/.local/bin/start-hyprland"
   action_log "remove managed shadow: $HOME_DIR/.local/bin/start-hyprland"
 fi
-link_file "$ROOT_DIR/scripts/dotfiles-welcome" "$HOME_DIR/.local/bin/dotfiles-welcome"
+link_file "$ROOT_DIR/scripts/splinter-welcome" "$HOME_DIR/.local/bin/dotfiles-welcome"
 link_file "$ROOT_DIR/scripts/splinter-wallpaper" "$HOME_DIR/.local/bin/splinter-wallpaper"
 link_file "$ROOT_DIR/scripts/splinter-screenshot" "$HOME_DIR/.local/bin/splinter-screenshot"
+link_file "$ROOT_DIR/scripts/splinter-calendar-menu" "$HOME_DIR/.local/bin/splinter-calendar-menu"
+link_file "$ROOT_DIR/scripts/splinter-media-menu" "$HOME_DIR/.local/bin/splinter-media-menu"
+link_file "$ROOT_DIR/scripts/splinter-cava-read" "$HOME_DIR/.local/bin/splinter-cava-read"
+link_file "$ROOT_DIR/scripts/splinter-cava-daemon" "$HOME_DIR/.local/bin/splinter-cava-daemon"
+link_file "$ROOT_DIR/scripts/splinter-apply-kitty-theme" "$HOME_DIR/.local/bin/splinter-apply-kitty-theme"
 
 log ""
 log "Done. Open a new shell or run: exec \"\$SHELL\""

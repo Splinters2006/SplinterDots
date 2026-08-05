@@ -61,7 +61,7 @@ status() {
   fi
 
   welcome_dest="$HOME/.local/bin/dotfiles-welcome"
-  if [ -L "$welcome_dest" ] && [ "$(readlink "$welcome_dest")" = "$ROOT_DIR/scripts/dotfiles-welcome" ]; then
+  if [ -L "$welcome_dest" ] && [ "$(readlink "$welcome_dest")" = "$ROOT_DIR/scripts/splinter-welcome" ]; then
     printf 'linked  %s\n' "$welcome_dest"
   elif [ -e "$welcome_dest" ] || [ -L "$welcome_dest" ]; then
     printf 'custom  %s\n' "$welcome_dest"
@@ -144,7 +144,7 @@ edit_settings() {
 }
 
 apply() {
-  "$ROOT_DIR/install.sh" "$@"
+  "$ROOT_DIR/install.sh" --apply "$@"
 }
 
 packages() {
@@ -168,7 +168,7 @@ all() {
 }
 
 welcome() {
-  "$ROOT_DIR/scripts/dotfiles-welcome" --force
+  "$ROOT_DIR/scripts/splinter-welcome" --force
 }
 
 center() {
@@ -200,7 +200,7 @@ uninstall() {
     printf 'removed %s\n' "$HOME/.local/bin/dotctl"
   fi
 
-  if [ -L "$HOME/.local/bin/dotfiles-welcome" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-welcome")" = "$ROOT_DIR/scripts/dotfiles-welcome" ]; then
+  if [ -L "$HOME/.local/bin/dotfiles-welcome" ] && [ "$(readlink "$HOME/.local/bin/dotfiles-welcome")" = "$ROOT_DIR/scripts/splinter-welcome" ]; then
     rm "$HOME/.local/bin/dotfiles-welcome"
     printf 'removed %s\n' "$HOME/.local/bin/dotfiles-welcome"
   fi

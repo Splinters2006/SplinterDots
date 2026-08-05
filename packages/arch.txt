@@ -32,6 +32,8 @@ thunar
 polkit-gnome
 
 # Required desktop helpers
+python
+fastfetch
 wl-clipboard
 grim
 slurp

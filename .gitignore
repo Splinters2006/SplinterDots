@@ -2,3 +2,6 @@
 __pycache__/
 /target/
 .dotfiles-change-backup/
+*.bak
+*.tmp
+*~

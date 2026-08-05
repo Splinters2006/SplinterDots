@@ -281,7 +281,7 @@ Variants {
 
               Process {
                 id: proc_right_0_media_menu
-                command: ["bash", "-lc", "echo clicked >> /tmp/splinter-media-button.log; exec $HOME/.local/bin/splinter-media-menu >> /tmp/splinter-media-button.log 2>&1"]
+                command: ["sh", "-c", "$HOME/.local/bin/splinter-media-menu"]
               }
 
               Rectangle {
