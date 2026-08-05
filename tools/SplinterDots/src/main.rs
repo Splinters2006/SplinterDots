@@ -3593,7 +3593,7 @@ fn bar_widget_qml(
         "volume" => clickable_command_text_qml(id, palette, font_size, icon_font, "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'", status_ms, "pavucontrol"),
         "mic" => command_text_qml(id, palette, font_size, icon_font, "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \" muted\"; else print \" \" v \"%\"}'", status_ms, None),
         "network" => command_text_qml(id, palette, font_size, icon_font, "nmcli -t -f DEVICE,STATE device 2>/dev/null | awk -F: '$2==\"connected\"{print \"󰤨 \" $1; exit}'", status_ms, None),
-        "bluetooth" => clickable_command_text_qml(id, palette, font_size, icon_font, "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf ' on' || printf ' off'", status_ms, "overskride"),
+        "bluetooth" => bluetooth_widget_qml(id, palette, height, radius, font_size, icon_font, status_ms),
         "battery" => command_text_qml(id, palette, font_size, icon_font, "bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && printf '󰁹 %s%%' \"$bat\"", status_ms, None),
         "brightness" => command_text_qml(id, palette, font_size, icon_font, "brightnessctl -m 2>/dev/null | awk -F, '{print \"󰃠 \" $4}'", status_ms, None),
         "updates" => {
@@ -3723,6 +3723,87 @@ fn easyeffects_widget_qml(
     .replace("__STATUS_ID__", &status_id)
     .replace("__TOGGLE_ID__", &toggle_id)
     .replace("__HEIGHT__", &(height - 8).max(22).to_string())
+    .replace("__RADIUS__", &(radius - 4).max(6).to_string())
+    .replace("__ACCENT__", &palette.accent)
+    .replace("__SURFACE__", &palette.surface)
+    .replace("__MUTED__", &palette.muted)
+    .replace("__TEXT__", &palette.text)
+    .replace("__FONT_SIZE__", &font_size.to_string())
+    .replace("__ICON_FONT__", icon_font)
+    .replace("__INTERVAL__", &interval.max(500).to_string())
+}
+
+fn bluetooth_widget_qml(
+    id: &str,
+    palette: &Palette,
+    height: i64,
+    radius: i64,
+    font_size: i64,
+    icon_font: &str,
+    interval: i64,
+) -> String {
+    r#"
+            Rectangle {
+              id: __ID__
+              property bool powered: false
+              width: 86
+              height: __HEIGHT__
+              anchors.verticalCenter: parent.verticalCenter
+              radius: __RADIUS__
+              color: __MOUSE_ID__.containsMouse ? "__ACCENT__" : "__SURFACE__"
+              border.color: powered ? "__ACCENT__" : "__MUTED__"
+              border.width: 1
+
+              Text {
+                anchors.centerIn: parent
+                text: __ID__.powered ? " Bluetooth" : " Off"
+                color: "__TEXT__"
+                font.pixelSize: __FONT_SIZE__
+                font.family: "__ICON_FONT__"
+                font.bold: true
+              }
+
+              Process {
+                id: __STATUS_ID__
+                command: ["sh", "-c", "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf 1 || printf 0"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: __ID__.powered = this.text.trim() === "1"
+                }
+              }
+
+              Process {
+                id: __CLICK_ID__
+                command: ["sh", "-c", "overskride"]
+              }
+
+              MouseArea {
+                id: __MOUSE_ID__
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  __CLICK_ID__.running = false
+                  __CLICK_ID__.running = true
+                }
+              }
+
+              Timer {
+                interval: __INTERVAL__
+                running: true
+                repeat: true
+                onTriggered: {
+                  __STATUS_ID__.running = false
+                  __STATUS_ID__.running = true
+                }
+              }
+            }
+"#
+    .replace("__ID__", &qml_id(id, "bluetooth"))
+    .replace("__STATUS_ID__", &qml_id(id, "bluetoothStatus"))
+    .replace("__CLICK_ID__", &qml_id(id, "bluetoothClick"))
+    .replace("__MOUSE_ID__", &qml_id(id, "bluetoothMouse"))
+    .replace("__HEIGHT__", &(height - 8).max(24).to_string())
     .replace("__RADIUS__", &(radius - 4).max(6).to_string())
     .replace("__ACCENT__", &palette.accent)
     .replace("__SURFACE__", &palette.surface)
@@ -5685,7 +5766,7 @@ mod tests {
     }
 
     #[test]
-    fn clickable_status_widgets_launch_their_control_panels() {
+    fn status_widgets_launch_their_control_panels() {
         let palette = theme_palette(&HashMap::new());
         let volume = clickable_command_text_qml(
             "left_0",
@@ -5696,20 +5777,22 @@ mod tests {
             1_500,
             "pavucontrol",
         );
-        let bluetooth = clickable_command_text_qml(
+        let bluetooth = bluetooth_widget_qml(
             "right_0",
             &palette,
+            34,
+            10,
             12,
             "Symbols Nerd Font",
-            "printf bluetooth",
             1_500,
-            "overskride",
         );
 
         assert!(volume.contains("pavucontrol"));
         assert!(bluetooth.contains("overskride"));
         assert!(volume.contains("MouseArea"));
-        assert!(bluetooth.contains("MouseArea"));
+        assert!(bluetooth.contains("width: 86"));
+        assert!(bluetooth.contains("Rectangle"));
+        assert!(bluetooth.contains("Bluetooth"));
     }
 
     #[test]
