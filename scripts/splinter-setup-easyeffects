@@ -2,36 +2,33 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 
 if ! command -v easyeffects >/dev/null 2>&1; then
   echo "EasyEffects is not installed."
   exit 0
 fi
 
-mkdir -p "$CONFIG_HOME/easyeffects/output" "$CONFIG_HOME/easyeffects/input"
+mkdir -p "$DATA_HOME/easyeffects/output" "$DATA_HOME/easyeffects/input"
 
 if [ -f "$ROOT_DIR/files/easyeffects/output/SplinterDots-Output.json" ]; then
   cp "$ROOT_DIR/files/easyeffects/output/SplinterDots-Output.json" \
-     "$CONFIG_HOME/easyeffects/output/SplinterDots-Output.json"
+     "$DATA_HOME/easyeffects/output/SplinterDots-Output.json"
 fi
 
 if [ -f "$ROOT_DIR/files/easyeffects/output/Dotfiles Audio.json" ]; then
   cp "$ROOT_DIR/files/easyeffects/output/Dotfiles Audio.json" \
-     "$CONFIG_HOME/easyeffects/output/Dotfiles Audio.json"
+     "$DATA_HOME/easyeffects/output/Dotfiles Audio.json"
 fi
 
 if [ -f "$ROOT_DIR/files/easyeffects/input/SplinterDots-Mic.json" ]; then
   cp "$ROOT_DIR/files/easyeffects/input/SplinterDots-Mic.json" \
-     "$CONFIG_HOME/easyeffects/input/SplinterDots-Mic.json"
+     "$DATA_HOME/easyeffects/input/SplinterDots-Mic.json"
 fi
-
-# Enable the EasyEffects service/app autostart where available.
-systemctl --user enable --now easyeffects.service 2>/dev/null || true
 
 # Start it once so it can pick up presets.
 if ! pgrep -x easyeffects >/dev/null 2>&1; then
-  easyeffects --gapplication-service >/dev/null 2>&1 &
+  easyeffects --service-mode >/dev/null 2>&1 &
   sleep 1
 fi
 

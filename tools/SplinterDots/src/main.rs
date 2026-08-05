@@ -3699,7 +3699,7 @@ fn easyeffects_widget_qml(
 
               Process {
                 id: __TOGGLE_ID__
-                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then pkill -x easyeffects; else easyeffects --gapplication-service >/dev/null 2>&1 & fi; sleep 0.4; printf done"]
+                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then pkill -x easyeffects; else easyeffects --service-mode >/dev/null 2>&1 & fi; sleep 0.4; printf done"]
                 stdout: StdioCollector {
                   onStreamFinished: {
                     __STATUS_ID__.running = false
@@ -5776,6 +5776,8 @@ mod tests {
         assert!(qml.contains("FX OFF"));
         assert!(qml.contains("pgrep -x easyeffects"));
         assert!(qml.contains("pkill -x easyeffects"));
+        assert!(qml.contains("easyeffects --service-mode"));
+        assert!(!qml.contains("--gapplication-service"));
         assert!(!qml.contains("__ID__"));
         assert!(!qml.contains("__STATUS_ID__"));
         assert!(!qml.contains("__TOGGLE_ID__"));
