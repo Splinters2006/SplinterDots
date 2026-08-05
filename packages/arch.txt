@@ -70,5 +70,7 @@ unzip
 pamixer
 hyprpicker
 easyeffects
+lsp-plugins-lv2
+calf
 pavucontrol
 cava
