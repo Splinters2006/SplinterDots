@@ -507,6 +507,7 @@ link_file "$ROOT_DIR/scripts/splinter-media-menu" "$HOME_DIR/.local/bin/splinter
 link_file "$ROOT_DIR/scripts/splinter-cava-read" "$HOME_DIR/.local/bin/splinter-cava-read"
 link_file "$ROOT_DIR/scripts/splinter-cava-daemon" "$HOME_DIR/.local/bin/splinter-cava-daemon"
 link_file "$ROOT_DIR/scripts/splinter-apply-kitty-theme" "$HOME_DIR/.local/bin/splinter-apply-kitty-theme"
+link_file "$ROOT_DIR/scripts/splinter-install-addon" "$HOME_DIR/.local/bin/splinter-install-addon"
 
 log ""
 log "Done. Open a new shell or run: exec \"\$SHELL\""

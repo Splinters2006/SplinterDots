@@ -1297,33 +1297,17 @@ misc               = 313244
 
     fn install_addon_package(&mut self, package: &str) {
         let terminal = self.value("DOTFILES_TERMINAL");
-        let helper = self.paths.script("splinterdots-style");
+        let installer = self.paths.script("splinter-install-addon");
+        let packages = package.split_whitespace().collect::<Vec<_>>();
 
-        let packages = package
-            .split_whitespace()
-            .map(shell_quote)
-            .collect::<Vec<_>>()
-            .join(" ");
-
-        let command = format!(
-            "for pkg in {packages}; do {helper} install \"$pkg\" || exit 1; done; \
-             mkdir -p \"${{XDG_CACHE_HOME:-$HOME/.cache}}/splinterdots\"; \
-             touch \"${{XDG_CACHE_HOME:-$HOME/.cache}}/splinterdots/addons-refresh\"; \
-             echo; read -rp 'Press enter to close...'",
-            packages = packages,
-            helper = shell_quote(&helper.to_string_lossy()),
-        );
-
-        let result = Command::new("sh")
-            .arg("-c")
-            .arg(format!("{} -e sh -c {}", terminal, shell_quote(&command)))
+        let result = Command::new(&terminal)
+            .arg("-e")
+            .arg(installer)
+            .args(&packages)
             .spawn();
 
         self.status = match result {
-            Ok(_) => {
-                self.configure_addon_after_install(package);
-                format!("Opening installer for {package}")
-            }
+            Ok(_) => format!("Installing {package}…"),
             Err(err) => format!("Could not open installer: {err}"),
         };
     }
@@ -2777,6 +2761,7 @@ const WIDGET_TOGGLES: &[(&str, &str)] = &[
 
 impl eframe::App for SplinterDots {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.refresh_addons_if_needed();
         self.sync_ui_font(ctx);
         self.apply_style(ctx);
         let theme = self.app_theme();
@@ -5013,11 +4998,24 @@ fn addon_package_installed(package: &str) -> bool {
 }
 
 fn package_installed_cached(package: &str) -> bool {
-    static INSTALLED_PACKAGES: std::sync::OnceLock<std::collections::HashSet<String>> =
-        std::sync::OnceLock::new();
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
 
-    let packages = INSTALLED_PACKAGES.get_or_init(|| {
-        Command::new("pacman")
+    static INSTALLED_PACKAGES: OnceLock<Mutex<Option<(Instant, std::collections::HashSet<String>)>>> =
+        OnceLock::new();
+
+    let cache = INSTALLED_PACKAGES.get_or_init(|| Mutex::new(None));
+    let Ok(mut cached) = cache.lock() else {
+        return false;
+    };
+
+    let expired = cached
+        .as_ref()
+        .map(|(updated, _)| updated.elapsed() >= Duration::from_secs(2))
+        .unwrap_or(true);
+
+    if expired {
+        let packages = Command::new("pacman")
             .arg("-Qq")
             .output()
             .ok()
@@ -5028,10 +5026,14 @@ fn package_installed_cached(package: &str) -> bool {
                     .filter(|line| !line.is_empty())
                     .collect::<std::collections::HashSet<String>>()
             })
-            .unwrap_or_default()
-    });
+            .unwrap_or_default();
+        *cached = Some((Instant::now(), packages));
+    }
 
-    packages.contains(package)
+    cached
+        .as_ref()
+        .map(|(_, packages)| packages.contains(package))
+        .unwrap_or(false)
 }
 
 #[derive(Clone, Copy)]

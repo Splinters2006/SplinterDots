@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ "$#" -eq 0 ]; then
+  echo "No add-on package was provided." >&2
+  exit 1
+fi
+
+for package in "$@"; do
+  "$ROOT_DIR/scripts/splinterdots-style" install "$package"
+done
+
+for package in "$@"; do
+  case "$package" in
+    vesktop|vesktop-bin)
+      config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+      mkdir -p "$config_home/vesktop/themes" "$config_home/vesktop/plugins"
+      if [ -f "$ROOT_DIR/files/vesktop/SplinterDots.theme.css" ]; then
+        cp "$ROOT_DIR/files/vesktop/SplinterDots.theme.css" \
+          "$config_home/vesktop/themes/SplinterDots.theme.css"
+      fi
+      ;;
+    spicetify|spicetify-cli)
+      "$ROOT_DIR/scripts/splinter-setup-spicetify"
+      ;;
+  esac
+done
+
+marker_dir="${XDG_CACHE_HOME:-$HOME/.cache}/splinterdots"
+mkdir -p "$marker_dir"
+touch "$marker_dir/addons-refresh"
+
+echo
+echo "Add-on installation completed successfully."
+if [ -t 0 ]; then
+  read -rp "Press enter to close..." _
+fi
