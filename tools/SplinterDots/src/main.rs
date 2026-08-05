@@ -3577,10 +3577,10 @@ fn bar_widget_qml(
         "submap" => command_text_qml(id, palette, font_size, icon_font, "hyprctl submap 2>/dev/null | grep -v '^$' | sed 's/^/󰌌 /'", status_ms, None),
 
         "easyeffects" => easyeffects_widget_qml(id, palette, height, radius, font_size, icon_font, status_ms),
-        "volume" => command_text_qml(id, palette, font_size, icon_font, "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'", status_ms, None),
+        "volume" => clickable_command_text_qml(id, palette, font_size, icon_font, "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'", status_ms, "pavucontrol"),
         "mic" => command_text_qml(id, palette, font_size, icon_font, "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \" muted\"; else print \" \" v \"%\"}'", status_ms, None),
         "network" => command_text_qml(id, palette, font_size, icon_font, "nmcli -t -f DEVICE,STATE device 2>/dev/null | awk -F: '$2==\"connected\"{print \"󰤨 \" $1; exit}'", status_ms, None),
-        "bluetooth" => command_text_qml(id, palette, font_size, icon_font, "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf ' on' || printf ' off'", status_ms, None),
+        "bluetooth" => clickable_command_text_qml(id, palette, font_size, icon_font, "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf ' on' || printf ' off'", status_ms, "overskride"),
         "battery" => command_text_qml(id, palette, font_size, icon_font, "bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && printf '󰁹 %s%%' \"$bat\"", status_ms, None),
         "brightness" => command_text_qml(id, palette, font_size, icon_font, "brightnessctl -m 2>/dev/null | awk -F, '{print \"󰃠 \" $4}'", status_ms, None),
         "updates" => {
@@ -3765,6 +3765,70 @@ fn command_text_qml(
     .replace("__COMMAND__", &json_string(command))
     .replace("__INTERVAL__", &interval.to_string())
     .replace("__PREFIX__", &qml_string_escape(&prefix))
+}
+
+fn clickable_command_text_qml(
+    id: &str,
+    palette: &Palette,
+    font_size: i64,
+    icon_font: &str,
+    status_command: &str,
+    interval: i64,
+    click_command: &str,
+) -> String {
+    r#"
+            Text {
+              id: __ID__
+              anchors.verticalCenter: parent.verticalCenter
+              color: "__TEXT__"
+              font.pixelSize: __FONT_SIZE__
+              font.family: "__ICON_FONT__"
+              text: ""
+
+              Process {
+                id: __STATUS_ID__
+                command: ["sh", "-c", __STATUS_COMMAND__]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: __ID__.text = this.text.split("\\n").join("").trim()
+                }
+              }
+
+              Process {
+                id: __CLICK_ID__
+                command: ["sh", "-c", __CLICK_COMMAND__]
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  __CLICK_ID__.running = false
+                  __CLICK_ID__.running = true
+                }
+              }
+
+              Timer {
+                interval: __INTERVAL__
+                running: true
+                repeat: true
+                onTriggered: {
+                  __STATUS_ID__.running = false
+                  __STATUS_ID__.running = true
+                }
+              }
+            }
+"#
+    .replace("__ID__", &qml_id(id, "txt"))
+    .replace("__STATUS_ID__", &qml_id(id, "statusProc"))
+    .replace("__CLICK_ID__", &qml_id(id, "clickProc"))
+    .replace("__TEXT__", &palette.text)
+    .replace("__FONT_SIZE__", &font_size.to_string())
+    .replace("__ICON_FONT__", icon_font)
+    .replace("__STATUS_COMMAND__", &json_string(status_command))
+    .replace("__CLICK_COMMAND__", &json_string(click_command))
+    .replace("__INTERVAL__", &interval.max(500).to_string())
 }
 
 fn command_button_qml(
@@ -5605,5 +5669,33 @@ mod tests {
         assert!(!qml.contains("__ID__"));
         assert!(!qml.contains("__STATUS_ID__"));
         assert!(!qml.contains("__TOGGLE_ID__"));
+    }
+
+    #[test]
+    fn clickable_status_widgets_launch_their_control_panels() {
+        let palette = theme_palette(&HashMap::new());
+        let volume = clickable_command_text_qml(
+            "left_0",
+            &palette,
+            12,
+            "Symbols Nerd Font",
+            "printf volume",
+            1_500,
+            "pavucontrol",
+        );
+        let bluetooth = clickable_command_text_qml(
+            "right_0",
+            &palette,
+            12,
+            "Symbols Nerd Font",
+            "printf bluetooth",
+            1_500,
+            "overskride",
+        );
+
+        assert!(volume.contains("pavucontrol"));
+        assert!(bluetooth.contains("overskride"));
+        assert!(volume.contains("MouseArea"));
+        assert!(bluetooth.contains("MouseArea"));
     }
 }

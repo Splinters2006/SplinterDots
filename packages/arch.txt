@@ -70,4 +70,5 @@ unzip
 pamixer
 hyprpicker
 easyeffects
+pavucontrol
 cava
