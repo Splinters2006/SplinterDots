@@ -11,6 +11,7 @@ UPDATE_DOTFILES=0
 CONFIGURE_SYSTEM=0
 NOCONFIRM=0
 LINK_LIVE_HYPR=0
+EXPLICIT_ACTION=0
 DOTFILES_NAME="Arch User"
 DOTFILES_EMAIL=""
 
@@ -18,10 +19,14 @@ usage() {
   cat <<'EOF'
 Usage: ./install.sh [options]
 
+With no action flag, install pacman/AUR packages (including Spotify and Spicetify),
+configure desktop services, apply dotfiles, and apply the Spicetify theme.
+Use --dry-run to preview this default installation.
+
 Options:
   --apply         Apply dotfiles without installing or updating packages
   --dry-run       Show actions without changing files
-  --packages      Install recommended Arch packages with pacman
+  --packages      Install recommended Arch packages and configure Bluetooth
   --aur           Install yay, then install packages from packages/aur.txt
   --upd           Update this dotfiles repo, then apply dotfiles
   --system        Configure greetd and enable desktop services
@@ -31,11 +36,6 @@ Options:
   -h, --help      Show this help
 EOF
 }
-
-if [ "$#" -eq 0 ]; then
-  usage
-  exit 0
-fi
 
 log() {
   printf '%s\n' "$*"
@@ -60,24 +60,30 @@ run() {
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --apply)
+      EXPLICIT_ACTION=1
       :
       ;;
     --dry-run)
       DRY_RUN=1
       ;;
     --packages)
+      EXPLICIT_ACTION=1
       INSTALL_PACKAGES=1
       ;;
     --aur)
+      EXPLICIT_ACTION=1
       INSTALL_AUR=1
       ;;
     --upd)
+      EXPLICIT_ACTION=1
       UPDATE_DOTFILES=1
       ;;
     --system)
+      EXPLICIT_ACTION=1
       CONFIGURE_SYSTEM=1
       ;;
     --all)
+      EXPLICIT_ACTION=1
       UPDATE_DOTFILES=1
       INSTALL_PACKAGES=1
       INSTALL_AUR=1
@@ -101,6 +107,12 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$EXPLICIT_ACTION" -eq 0 ]; then
+  INSTALL_PACKAGES=1
+  INSTALL_AUR=1
+  CONFIGURE_SYSTEM=1
+fi
 
 if [ "$(uname -s)" != "Linux" ]; then
   log "This installer is intended for Linux. Continuing anyway."
@@ -228,16 +240,11 @@ install_aur_packages() {
 
   if [ "$DRY_RUN" -eq 1 ]; then
     log "[dry-run] yay ${yay_args[*]} ${aur_packages[*]}"
-    log "[dry-run] sudo chmod a+wr /opt/spotify"
-    log "[dry-run] sudo chmod a+wr /opt/spotify/Apps -R"
     return
   fi
 
   yay "${yay_args[@]}" "${aur_packages[@]}"
 
-  # Spicetify needs write access to Spotify's installation and app files.
-  sudo chmod a+wr /opt/spotify
-  sudo chmod a+wr /opt/spotify/Apps -R
 }
 
 remove_managed_start_hyprland_shadow() {
@@ -264,6 +271,32 @@ remove_managed_start_hyprland_shadow() {
   fi
 }
 
+configure_bluetooth() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    log "Skipping Bluetooth setup: systemctl was not found."
+    return
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] sudo systemctl enable --now bluetooth.service"
+    log "[dry-run] sudo rfkill unblock bluetooth"
+    log "[dry-run] bluetoothctl --timeout 10 power on"
+    return
+  fi
+
+  if ! command -v bluetoothctl >/dev/null 2>&1; then
+    log "Skipping Bluetooth setup: install bluez and bluez-utils with --packages."
+    return
+  fi
+  sudo systemctl enable --now bluetooth.service
+  if command -v rfkill >/dev/null 2>&1; then
+    sudo rfkill unblock bluetooth || log "Could not unblock Bluetooth; check the hardware switch."
+  fi
+  if ! bluetoothctl --timeout 10 power on; then
+    log "Bluetooth service is enabled. No usable adapter could be powered on; check hardware/firmware with splinter-doctor."
+  fi
+}
+
 configure_system() {
   if ! command -v systemctl >/dev/null 2>&1; then
     log "Skipping system setup: systemctl was not found."
@@ -275,7 +308,7 @@ configure_system() {
     log "[dry-run] sudo install -Dm644 $ROOT_DIR/system/wayland-sessions/start-hyprland.desktop /usr/share/wayland-sessions/start-hyprland.desktop"
     log "[dry-run] sudo install -Dm755 $ROOT_DIR/scripts/splinter-session /usr/local/bin/splinter-session"
     remove_managed_start_hyprland_shadow
-    log "[dry-run] sudo systemctl enable NetworkManager bluetooth greetd"
+    log "[dry-run] sudo systemctl enable NetworkManager greetd"
     return
   fi
 
@@ -283,7 +316,7 @@ configure_system() {
   sudo install -Dm644 "$ROOT_DIR/system/wayland-sessions/start-hyprland.desktop" /usr/share/wayland-sessions/start-hyprland.desktop
   sudo install -Dm755 "$ROOT_DIR/scripts/splinter-session" /usr/local/bin/splinter-session
   remove_managed_start_hyprland_shadow
-  sudo systemctl enable NetworkManager bluetooth greetd
+  sudo systemctl enable NetworkManager greetd
 }
 
 update_dotfiles() {
@@ -471,6 +504,10 @@ if [ "$CONFIGURE_SYSTEM" -eq 1 ]; then
   configure_system
 fi
 
+if [ "$INSTALL_PACKAGES" -eq 1 ] || [ "$CONFIGURE_SYSTEM" -eq 1 ]; then
+  configure_bluetooth
+fi
+
 find "$ROOT_DIR/home" -type f -print | while IFS= read -r src; do
   rel="${src#"$ROOT_DIR/home/"}"
   if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ "$LINK_LIVE_HYPR" -ne 1 ]; then
@@ -509,9 +546,21 @@ link_file "$ROOT_DIR/scripts/splinter-cava-daemon" "$HOME_DIR/.local/bin/splinte
 link_file "$ROOT_DIR/scripts/splinter-apply-kitty-theme" "$HOME_DIR/.local/bin/splinter-apply-kitty-theme"
 link_file "$ROOT_DIR/scripts/splinter-install-addon" "$HOME_DIR/.local/bin/splinter-install-addon"
 link_file "$ROOT_DIR/scripts/splinter-setup-easyeffects" "$HOME_DIR/.local/bin/splinter-setup-easyeffects"
+link_file "$ROOT_DIR/scripts/splinter-setup-spicetify" "$HOME_DIR/.local/bin/splinter-setup-spicetify"
 
 if [ "$INSTALL_PACKAGES" -eq 1 ]; then
   run "$ROOT_DIR/scripts/splinter-setup-easyeffects"
+fi
+
+# Reapply the Spotify theme after installing/updating or applying these dotfiles.
+if [ "$DRY_RUN" -eq 1 ] && [ "$INSTALL_AUR" -eq 1 ]; then
+  run "$ROOT_DIR/scripts/splinter-setup-spicetify"
+elif command -v spicetify >/dev/null 2>&1 && command -v spotify >/dev/null 2>&1; then
+  if ! run "$ROOT_DIR/scripts/splinter-setup-spicetify"; then
+    log "Spicetify setup could not finish; see the error above. Fix the reported issue, then run splinter-setup-spicetify to retry."
+  fi
+else
+  log "Skipping Spicetify setup: Spotify and spicetify-cli are installed by --aur or --all."
 fi
 
 log ""

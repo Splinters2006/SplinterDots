@@ -2829,6 +2829,7 @@ fn read_settings(paths: &Paths) -> HashMap<String, String> {
     let mut values = defaults_map();
     load_shell_values(&paths.repo_settings(), &mut values);
     load_shell_values(&paths.local_conf, &mut values);
+    migrate_system_widgets(&mut values);
     values
 }
 
@@ -3334,6 +3335,9 @@ fn write_colors(paths: &Paths, values: &HashMap<String, String>) -> Result<(), S
 fn write_quickshell_bar(paths: &Paths, values: &HashMap<String, String>) -> Result<(), String> {
     ensure_dir(&paths.quickshell_dir)?;
 
+    let mut migrated = values.clone();
+    migrate_system_widgets(&mut migrated);
+    let values = &migrated;
     let palette = theme_palette(values);
     let icons = icons_for(&value_or(values, "DOTFILES_BAR_ICON_PACK"));
     let position = value_or(values, "DOTFILES_BAR_POSITION");
@@ -3454,7 +3458,7 @@ Variants {
         interval: __REACTIVE_MS__
         running: true
         repeat: true
-        onTriggered: { stateProc.running = false; stateProc.running = true }
+        onTriggered: { if (!stateProc.running) stateProc.running = true }
       }
 
       Rectangle {
@@ -3464,32 +3468,29 @@ Variants {
         border.width: __BORDER_WIDTH__
         border.color: "__BORDER_COLOR__"
 
-        RowLayout {
+        Item {
           anchors.fill: parent
           anchors.leftMargin: __SPACING__
           anchors.rightMargin: __SPACING__
-          spacing: __SPACING__
 
           Row {
-            Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
             spacing: 7
 __LEFT_SECTION__
           }
 
-          Item { Layout.fillWidth: true }
-
           Row {
-            Layout.alignment: Qt.AlignCenter
+            anchors.centerIn: parent
             // Keep the midpoint between the center widgets so they fan out
             // symmetrically instead of reading as one tight cluster.
             spacing: Math.max(14, __SPACING__ * 2)
 __CENTER_SECTION__
           }
 
-          Item { Layout.fillWidth: true }
-
           Row {
-            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
             spacing: 7
 __RIGHT_SECTION__
           }
@@ -3580,26 +3581,24 @@ fn bar_widget_qml(
         "workspaces" => workspaces_qml(id, palette, height, radius, font_size, workspace_count, icon_font),
             "visualizer" => visualizer_widget_qml(id, palette, height, radius, font_size),
             "datetime" => datetime_widget_qml(id, palette, height, radius, font_size),
-        "window_title" => window_title_qml(id, palette, font_size),
-        "submap" => command_text_qml(id, palette, font_size, icon_font, "hyprctl submap 2>/dev/null | grep -v '^$' | sed 's/^/󰌌 /'", status_ms, None),
+        "window_title" => window_title_qml(id, palette, height, radius, font_size),
+        "submap" => command_text_qml(id, palette, height, radius, font_size, icon_font, "hyprctl submap 2>/dev/null | grep -v '^$' | sed 's/^/󰌌 /'", status_ms, None),
 
         "easyeffects" => easyeffects_widget_qml(id, palette, height, radius, font_size, icon_font, status_ms),
         "volume" => volume_widget_qml(id, palette, height, radius, font_size, icon_font, status_ms),
-        "mic" => command_text_qml(id, palette, font_size, icon_font, "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \" muted\"; else print \" \" v \"%\"}'", status_ms, None),
-        "network" => command_text_qml(id, palette, font_size, icon_font, "nmcli -t -f DEVICE,STATE device 2>/dev/null | awk -F: '$2==\"connected\"{print \"󰤨 \" $1; exit}'", status_ms, None),
+        "microphone" => microphone_widget_qml(id, palette, height, radius, font_size, icon_font, status_ms),
+        "network" => network_widget_qml(id, palette, height, radius, font_size, icon_font, status_ms),
         "bluetooth" => bluetooth_widget_qml(id, palette, height, radius, font_size, icon_font, status_ms),
-        "battery" => command_text_qml(id, palette, font_size, icon_font, "bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null); [ -n \"$bat\" ] && printf '󰁹 %s%%' \"$bat\"", status_ms, None),
-        "brightness" => command_text_qml(id, palette, font_size, icon_font, "brightnessctl -m 2>/dev/null | awk -F, '{print \"󰃠 \" $4}'", status_ms, None),
+        "battery" => command_text_qml(id, palette, height, radius, font_size, icon_font, "for bat in /sys/class/power_supply/*; do [ \"$(cat \"$bat/type\" 2>/dev/null)\" = Battery ] || continue; capacity=$(cat \"$bat/capacity\" 2>/dev/null) || continue; status=$(cat \"$bat/status\" 2>/dev/null); if [ \"$status\" = Charging ]; then icon='󰂄'; else icon='󰁹'; fi; printf '%s %s%%' \"$icon\" \"$capacity\"; break; done", status_ms, None),
+        "brightness" => command_text_qml(id, palette, height, radius, font_size, icon_font, "brightnessctl -m 2>/dev/null | awk -F, '{print \"󰃠 \" $4}'", status_ms, None),
         "updates" => {
             let command = value_or(values, "DOTFILES_WIDGET_UPDATES_COMMAND");
-            command_text_qml(id, palette, font_size, icon_font, &format!("upd=$({}); [ -n \"$upd\" ] && [ \"$upd\" != \"0\" ] && printf '󰚰 %s' \"$upd\"", command), status_ms * 4, None)
+            command_text_qml(id, palette, height, radius, font_size, icon_font, &format!("upd=$({}); [ -n \"$upd\" ] && [ \"$upd\" != \"0\" ] && printf '󰚰 %s' \"$upd\"", command), status_ms * 4, None)
         }
 
-        "cpu" => command_text_qml(id, palette, font_size, icon_font, r#"top -bn1 | awk -F'[, ]+' '/Cpu\(s\)/{print " " int($2+$4) "%"}'"#, status_ms, None),
-        "memory" => command_text_qml(id, palette, font_size, icon_font, "free -m | awk '/^Mem/{printf \" %dMB\", $3}'", status_ms, None),
-        "temp" => command_text_qml(id, palette, font_size, icon_font, "sensors 2>/dev/null | awk '/Package id 0|Tctl|temp1/{gsub(/[+°C]/, \"\", $2); print \" \" int($2) \"°C\"; exit}'", status_ms, None),
-        "disk" => command_text_qml(id, palette, font_size, icon_font, "df -h / 2>/dev/null | awk 'NR==2{print \"󰋊 \" $5}'", status_ms, None),
-        "gpu" => command_text_qml(id, palette, font_size, icon_font, "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | awk '{print \"󰢮 \" $1 \"%\"}'", status_ms, None),
+        "system" => command_text_qml(id, palette, height, radius, font_size, icon_font,
+            &format!("python -c {} {}", shell_escape(include_str!("widgets/system.py")), shell_escape(&value_or(values, "DOTFILES_WIDGET_DISK_PATH"))), status_ms.max(1000), None),
+        "gpu" => command_text_qml(id, palette, height, radius, font_size, icon_font, "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | awk '{print \"󰢮 \" $1 \"%\"}'", status_ms, None),
         "media_controls" | "media" | "media_controller" | "media-controller" | "media_prev" | "media-play" | "media-next" => media_controls_qml(id, palette, height, radius, font_size, icon_font),
 
         "launcher" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰀻", "wofi --show drun"),
@@ -3610,33 +3609,115 @@ fn bar_widget_qml(
         "color-picker" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "hyprpicker -a"),
         "night-light" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰖔", "pkill wlsunset || wlsunset -t 3400 -T 6500 &"),
 
-        "weather" => command_text_qml(id, palette, font_size, icon_font, "curl -fsS 'wttr.in/?format=1' 2>/dev/null", 900_000, None),
+        "weather" => command_text_qml(id, palette, height, radius, font_size, icon_font, "curl -fsS 'wttr.in/?format=1' 2>/dev/null", 900_000, None),
         "notes" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰎞", "xdg-open \"$HOME/Notes\""),
         "todo" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰄬", "xdg-open \"$HOME/todo.txt\""),
-        "keyboard" => command_text_qml(id, palette, font_size, icon_font, "hyprctl devices -j 2>/dev/null | grep -m1 -o '\"active_keymap\":\"[^\"]*' | cut -d'\"' -f4 | sed 's/^/ /'", status_ms, None),
+        "keyboard" => command_text_qml(id, palette, height, radius, font_size, icon_font, "hyprctl devices -j 2>/dev/null | grep -m1 -o '\"active_keymap\":\"[^\"]*' | cut -d'\"' -f4 | sed 's/^/ /'", status_ms, None),
 
-        _ => command_text_qml(id, palette, font_size, icon_font, &format!("printf {}", shell_escape(widget)), status_ms, None),
+        _ => command_text_qml(id, palette, height, radius, font_size, icon_font, &format!("printf {}", shell_escape(widget)), status_ms, None),
     }
 }
 
-fn window_title_qml(id: &str, palette: &Palette, font_size: i64) -> String {
+fn window_title_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_size: i64) -> String {
     r#"
-            Text {
-              id: windowTitle___ID__
+            Rectangle {
               anchors.verticalCenter: parent.verticalCenter
-              width: Math.min(implicitWidth, 360)
-              color: "__TEXT__"
-              font.pixelSize: __FONT_SIZE__
-              elide: Text.ElideRight
-              maximumLineCount: 1
-              text: Hyprland.activeToplevel ? Hyprland.activeToplevel.title : ""
-              visible: text.length > 0
+              width: 129
+              height: __HEIGHT__
+              radius: __RADIUS__
+              color: "__SURFACE__"
+              border.color: "__MUTED__"
+              border.width: 1
+              visible: titleText___ID__.text.length > 0
+
+              Item {
+                id: titleViewport___ID__
+                anchors.centerIn: parent
+                width: parent.width - 20
+                height: parent.height - 4
+                clip: true
+
+                Text {
+                  id: titleText___ID__
+                  anchors.verticalCenter: parent.verticalCenter
+                  property real scrollOffset: 0
+                  x: Math.max(0, (parent.width - implicitWidth) / 2) + scrollOffset
+                  color: "__TEXT__"
+                  font.pixelSize: __FONT_SIZE__
+                  font.bold: true
+                  font.family: "Sans"
+                  textFormat: Text.PlainText
+                  maximumLineCount: 1
+                  text: "empty"
+                  function resetScroll() {
+                    titleScroll___ID__.stop()
+                    scrollOffset = 0
+                    if (implicitWidth > titleViewport___ID__.width) titleScroll___ID__.start()
+                  }
+                  onTextChanged: resetScroll()
+                  onImplicitWidthChanged: resetScroll()
+                }
+
+                SequentialAnimation {
+                  id: titleScroll___ID__
+                  loops: Animation.Infinite
+                  PauseAnimation { duration: 1200 }
+                  NumberAnimation {
+                    target: titleText___ID__
+                    property: "scrollOffset"
+                    from: 0
+                    to: Math.min(0, titleViewport___ID__.width - titleText___ID__.implicitWidth)
+                    duration: Math.max(1, (titleText___ID__.implicitWidth - titleViewport___ID__.width) / 35 * 1000)
+                  }
+                  PauseAnimation { duration: 1200 }
+                  PropertyAction { target: titleText___ID__; property: "scrollOffset"; value: 0 }
+                }
+              }
+
+              Process {
+                id: titleProc___ID__
+                command: ["sh", "-c", "hyprctl activewindow -j 2>/dev/null | jq -r '.title // \"\"'"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: titleText___ID__.text = this.text.trim().replace(/\s*\n\s*/g, " ") || "empty"
+                }
+              }
+              Timer {
+                interval: 250
+                running: true
+                repeat: true
+                onTriggered: { if (!titleProc___ID__.running) titleProc___ID__.running = true }
+              }
             }
 "#
-    .replace("__ID__", id)
+    .replace("__ID__", &qml_id(id, "window"))
+    .replace("__HEIGHT__", &(height - 8).max(22).to_string())
+    .replace("__RADIUS__", &(radius - 4).max(6).to_string())
+    .replace("__SURFACE__", &palette.surface)
+    .replace("__MUTED__", &palette.accent)
     .replace("__TEXT__", &palette.text)
     .replace("__FONT_SIZE__", &font_size.to_string())
 }
+
+fn network_widget_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_size: i64, icon_font: &str, interval: i64) -> String {
+    let qml = command_text_qml(id, palette, height, radius, font_size, icon_font,
+        r#"LC_ALL=C nmcli -t -f DEVICE,TYPE,STATE device 2>/dev/null | awk -F: '$3 ~ /^connected/ && $2!="loopback" {print ($2=="wifi" ? "Wi-Fi " : "LAN ") $1; found=1; exit} END {if (!found) print "Network offline"}'"#,
+        interval, None)
+;
+    let controls = format!(r#"
+              MouseArea {{
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {{ if (!networkMenu_{id}.running) networkMenu_{id}.running = true }}
+              }}
+              Process {{
+                id: networkMenu_{id}
+                command: ["kitty", "--title", "Network", "nmtui"]
+              }}
+"#);
+    qml.replacen("              Timer {", &(controls + "              Timer {"), 1)
+}
+
 
 fn easyeffects_widget_qml(
     id: &str,
@@ -3668,8 +3749,9 @@ fn easyeffects_widget_qml(
                 text: __ID__.effectsEnabled ? "󰓃 FX ON" : "󰓃 FX OFF"
                 color: "__TEXT__"
                 font.pixelSize: __FONT_SIZE__
-                font.family: "__ICON_FONT__"
                 font.bold: true
+                font.family: "__ICON_FONT__"
+
               }
 
               MouseArea {
@@ -3720,7 +3802,7 @@ fn easyeffects_widget_qml(
     .replace("__RADIUS__", &(radius - 4).max(6).to_string())
     .replace("__ACCENT__", &palette.accent)
     .replace("__SURFACE__", &palette.surface)
-    .replace("__MUTED__", &palette.muted)
+    .replace("__MUTED__", &palette.accent)
     .replace("__TEXT__", &palette.text)
     .replace("__FONT_SIZE__", &font_size.to_string())
     .replace("__ICON_FONT__", icon_font)
@@ -3753,8 +3835,9 @@ fn bluetooth_widget_qml(
                 text: __ID__.powered ? " Bluetooth" : " Off"
                 color: "__TEXT__"
                 font.pixelSize: __FONT_SIZE__
-                font.family: "__ICON_FONT__"
                 font.bold: true
+                font.family: "__ICON_FONT__"
+
               }
 
               Process {
@@ -3801,7 +3884,7 @@ fn bluetooth_widget_qml(
     .replace("__RADIUS__", &(radius - 4).max(6).to_string())
     .replace("__ACCENT__", &palette.accent)
     .replace("__SURFACE__", &palette.surface)
-    .replace("__MUTED__", &palette.muted)
+    .replace("__MUTED__", &palette.accent)
     .replace("__TEXT__", &palette.text)
     .replace("__FONT_SIZE__", &font_size.to_string())
     .replace("__ICON_FONT__", icon_font)
@@ -3821,6 +3904,21 @@ fn volume_widget_qml(
             Rectangle {
               id: __ID__
               property string volumeText: " --%"
+              property real wheelRemainder: 0
+              property int pendingSteps: 0
+              property bool adjustingVolume: false
+              function applyVolumeSteps() {
+                if (adjustingVolume || pendingSteps === 0) return
+                adjustingVolume = true
+                var steps = pendingSteps
+                pendingSteps = 0
+                __ADJUST_ID__.command = ["wpctl", "set-volume", "--limit", "1.0",
+                  "@DEFAULT_AUDIO_SINK@", (Math.abs(steps) * 5) + "%" + (steps > 0 ? "+" : "-")]
+                __ADJUST_ID__.running = true
+              }
+              function refreshVolume() {
+                if (!__STATUS_ID__.running) __STATUS_ID__.running = true
+              }
               width: 86
               height: __HEIGHT__
               anchors.verticalCenter: parent.verticalCenter
@@ -3834,8 +3932,9 @@ fn volume_widget_qml(
                 text: __ID__.volumeText
                 color: "__TEXT__"
                 font.pixelSize: __FONT_SIZE__
-                font.family: "__ICON_FONT__"
                 font.bold: true
+                font.family: "__ICON_FONT__"
+
               }
 
               Process {
@@ -3843,7 +3942,7 @@ fn volume_widget_qml(
                 command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'"]
                 running: true
                 stdout: StdioCollector {
-                  onStreamFinished: __ID__.volumeText = this.text.split("\\n").join("").trim()
+                  onStreamFinished: __ID__.volumeText = this.text.trim() || "Audio unavailable"
                 }
               }
 
@@ -3852,14 +3951,44 @@ fn volume_widget_qml(
                 command: ["sh", "-c", "pavucontrol"]
               }
 
+              Process {
+                id: __ADJUST_ID__
+                onExited: {
+                  __ID__.adjustingVolume = false
+                  __ID__.refreshVolume()
+                  Qt.callLater(__ID__.applyVolumeSteps)
+                }
+              }
+              Process {
+                id: __MUTE_ID__
+                command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]
+                onExited: __ID__.refreshVolume()
+              }
+
               MouseArea {
                 id: __MOUSE_ID__
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  __CLICK_ID__.running = false
-                  __CLICK_ID__.running = true
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                onClicked: mouse => {
+                  if (mouse.button === Qt.RightButton) {
+                    if (!__MUTE_ID__.running) __MUTE_ID__.running = true
+                  } else if (!__CLICK_ID__.running) {
+                    __CLICK_ID__.running = true
+                  }
+                }
+                onWheel: wheel => {
+                  var delta = wheel.angleDelta.y !== 0 ? wheel.angleDelta.y / 120 : wheel.pixelDelta.y / 40
+                  var touchpad = wheel.device && wheel.device.type === PointerDevice.TouchPad
+                  if (touchpad || wheel.pixelDelta.y !== 0) delta = -delta
+                  if (delta === 0) return
+                  __ID__.wheelRemainder += delta
+                  var steps = Math.trunc(__ID__.wheelRemainder)
+                  __ID__.wheelRemainder -= steps
+                  __ID__.pendingSteps += steps
+                  __ID__.applyVolumeSteps()
+                  wheel.accepted = true
                 }
               }
 
@@ -3868,8 +3997,7 @@ fn volume_widget_qml(
                 running: true
                 repeat: true
                 onTriggered: {
-                  __STATUS_ID__.running = false
-                  __STATUS_ID__.running = true
+                  __ID__.refreshVolume()
                 }
               }
             }
@@ -3878,6 +4006,8 @@ fn volume_widget_qml(
     .replace("__STATUS_ID__", &qml_id(id, "volumeStatus"))
     .replace("__CLICK_ID__", &qml_id(id, "volumeClick"))
     .replace("__MOUSE_ID__", &qml_id(id, "volumeMouse"))
+    .replace("__ADJUST_ID__", &qml_id(id, "volumeAdjust"))
+    .replace("__MUTE_ID__", &qml_id(id, "volumeMute"))
     .replace("__HEIGHT__", &(height - 8).max(24).to_string())
     .replace("__RADIUS__", &(radius - 4).max(6).to_string())
     .replace("__ACCENT__", &palette.accent)
@@ -3888,9 +4018,24 @@ fn volume_widget_qml(
     .replace("__INTERVAL__", &interval.max(500).to_string())
 }
 
+fn microphone_widget_qml(
+    id: &str, palette: &Palette, height: i64, radius: i64,
+    font_size: i64, icon_font: &str, interval: i64,
+) -> String {
+    volume_widget_qml(id, palette, height, radius, font_size, icon_font, interval)
+        .replace("@DEFAULT_AUDIO_SINK@", "@DEFAULT_AUDIO_SOURCE@")
+        .replace("", "")
+        .replace("󰝟", "")
+        .replace("Audio unavailable", "Mic unavailable")
+        .replace("pavucontrol", "pavucontrol --tab=4")
+        .replace("mouse.button === Qt.RightButton", "mouse.button === Qt.LeftButton")
+}
+
 fn command_text_qml(
     id: &str,
     palette: &Palette,
+    height: i64,
+    radius: i64,
     font_size: i64,
     icon_font: &str,
     command: &str,
@@ -3900,20 +4045,36 @@ fn command_text_qml(
     let prefix = prefix_icon.map(|icon| format!("{icon} ")).unwrap_or_default();
 
     r#"
-            Text {
-              id: __ID__
+            Rectangle {
               anchors.verticalCenter: parent.verticalCenter
-              color: "__TEXT__"
-              font.pixelSize: __FONT_SIZE__
-              font.family: "__ICON_FONT__"
-              text: ""
+              width: __ID__.width + 20
+              height: __HEIGHT__
+              radius: __RADIUS__
+              color: "__SURFACE__"
+              border.color: "__MUTED__"
+              border.width: 1
+              visible: __ID__.text.length > 0
+
+              Text {
+                id: __ID__
+                anchors.centerIn: parent
+                width: implicitWidth
+                color: "__TEXT__"
+                font.pixelSize: __FONT_SIZE__
+                font.bold: true
+                font.family: "__ICON_FONT__"
+                text: ""
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                maximumLineCount: 1
+              }
 
               Process {
                 id: __PROC_ID__
                 command: ["sh", "-c", __COMMAND__]
                 running: true
                 stdout: StdioCollector {
-                  onStreamFinished: __ID__.text = "__PREFIX__" + this.text.split("\\n").join("").trim()
+                  onStreamFinished: __ID__.text = "__PREFIX__" + this.text.trim().replace(/\s*\n\s*/g, " ")
                 }
               }
 
@@ -3921,12 +4082,16 @@ fn command_text_qml(
                 interval: __INTERVAL__
                 running: true
                 repeat: true
-                onTriggered: { __PROC_ID__.running = false; __PROC_ID__.running = true }
+                onTriggered: { if (!__PROC_ID__.running) __PROC_ID__.running = true }
               }
             }
 "#
     .replace("__ID__", &qml_id(id, "txt"))
     .replace("__PROC_ID__", &qml_id(id, "proc"))
+    .replace("__HEIGHT__", &(height - 8).max(22).to_string())
+    .replace("__RADIUS__", &(radius - 4).max(6).to_string())
+    .replace("__SURFACE__", &palette.surface)
+    .replace("__MUTED__", &palette.accent)
     .replace("__TEXT__", &palette.text)
     .replace("__FONT_SIZE__", &font_size.to_string())
     .replace("__ICON_FONT__", icon_font)
@@ -3955,14 +4120,17 @@ fn command_button_qml(
               anchors.verticalCenter: parent.verticalCenter
               radius: __RADIUS__
               color: "__SURFACE__"
+              border.color: "__MUTED__"
+              border.width: 1
 
               Text {
                 anchors.centerIn: parent
                 text: "__LABEL__"
                 color: "__TEXT__"
                 font.pixelSize: __FONT_SIZE__
-                font.family: "__ICON_FONT__"
                 font.bold: true
+                font.family: "__ICON_FONT__"
+
               }
 
               MouseArea {
@@ -3983,6 +4151,7 @@ fn command_button_qml(
     .replace("__HEIGHT__", &button_height.to_string())
     .replace("__RADIUS__", &button_radius.to_string())
     .replace("__SURFACE__", &palette.surface)
+    .replace("__MUTED__", &palette.accent)
     .replace("__ACCENT__", &palette.accent)
     .replace("__TEXT__", &palette.text)
     .replace("__FONT_SIZE__", &font_size.to_string())
@@ -4017,15 +4186,17 @@ fn workspaces_qml(
                   width: __BUTTON_SIZE__
                   height: __BUTTON_SIZE__
                   radius: __BUTTON_RADIUS__
-                  color: "__SURFACE__"
+                  property bool active: root.activeWorkspace === modelData + 1
+                  color: active ? "__ACCENT__" : "__SURFACE__"
                   border.color: "__MUTED__"
                   border.width: 1
 
                   Text {{
                     anchors.centerIn: parent
                     text: modelData + 1
-                    color: "__TEXT__"
+                    color: parent.active ? "__SURFACE__" : "__TEXT__"
                     font.pixelSize: __FONT_SIZE__
+                    font.bold: true
                     font.family: "__ICON_FONT__"
                   }}
 
@@ -4048,8 +4219,9 @@ fn workspaces_qml(
     .replace("__FONT_SIZE__", &font_size.to_string())
     .replace("__ICON_FONT__", &qml_string_escape(icon_font))
     .replace("__SURFACE__", &palette.surface)
+    .replace("__ACCENT__", &palette.accent)
     .replace("__TEXT__", &palette.text)
-    .replace("__MUTED__", &palette.muted)
+    .replace("__MUTED__", &palette.accent)
 }
 
 
@@ -4127,6 +4299,7 @@ fn datetime_widget_qml(
                     color: "{text}"
                     font.pixelSize: Math.max(10, {font_size} - 1)
                     font.bold: true
+
                 }}
 
                 MouseArea {{
@@ -4150,7 +4323,7 @@ fn datetime_widget_qml(
         radius = radius,
         font_size = font_size,
         card = palette.surface,
-        border = palette.muted,        text = palette.text,
+        border = palette.accent,        text = palette.text,
 
     )
 }
@@ -4255,7 +4428,7 @@ fn visualizer_widget_qml(
         height = height,
         radius = radius,
         surface = palette.surface,
-        muted = palette.muted,
+        muted = palette.accent,
         accent = palette.accent,
     )
 }
@@ -4303,6 +4476,7 @@ fn media_controls_qml(
                   color: "__TEXT__"
                   font.family: "__ICON_FONT__"
                   font.pixelSize: __FONT_SIZE__
+                  font.bold: true
                 }}
 
                 MouseArea {{
@@ -5343,10 +5517,7 @@ fn bar_widget_choices() -> &'static [BarWidgetChoice] {
         BarWidgetChoice { id: "battery",            label: "Battery",               setting: "DOTFILES_WIDGET_BATTERY" },
         BarWidgetChoice { id: "brightness",         label: "Brightness",            setting: "DOTFILES_WIDGET_BRIGHTNESS" },
 
-        BarWidgetChoice { id: "cpu",                label: "CPU",                   setting: "DOTFILES_WIDGET_CPU" },
-        BarWidgetChoice { id: "memory",             label: "Memory",                setting: "DOTFILES_WIDGET_MEMORY" },
-        BarWidgetChoice { id: "temp",               label: "Temperature",           setting: "DOTFILES_WIDGET_TEMP" },
-        BarWidgetChoice { id: "disk",               label: "Disk",                  setting: "DOTFILES_WIDGET_DISK" },
+        BarWidgetChoice { id: "system", label: "System (CPU, RAM, Temperature, Disk)", setting: "DOTFILES_WIDGET_SYSTEM" },
         BarWidgetChoice { id: "updates",            label: "Updates",               setting: "DOTFILES_WIDGET_UPDATES" },
 
         BarWidgetChoice { id: "keyboard",           label: "Keyboard Layout",       setting: "DOTFILES_WIDGET_KEYBOARD" },
@@ -5378,10 +5549,27 @@ fn normalize_bar_widget_id(id: &str) -> &str {
     match id.trim() {
         "clock" | "date" | "calendar" => "datetime",
         "window-title" => "window_title",
+        "mic" => "microphone",
+        "cpu" | "memory" | "temp" | "temperature" | "disk" => "system",
         other => other,
     }
 }
 
+
+fn migrate_system_widgets(values: &mut HashMap<String, String>) {
+    let mut system_seen = false;
+    for zone in ["left", "center", "right"] {
+        let widgets = split_csv(&value_or(values, zone_key(zone))).into_iter()
+            .map(|id| normalize_bar_widget_id(&id).to_string())
+            .filter(|id| {
+                if id != "system" { return true; }
+                let keep = !system_seen;
+                system_seen = true;
+                keep
+            }).collect::<Vec<_>>();
+        write_widget_zone(values, zone, &widgets);
+    }
+}
 
 fn parse_widget_zone(value: &str) -> Vec<String> {
     value
@@ -5743,14 +5931,68 @@ mod tests {
     }
 
     #[test]
-    fn window_title_widget_uses_native_hyprland_state() {
-        let palette = theme_palette(&HashMap::new());
-        let qml = window_title_qml("center_0", &palette, 12);
-
+    fn window_title_widget_reads_active_window_as_plain_text() {
+        let qml = window_title_qml("center_0", &theme_palette(&HashMap::new()), 34, 8, 12);
         assert_eq!(normalize_bar_widget_id("window-title"), "window_title");
-        assert!(qml.contains("Hyprland.activeToplevel.title"));
-        assert!(!qml.contains("hyprctl"));
-        assert!(!qml.contains("Process {"));
+        assert!(qml.contains("hyprctl activewindow -j"));
+        assert!(qml.contains("Text.PlainText"));
+        assert!(qml.contains("clip: true"));
+        assert!(qml.contains("SequentialAnimation"));
+        assert!(qml.contains("width: 129"));
+        assert!(qml.contains("width: parent.width - 20"));
+        assert!(!qml.contains("Hyprland.activeToplevel"));
+    }
+
+    #[test]
+    fn old_system_widgets_merge_at_the_first_position() {
+        let mut values = HashMap::from([
+            (zone_key("left").to_string(), "workspaces,cpu,window-title,memory".to_string()),
+            (zone_key("center").to_string(), "datetime".to_string()),
+            (zone_key("right").to_string(), "network,temp,disk,system,volume".to_string()),
+        ]);
+        migrate_system_widgets(&mut values);
+        assert_eq!(values[zone_key("left")], "workspaces,system,window_title");
+        assert_eq!(values[zone_key("center")], "datetime");
+        assert_eq!(values[zone_key("right")], "network,volume");
+        let migrated = values.clone();
+        migrate_system_widgets(&mut values);
+        assert_eq!(values, migrated);
+        assert!(bar_widget_choices().iter().any(|w| w.id == "system"));
+        assert!(!bar_widget_choices().iter().any(|w| ["cpu", "memory", "temp", "disk"].contains(&w.id)));
+    }
+
+    #[test]
+    fn changed_widgets_generate_valid_commands_and_unique_ids() {
+        let values = defaults_map();
+        let palette = theme_palette(&values);
+        let icons = icons_for("nerd");
+        let mut ids = HashSet::new();
+        let mut snippets = Vec::new();
+        for (index, widget) in ["network", "window_title", "system", "network", "volume", "microphone"].iter().enumerate() {
+            let qml = bar_widget_qml(widget, &format!("left_{index}"), &values, &palette,
+                &icons, 34, 8, 12, 5, 1500, "Sans");
+            for line in qml.lines() {
+                if let Some(id) = line.trim().strip_prefix("id: ") {
+                    assert!(ids.insert(id.to_string()), "duplicate id {id}");
+                }
+                if let Some(command) = line.trim().strip_prefix("command: ") {
+                    let argv: Vec<String> = serde_json::from_str(command).expect("valid QML command array");
+                    if argv[0] == "sh" {
+                        assert!(Command::new("sh").args(["-n", "-c", &argv[2]]).status().unwrap().success());
+                    }
+                }
+            }
+            snippets.push(qml);
+        }
+        if let Ok(dir) = env::var("SPLINTER_TEST_QML_DIR") {
+            fs::create_dir_all(&dir).unwrap();
+            for (index, snippet) in snippets.iter().enumerate() {
+                fs::write(Path::new(&dir).join(format!("widget_{index}.qml")), snippet).unwrap();
+            }
+            fs::write(Path::new(&dir).join("shell.qml"), format!(
+                "import Quickshell\nimport Quickshell.Io\nimport QtQuick\nShellRoot {{ FloatingWindow {{ implicitWidth: 1600; implicitHeight: 50; Row {{ {} }} }} }}", snippets.join("\n")
+            )).unwrap();
+        }
     }
 
     #[test]

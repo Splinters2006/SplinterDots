@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+ROOT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd)"
 
 if ! command -v spicetify >/dev/null 2>&1; then
   echo "spicetify is not installed." >&2
@@ -70,22 +71,12 @@ CSS
 fi
 
 if [ -d /opt/spotify ]; then
-  sudo chmod a+wr /opt/spotify || true
-  sudo chmod -R a+wr /opt/spotify/Apps || true
+  sudo chmod a+wr /opt/spotify
+  sudo chmod -R a+wr /opt/spotify/Apps
 fi
 
-spicetify config current_theme SplinterDots
-spicetify config color_scheme SplinterDots
-spicetify config inject_css 1
-spicetify config replace_colors 1
-spicetify config overwrite_assets 1
-
-spicetify backup || true
-spicetify apply
-spicetify update || true
-spicetify apply || true
-
-echo "Spicetify SplinterDots theme installed and applied."
+# Marketplace runs `spicetify apply` itself, so the backup must exist first.
+spicetify backup
 
 # Install Spicetify Marketplace if it is not already installed.
 marketplace_dir="$config_dir/CustomApps/marketplace"
@@ -93,9 +84,27 @@ marketplace_file="$marketplace_dir/index.js"
 
 if [ ! -f "$marketplace_file" ]; then
   echo "Installing Spicetify Marketplace..."
-  curl -fsSL https://raw.githubusercontent.com/spicetify/marketplace/main/resources/install.sh | sh
+  marketplace_installer="$(mktemp)"
+  trap 'rm -f "$marketplace_installer"' EXIT
+  curl -fsSL --connect-timeout 10 --max-time 60 \
+    https://raw.githubusercontent.com/spicetify/marketplace/main/resources/install.sh \
+    -o "$marketplace_installer"
+  sh "$marketplace_installer"
+  rm -f "$marketplace_installer"
+  trap - EXIT
 fi
 
 # Make sure Marketplace is enabled.
 spicetify config custom_apps marketplace
 
+
+spicetify config current_theme SplinterDots
+spicetify config color_scheme SplinterDots
+spicetify config inject_css 1
+spicetify config replace_colors 1
+spicetify config overwrite_assets 1
+
+# Apply after every config change, including enabling Marketplace.
+spicetify apply
+
+echo "Spicetify SplinterDots theme and Marketplace configured and applied."
