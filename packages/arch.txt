@@ -44,6 +44,7 @@ playerctl
 pipewire
 pipewire-alsa
 pipewire-pulse
+libpulse
 wireplumber
 networkmanager
 bluez

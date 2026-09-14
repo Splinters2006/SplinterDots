@@ -3048,6 +3048,9 @@ fn write_keybinds(
         "end".to_string(),
     ]);
 
+    lines.push(String::new());
+    lines.push(include_str!("laptop-keybindings.lua").trim().to_string());
+
     fs::write(&paths.hypr_keybinds, lines.join("\n") + "\n").map_err(err_string)
 }
 
@@ -3907,6 +3910,7 @@ fn volume_widget_qml(
               property real wheelRemainder: 0
               property int pendingSteps: 0
               property bool adjustingVolume: false
+              property bool refreshPending: false
               function applyVolumeSteps() {
                 if (adjustingVolume || pendingSteps === 0) return
                 adjustingVolume = true
@@ -3917,7 +3921,12 @@ fn volume_widget_qml(
                 __ADJUST_ID__.running = true
               }
               function refreshVolume() {
-                if (!__STATUS_ID__.running) __STATUS_ID__.running = true
+                if (__STATUS_ID__.running) {
+                  refreshPending = true
+                  return
+                }
+                refreshPending = false
+                __STATUS_ID__.running = true
               }
               width: 86
               height: __HEIGHT__
@@ -3941,8 +3950,22 @@ fn volume_widget_qml(
                 id: __STATUS_ID__
                 command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'"]
                 running: true
+                onExited: {
+                  if (__ID__.refreshPending) Qt.callLater(__ID__.refreshVolume)
+                }
                 stdout: StdioCollector {
                   onStreamFinished: __ID__.volumeText = this.text.trim() || "Audio unavailable"
+                }
+              }
+
+              Process {
+                id: __EVENT_ID__
+                command: ["env", "LC_ALL=C", "pactl", "subscribe"]
+                running: true
+                stdout: SplitParser {
+                  onRead: data => {
+                    if (/ on (sink|source|server) #/.test(data)) __ID__.refreshVolume()
+                  }
                 }
               }
 
@@ -3997,6 +4020,7 @@ fn volume_widget_qml(
                 running: true
                 repeat: true
                 onTriggered: {
+                  if (!__EVENT_ID__.running) __EVENT_ID__.running = true
                   __ID__.refreshVolume()
                 }
               }
@@ -4004,6 +4028,7 @@ fn volume_widget_qml(
 "#
     .replace("__ID__", &qml_id(id, "volume"))
     .replace("__STATUS_ID__", &qml_id(id, "volumeStatus"))
+    .replace("__EVENT_ID__", &qml_id(id, "volumeEvents"))
     .replace("__CLICK_ID__", &qml_id(id, "volumeClick"))
     .replace("__MOUSE_ID__", &qml_id(id, "volumeMouse"))
     .replace("__ADJUST_ID__", &qml_id(id, "volumeAdjust"))

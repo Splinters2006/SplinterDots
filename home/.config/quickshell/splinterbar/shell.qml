@@ -193,6 +193,7 @@ Variants {
               property real wheelRemainder: 0
               property int pendingSteps: 0
               property bool adjustingVolume: false
+              property bool refreshPending: false
               function applyVolumeSteps() {
                 if (adjustingVolume || pendingSteps === 0) return
                 adjustingVolume = true
@@ -203,7 +204,12 @@ Variants {
                 volumeAdjust_left_2.running = true
               }
               function refreshVolume() {
-                if (!volumeStatus_left_2.running) volumeStatus_left_2.running = true
+                if (volumeStatus_left_2.running) {
+                  refreshPending = true
+                  return
+                }
+                refreshPending = false
+                volumeStatus_left_2.running = true
               }
               width: 86
               height: 26
@@ -227,8 +233,22 @@ Variants {
                 id: volumeStatus_left_2
                 command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'"]
                 running: true
+                onExited: {
+                  if (volume_left_2.refreshPending) Qt.callLater(volume_left_2.refreshVolume)
+                }
                 stdout: StdioCollector {
                   onStreamFinished: volume_left_2.volumeText = this.text.trim() || "Audio unavailable"
+                }
+              }
+
+              Process {
+                id: volumeEvents_left_2
+                command: ["env", "LC_ALL=C", "pactl", "subscribe"]
+                running: true
+                stdout: SplitParser {
+                  onRead: data => {
+                    if (/ on (sink|source|server) #/.test(data)) volume_left_2.refreshVolume()
+                  }
                 }
               }
 
@@ -283,6 +303,7 @@ Variants {
                 running: true
                 repeat: true
                 onTriggered: {
+                  if (!volumeEvents_left_2.running) volumeEvents_left_2.running = true
                   volume_left_2.refreshVolume()
                 }
               }
@@ -295,6 +316,7 @@ Variants {
               property real wheelRemainder: 0
               property int pendingSteps: 0
               property bool adjustingVolume: false
+              property bool refreshPending: false
               function applyVolumeSteps() {
                 if (adjustingVolume || pendingSteps === 0) return
                 adjustingVolume = true
@@ -305,7 +327,12 @@ Variants {
                 volumeAdjust_left_3.running = true
               }
               function refreshVolume() {
-                if (!volumeStatus_left_3.running) volumeStatus_left_3.running = true
+                if (volumeStatus_left_3.running) {
+                  refreshPending = true
+                  return
+                }
+                refreshPending = false
+                volumeStatus_left_3.running = true
               }
               width: 86
               height: 26
@@ -329,8 +356,22 @@ Variants {
                 id: volumeStatus_left_3
                 command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \" muted\"; else print \" \" v \"%\"}'"]
                 running: true
+                onExited: {
+                  if (volume_left_3.refreshPending) Qt.callLater(volume_left_3.refreshVolume)
+                }
                 stdout: StdioCollector {
                   onStreamFinished: volume_left_3.volumeText = this.text.trim() || "Mic unavailable"
+                }
+              }
+
+              Process {
+                id: volumeEvents_left_3
+                command: ["env", "LC_ALL=C", "pactl", "subscribe"]
+                running: true
+                stdout: SplitParser {
+                  onRead: data => {
+                    if (/ on (sink|source|server) #/.test(data)) volume_left_3.refreshVolume()
+                  }
                 }
               }
 
@@ -385,6 +426,7 @@ Variants {
                 running: true
                 repeat: true
                 onTriggered: {
+                  if (!volumeEvents_left_3.running) volumeEvents_left_3.running = true
                   volume_left_3.refreshVolume()
                 }
               }
