@@ -694,7 +694,7 @@ Variants {
               }
               Process {
                 id: networkMenu_right_2
-                command: ["kitty", "--title", "Network", "nmtui"]
+                command: ["kitty", "--class", "splinter-nmtui", "--title", "Network", "nmtui"]
               }
               Timer {
                 interval: 1500

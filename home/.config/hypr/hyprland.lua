@@ -21,6 +21,7 @@ hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.window_rule({ name = "float-nautilus", match = { class = "^(org.gnome.Nautilus)$" }, float = true })
 hl.window_rule({ name = "float-pavucontrol", match = { class = "^(pavucontrol|org.pulseaudio.pavucontrol|org.PulseAudio.pavucontrol)$" }, float = true })
 hl.window_rule({ name = "float-overskride", match = { class = "^(io.github.kaii_lb.Overskride|overskride)$" }, float = true })
+hl.window_rule({ name = "float-nmtui", match = { class = "^(splinter-nmtui)$" }, float = true })
 
 hl.config({
     misc = {
