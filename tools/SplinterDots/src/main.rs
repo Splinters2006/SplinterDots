@@ -4348,7 +4348,8 @@ fn easyeffects_widget_qml(
 
               Process {
                 id: __TOGGLE_ID__
-                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then QT_QPA_PLATFORM=offscreen timeout 3s easyeffects --hide-window --bypass-toggle; else easyeffects --service-mode --hide-window >/dev/null 2>&1 & for attempt in 1 2 3 4 5 6 7 8 9 10; do sleep 0.3; state=$(QT_QPA_PLATFORM=offscreen timeout 1s easyeffects --bypass 3 2>/dev/null); case $state in 1|2) QT_QPA_PLATFORM=offscreen timeout 3s easyeffects --hide-window --bypass 2; exit $?;; esac; done; exit 1; fi"]
+                // Only flips bypass: never starts EasyEffects or hides its window.
+                command: ["sh", "-c", "pgrep -x easyeffects >/dev/null && QT_QPA_PLATFORM=offscreen timeout 3s easyeffects --bypass-toggle"]
                 onExited: {
                   __STATUS_ID__.running = false
                   __STATUS_ID__.running = true
@@ -6786,10 +6787,12 @@ mod tests {
         assert!(qml.contains("FX OFF"));
         assert!(qml.contains("pgrep -x easyeffects"));
         assert!(!qml.contains("pkill"));
-        assert!(qml.contains("--hide-window --bypass-toggle"));
+        assert!(qml.contains("easyeffects --bypass-toggle"));
         assert!(qml.contains("--bypass 3"));
         assert!(qml.contains("this.text.trim() === \"2\""));
-        assert!(qml.contains("easyeffects --service-mode"));
+        // The button must never open, start or close EasyEffects itself.
+        assert!(!qml.contains("--hide-window"));
+        assert!(!qml.contains("--service-mode"));
         assert!(!qml.contains("--gapplication-service"));
         assert!(!qml.contains("__ID__"));
         assert!(!qml.contains("__STATUS_ID__"));

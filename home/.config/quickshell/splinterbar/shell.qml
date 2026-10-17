@@ -752,7 +752,8 @@ Variants {
 
               Process {
                 id: easyeffectsToggle_right_3
-                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then QT_QPA_PLATFORM=offscreen timeout 3s easyeffects --hide-window --bypass-toggle; else easyeffects --service-mode --hide-window >/dev/null 2>&1 & for attempt in 1 2 3 4 5 6 7 8 9 10; do sleep 0.3; state=$(QT_QPA_PLATFORM=offscreen timeout 1s easyeffects --bypass 3 2>/dev/null); case $state in 1|2) QT_QPA_PLATFORM=offscreen timeout 3s easyeffects --hide-window --bypass 2; exit $?;; esac; done; exit 1; fi"]
+                // Only flips bypass: never starts EasyEffects or hides its window.
+                command: ["sh", "-c", "pgrep -x easyeffects >/dev/null && QT_QPA_PLATFORM=offscreen timeout 3s easyeffects --bypass-toggle"]
                 onExited: {
                   easyeffectsStatus_right_3.running = false
                   easyeffectsStatus_right_3.running = true
