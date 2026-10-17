@@ -14,6 +14,8 @@ hl.on("hyprland.start", function()
 end)
 
 hl.env("XCURSOR_SIZE", "24")
+-- Cursor theme written by splinterdots-style; missing until a style is applied.
+pcall(require, "cursor")
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 
 hl.window_rule({ name = "float-nautilus", match = { class = "^(org.gnome.Nautilus)$" }, float = true })

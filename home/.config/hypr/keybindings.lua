@@ -1,7 +1,7 @@
 local mainMod = "SUPER"
 local terminal = "kitty"
 local fileManager = "thunar"
-local menu = "wofi --show drun"
+local menu = "splinter-launcher"
 local browser = "zen-browser"
 
 hl.bind("SUPER + mouse:272", hl.dsp.window.drag(), { mouse = true })

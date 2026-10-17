@@ -23,7 +23,9 @@ if [ -x "$POLKIT_AGENT" ]; then
 fi
 
 command -v mako >/dev/null 2>&1 && start_once mako mako
-command -v quickshell >/dev/null 2>&1 && start_once quickshell quickshell -c splinterbar
+# Bar icons come from the icon theme selected in SplinterDots.
+icon_theme="$(sed -n 's/^DOTFILES_ICON_THEME=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.conf" 2>/dev/null | tail -n1 | tr -d "\"'")"
+command -v quickshell >/dev/null 2>&1 && start_once quickshell env QS_ICON_THEME="${icon_theme:-Papirus-Dark}" quickshell -c splinterbar
 
 if command -v swww-daemon >/dev/null 2>&1; then
   swww query >/dev/null 2>&1 || swww-daemon >/dev/null 2>&1 &

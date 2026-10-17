@@ -1,0 +1,557 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+MENU_DIR="$CONFIG_HOME/quickshell/splinter-launcher"
+MENU_QML="$MENU_DIR/shell.qml"
+SETTINGS_FILE="$CONFIG_HOME/dotfiles/settings.conf"
+LOCAL_FILE="$CONFIG_HOME/dotfiles/local.conf"
+HISTORY_FILE="$CACHE_HOME/splinterdots/launcher-history.json"
+
+# --dmenu reads "label" or "label<TAB>icon-name" lines from stdin and prints the
+# chosen label, exiting 1 when cancelled. It replaces wofi --dmenu.
+dmenu=0
+prompt="Search apps, m: math, s: web search, or type a command"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dmenu) dmenu=1 ;;
+    --prompt) prompt="${2:-}"; shift ;;
+    *) echo "Usage: splinter-launcher [--dmenu [--prompt TEXT]]" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+mkdir -p "$MENU_DIR" "${HISTORY_FILE%/*}"
+[[ -s "$HISTORY_FILE" ]] || printf '{}\n' > "$HISTORY_FILE"
+
+choices_file=""
+result_file=""
+if [[ "$dmenu" == 1 ]]; then
+  MENU_QML="$MENU_DIR/dmenu-$$.qml"
+  choices_file="$(mktemp)"
+  result_file="$(mktemp)"
+  trap 'rm -f "$MENU_QML" "$choices_file" "$result_file"' EXIT
+  cat > "$choices_file"
+elif pgrep -u "$UID" -f "$MENU_QML" >/dev/null 2>&1; then
+  # Pressing the keybind again closes the launcher.
+  pkill -u "$UID" -f "$MENU_QML" || true
+  exit 0
+fi
+
+qml_string() {
+  local value="${1//\\/\\\\}"
+  printf '%s' "${value//\"/\\\"}"
+}
+
+PALETTE_FILE="$CONFIG_HOME/dotfiles/palette.conf"
+HYPR_COLORS="$CONFIG_HOME/hypr/colors.lua"
+
+conf_value() {
+  local file="$1"
+  local key="$2"
+  local fallback="$3"
+
+  if [[ -f "$file" ]]; then
+    local line
+    line="$(grep -E "^${key} ?=" "$file" | tail -n1 || true)"
+    if [[ -n "$line" ]]; then
+      line="${line#*=}"
+      line="${line# }"
+      line="${line//\'/}"
+      printf '%s\n' "${line//\"/}"
+      return
+    fi
+  fi
+
+  printf '%s\n' "$fallback"
+}
+
+# Values saved by the SplinterDots app in local.conf override the repo defaults.
+setting() { conf_value "$LOCAL_FILE" "$1" "$(conf_value "$SETTINGS_FILE" "$@")"; }
+
+# Hyprland colors are written as rgba(rrggbbaa); convert them to #rrggbb.
+hypr_color() {
+  local value
+  value="$(conf_value "$HYPR_COLORS" "$1" "")"
+  if [[ "$value" =~ ^rgba\(([0-9a-fA-F]{6}) ]]; then
+    printf '#%s\n' "${BASH_REMATCH[1]}"
+  else
+    printf '%s\n' "$2"
+  fi
+}
+
+font="$(setting DOTFILES_UI_FONT "Sans")"
+icon_theme="$(setting DOTFILES_ICON_THEME "Papirus-Dark")"
+terminal="$(setting DOTFILES_TERMINAL kitty)"
+browser="$(setting DOTFILES_BROWSER xdg-open)"
+
+# Firefox-based browsers need --new-tab to reuse an open window instead of
+# opening a new one; it also starts the browser when none is running.
+# Chromium-based browsers already open URLs as a tab in the running window.
+case "$browser" in
+  *firefox*|*zen*|*librewolf*|*waterfox*|*floorp*) browser_new_tab=1 ;;
+  *) browser_new_tab=0 ;;
+esac
+
+# Use the palette SplinterDots generates for the bar, notifications and Hyprland.
+accent="$(conf_value "$PALETTE_FILE" PALETTE_ACCENT "$(hypr_color accent "$(setting DOTFILES_ACCENT "#89b4fa")")")"
+bg="$(conf_value "$PALETTE_FILE" PALETTE_BACKGROUND "$(hypr_color background "#1e1e2e")")"
+text="$(conf_value "$PALETTE_FILE" PALETTE_TEXT "$(hypr_color text "#cdd6f4")")"
+border="$(conf_value "$PALETTE_FILE" PALETTE_BORDER "$(hypr_color inactive "#45475a")")"
+card="$(conf_value "$PALETTE_FILE" PALETTE_SURFACE "$border")"
+muted="$(conf_value "$PALETTE_FILE" PALETTE_MUTED "$text")"
+opacity="$(setting DOTFILES_BAR_OPACITY "0.92")"
+
+cat > "$MENU_QML" <<QML
+import QtQuick
+import Quickshell
+import Quickshell.Hyprland
+import Quickshell.Io
+import Quickshell.Wayland
+import Quickshell.Widgets
+
+ShellRoot {
+  PanelWindow {
+    id: root
+    visible: true
+
+    function pickScreen() {
+      var focused = Hyprland.focusedMonitor
+      if (focused) {
+        for (var i = 0; i < Quickshell.screens.length; i++) {
+          if (Quickshell.screens[i].name === focused.name)
+            return Quickshell.screens[i]
+        }
+      }
+      return Quickshell.screens[0]
+    }
+
+    screen: pickScreen()
+
+    anchors {
+      top: true
+      bottom: true
+      left: true
+      right: true
+    }
+
+    exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    WlrLayershell.namespace: "splinter-launcher"
+    color: "#55000000"
+
+    property bool dmenu: $dmenu === 1
+    // Launch counts keyed by desktop entry id; frequently used apps rank higher.
+    property var history: ({})
+    property var choices: []
+    property var results: []
+    property int selected: 0
+    property string query: search.text.trim()
+    property bool closing: false
+
+    FileView {
+      id: historyFile
+      path: root.dmenu ? "" : "$HISTORY_FILE"
+      blockLoading: true
+      atomicWrites: true
+      onSaved: Qt.quit()
+      onSaveFailed: Qt.quit()
+    }
+
+    FileView {
+      id: choicesFile
+      path: "$choices_file"
+      blockLoading: true
+    }
+
+    FileView {
+      id: resultFile
+      path: "$result_file"
+      onSaved: Qt.quit()
+      onSaveFailed: Qt.quit()
+    }
+
+    Component.onCompleted: {
+      if (root.dmenu) {
+        root.choices = choicesFile.text().split("\n").filter(function(line) { return line.length > 0 }).map(function(line) {
+          var parts = line.split("\t")
+          return { kind: "choice", title: parts[0], subtitle: "", icon: parts[1] || "", value: parts[0] }
+        })
+      } else {
+        try {
+          root.history = JSON.parse(historyFile.text()) || {}
+        } catch (e) {
+          root.history = {}
+        }
+      }
+      refresh()
+      search.forceActiveFocus()
+    }
+
+    onQueryChanged: refresh()
+
+    Connections {
+      target: DesktopEntries.applications
+      function onValuesChanged() { if (!root.dmenu) root.refresh() }
+    }
+
+    function score(name, extra, q, bonus) {
+      name = (name || "").toLowerCase()
+      if (q.length === 0)
+        return 1 + bonus
+
+      if (name === q) return 1000 + bonus
+      if (name.indexOf(q) === 0) return 800 + bonus
+
+      var words = name.split(/[\s\-_.]+/)
+      for (var i = 0; i < words.length; i++) {
+        if (words[i].indexOf(q) === 0) return 600 + bonus
+      }
+
+      if (name.indexOf(q) >= 0) return 400 + bonus
+      if (extra.toLowerCase().indexOf(q) >= 0) return 200 + bonus
+
+      // Initials or subsequence match, e.g. "vsc" for Visual Studio Code.
+      var pos = 0
+      for (var j = 0; j < name.length && pos < q.length; j++) {
+        if (name[j] === q[pos]) pos++
+      }
+      return pos === q.length ? 100 + bonus : 0
+    }
+
+    // Evaluates arithmetic with a whitelist of Math functions; returns "" when invalid.
+    function calculate(expression) {
+      var names = {
+        sin: "Math.sin", cos: "Math.cos", tan: "Math.tan", asin: "Math.asin", acos: "Math.acos",
+        atan: "Math.atan", sqrt: "Math.sqrt", cbrt: "Math.cbrt", abs: "Math.abs", floor: "Math.floor",
+        ceil: "Math.ceil", round: "Math.round", exp: "Math.exp", ln: "Math.log", log: "Math.log10",
+        pow: "Math.pow", min: "Math.min", max: "Math.max", pi: "Math.PI", e: "Math.E"
+      }
+      var source = expression.replace(/×/g, "*").replace(/÷/g, "/")
+      if (!source.trim() || /[^0-9a-z+\-*\/%^().,\s]/i.test(source)) return ""
+      var valid = true
+      var js = source.replace(/[a-z]+/gi, function(word) {
+        var mapped = names[word.toLowerCase()]
+        if (!mapped) valid = false
+        return mapped || ""
+      }).replace(/\^/g, "**")
+      var depth = 0
+      for (var i = 0; i < js.length && valid; i++) {
+        if (js[i] === "(") depth++
+        else if (js[i] === ")") depth--
+        else if (js[i] === "," && depth === 0) valid = false
+      }
+      if (!valid) return ""
+      try {
+        var value = new Function("return (" + js + ")")()
+        if (typeof value !== "number" || !isFinite(value)) return ""
+        return String(Number(value.toPrecision(12)))
+      } catch (e) {
+        return ""
+      }
+    }
+
+    function refresh() {
+      var raw = root.query
+      var q = raw.toLowerCase()
+      var list = []
+
+      if (root.dmenu) {
+        // Ties keep the caller's order, so the first choice stays the default.
+        list = root.choices
+          .map(function(item, index) { return { item: item, index: index, score: score(item.title, "", q, 0) } })
+          .filter(function(entry) { return entry.score > 0 })
+          .sort(function(a, b) { return b.score - a.score || a.index - b.index })
+          .map(function(entry) { return entry.item })
+      } else if (q.indexOf("m:") === 0) {
+        var answer = calculate(raw.slice(2))
+        list = [{ kind: "calc", title: answer ? "= " + answer : "Type a calculation, e.g. m: 2^8 + sqrt(16)",
+                  subtitle: answer ? "Enter copies the result" : "Supports + - * / % ^ ( ) sin cos tan sqrt log ln pi e",
+                  icon: "accessories-calculator", value: answer }]
+      } else if (q.indexOf("s:") === 0) {
+        var terms = raw.slice(2).trim()
+        list = [{ kind: "search", title: terms ? "Search the web for \u201c" + terms + "\u201d" : "Type something to search the web",
+                  subtitle: "Opens in $(qml_string "$browser")", icon: "web-browser", value: terms }]
+      } else {
+        var apps = DesktopEntries.applications.values
+        var scored = []
+        var seen = {}
+        for (var i = 0; i < apps.length; i++) {
+          var entry = apps[i]
+          if (!entry || entry.noDisplay || seen[entry.id]) continue
+          seen[entry.id] = true
+          var extra = [entry.genericName || "", entry.comment || "", entry.id || ""]
+            .concat(entry.keywords || []).concat(entry.categories || []).join(" ")
+          var s = score(entry.name, extra, q, Math.min(root.history[entry.id] || 0, 50) * 2)
+          if (s > 0) scored.push({ score: s, item: { kind: "app", title: entry.name,
+            subtitle: entry.comment || entry.genericName || "", icon: entry.icon, entry: entry } })
+        }
+        scored.sort(function(a, b) {
+          if (b.score !== a.score) return b.score - a.score
+          return a.item.title.localeCompare(b.item.title)
+        })
+        list = scored.map(function(item) { return item.item })
+
+        // Anything typed can also be run directly as a shell command.
+        if (q.length > 0)
+          list.push({ kind: "run", title: "Run: " + raw, subtitle: "Execute as a shell command",
+                      icon: "utilities-terminal", value: raw })
+      }
+
+      root.results = list
+      root.selected = 0
+      list_.positionViewAtBeginning()
+    }
+
+    function move(delta) {
+      if (root.results.length === 0) return
+      root.selected = (root.selected + delta + root.results.length) % root.results.length
+      list_.positionViewAtIndex(root.selected, ListView.Contain)
+    }
+
+    function close() {
+      if (root.closing) return
+      root.closing = true
+      Qt.quit()
+    }
+
+    function launch(index) {
+      if (root.closing || index < 0 || index >= root.results.length) return
+      var item = root.results[index]
+      if ((item.kind === "calc" || item.kind === "search") && !item.value) return
+      root.closing = true
+      root.visible = false
+
+      if (item.kind === "choice") {
+        resultFile.setText(item.value)
+        return
+      }
+
+      if (item.kind === "run") {
+        Quickshell.execDetached(["sh", "-c", item.value])
+      } else if (item.kind === "calc") {
+        Quickshell.execDetached(["wl-copy", item.value])
+      } else if (item.kind === "search") {
+        var url = "https://www.google.com/search?q=" + encodeURIComponent(item.value)
+        if ($browser_new_tab === 1)
+          Quickshell.execDetached(["$(qml_string "$browser")", "--new-tab", url])
+        else
+          Quickshell.execDetached(["$(qml_string "$browser")", url])
+      } else {
+        if (item.entry.runInTerminal)
+          Quickshell.execDetached(["$(qml_string "$terminal")", "-e"].concat(item.entry.command))
+        else
+          item.entry.execute()
+
+        var history = root.history
+        history[item.entry.id] = (history[item.entry.id] || 0) + 1
+        historyFile.setText(JSON.stringify(history))
+        return
+      }
+      Qt.quit()
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      onClicked: root.close()
+    }
+
+    Rectangle {
+      id: panel
+      width: Math.min(620, parent.width - 48)
+      height: root.dmenu ? 16 + 48 + 12 + list_.height + 12 + footer.height + 16 : Math.min(520, parent.height - 96)
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: Math.round(parent.height * 0.18)
+      radius: 22
+      color: Qt.alpha("$bg", Math.max(0.85, $opacity))
+      border.color: "$border"
+      border.width: 1
+      clip: true
+
+      // Swallow clicks so they do not reach the close-on-outside-click area.
+      MouseArea { anchors.fill: parent }
+
+      Column {
+        anchors.fill: parent
+        anchors.margins: 16
+        spacing: 12
+
+        Rectangle {
+          width: parent.width
+          height: 48
+          radius: 14
+          color: "$card"
+          border.color: search.activeFocus ? "$accent" : "$border"
+          border.width: 1
+
+          Text {
+            id: searchIcon
+            anchors.left: parent.left
+            anchors.leftMargin: 16
+            anchors.verticalCenter: parent.verticalCenter
+            text: "󰍉"
+            color: "$muted"
+            font.family: "Symbols Nerd Font"
+            font.pixelSize: 18
+          }
+
+          TextInput {
+            id: search
+            anchors.left: searchIcon.right
+            anchors.leftMargin: 12
+            anchors.right: parent.right
+            anchors.rightMargin: 16
+            anchors.verticalCenter: parent.verticalCenter
+            color: "$text"
+            selectionColor: "$accent"
+            font.family: "$font"
+            font.pixelSize: 16
+            clip: true
+            focus: true
+
+            Text {
+              anchors.fill: parent
+              verticalAlignment: Text.AlignVCenter
+              text: "$(qml_string "$prompt")"
+              color: "$muted"
+              font: search.font
+              visible: search.text.length === 0
+            }
+
+            Keys.onPressed: function(event) {
+              var ctrl = event.modifiers & Qt.ControlModifier
+              if (event.key === Qt.Key_Escape) {
+                root.close()
+              } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                root.launch(root.selected)
+              } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Tab || (ctrl && (event.key === Qt.Key_J || event.key === Qt.Key_N))) {
+                root.move(1)
+              } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Backtab || (ctrl && (event.key === Qt.Key_K || event.key === Qt.Key_P))) {
+                root.move(-1)
+              } else if (event.key === Qt.Key_PageDown) {
+                root.move(6)
+              } else if (event.key === Qt.Key_PageUp) {
+                root.move(-6)
+              } else {
+                return
+              }
+              event.accepted = true
+            }
+          }
+        }
+
+        ListView {
+          id: list_
+          width: parent.width
+          height: root.dmenu ? Math.min(contentHeight, 360) : parent.height - 60 - footer.height
+          clip: true
+          spacing: 4
+          model: root.results
+          boundsBehavior: Flickable.StopAtBounds
+
+          delegate: Rectangle {
+            required property var modelData
+            required property int index
+            property bool current: index === root.selected
+            property string iconPath: modelData.icon ? (Quickshell.iconPath(modelData.icon, true)
+              || (modelData.kind === "app" ? Quickshell.iconPath("application-x-executable", true) : "")) : ""
+
+            width: ListView.view.width
+            height: modelData.subtitle ? 54 : 44
+            radius: 12
+            color: current ? Qt.alpha("$accent", 0.22) : (rowMouse.containsMouse ? "$card" : "transparent")
+            border.color: current ? "$accent" : "transparent"
+            border.width: 1
+
+            Item {
+              id: iconSlot
+              anchors.left: parent.left
+              anchors.leftMargin: 12
+              anchors.verticalCenter: parent.verticalCenter
+              width: 32
+              height: 32
+              visible: !!parent.modelData.icon
+
+              IconImage {
+                anchors.fill: parent
+                visible: parent.parent.iconPath.length > 0
+                asynchronous: true
+                source: parent.parent.iconPath
+              }
+
+              Text {
+                anchors.centerIn: parent
+                visible: parent.parent.iconPath.length === 0
+                text: ({ calc: "󰃬", search: "󰖟", run: "" })[parent.parent.modelData.kind] || "󰀻"
+                color: "$accent"
+                font.family: "Symbols Nerd Font"
+                font.pixelSize: 22
+              }
+            }
+
+            Column {
+              anchors.left: iconSlot.visible ? iconSlot.right : parent.left
+              anchors.leftMargin: 14
+              anchors.right: parent.right
+              anchors.rightMargin: 12
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: 2
+
+              Text {
+                width: parent.width
+                text: modelData.title
+                color: "$text"
+                font.family: "$font"
+                font.pixelSize: 14
+                font.bold: true
+                elide: Text.ElideRight
+                textFormat: Text.PlainText
+              }
+
+              Text {
+                width: parent.width
+                text: modelData.subtitle || ""
+                visible: text.length > 0
+                color: "$muted"
+                font.family: "$font"
+                font.pixelSize: 11
+                elide: Text.ElideRight
+                textFormat: Text.PlainText
+              }
+            }
+
+            MouseArea {
+              id: rowMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.launch(index)
+            }
+          }
+        }
+
+        Text {
+          id: footer
+          width: parent.width
+          horizontalAlignment: Text.AlignHCenter
+          text: root.dmenu ? "↑↓ select   ⏎ choose   esc cancel" : "m: math   s: web search   ↑↓ select   ⏎ launch   esc close"
+          color: "$muted"
+          font.family: "$font"
+          font.pixelSize: 11
+        }
+      }
+    }
+  }
+}
+QML
+
+if [[ "$dmenu" == 1 ]]; then
+  QS_ICON_THEME="$icon_theme" quickshell -p "$MENU_QML" > /tmp/splinter-launcher-dmenu.log 2>&1 || true
+  [[ -s "$result_file" ]] || exit 1
+  cat "$result_file"
+  echo
+else
+  QS_ICON_THEME="$icon_theme" quickshell -p "$MENU_QML" > /tmp/splinter-launcher.log 2>&1 &
+fi

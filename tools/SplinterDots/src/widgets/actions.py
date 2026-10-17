@@ -12,8 +12,14 @@ def run(args, **kwargs):
     return subprocess.run(args, capture_output=True, text=True, timeout=kwargs.pop('timeout', 5), **kwargs)
 
 
+# Icon theme names shown next to menu choices in splinter-launcher.
+CHOICE_ICONS = {'Restore latest': 'edit-undo', 'Dismiss all': 'edit-clear-all', 'Sleep': 'system-suspend',
+                'Lock': 'system-lock-screen', 'Reboot': 'system-reboot', 'Power off': 'system-shutdown'}
+
+
 def choose(prompt, choices):
-    result = run(['wofi', '--dmenu', '--prompt', prompt], input='\n'.join(choices), timeout=None)
+    lines = [f"{choice}\t{CHOICE_ICONS[choice]}" if choice in CHOICE_ICONS else choice for choice in choices]
+    result = run(['splinter-launcher', '--dmenu', '--prompt', prompt], input='\n'.join(lines), timeout=None)
     return result.stdout.strip() if result.returncode == 0 else ''
 
 
@@ -24,14 +30,35 @@ def keyboard():
     return main.get('active_keymap', 'Unknown')
 
 
+def splinterdots_repo():
+    # dotctl is linked from the checkout, so its real path locates the repository.
+    dotctl = shutil.which('dotctl')
+    return Path(os.path.realpath(dotctl)).parents[1] if dotctl else None
+
+
+def splinterdots_updates():
+    """Number of upstream SplinterDots commits not yet pulled; 0 when unknown."""
+    repo = splinterdots_repo()
+    if repo is None or not (repo / '.git').exists():
+        return 0
+    try:
+        if run(['git', '-C', str(repo), 'fetch', '--quiet'], timeout=30).returncode:
+            return 0
+        result = run(['git', '-C', str(repo), 'rev-list', '--count', 'HEAD..@{upstream}'])
+        return int(result.stdout.strip()) if result.returncode == 0 else 0
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return 0
+
+
 def updates(command):
     if command.strip() in ('checkupdates', 'checkupdates 2>/dev/null | wc -l'):
         result = run(['checkupdates'], timeout=120)
-        if result.returncode not in (0, 2):
-            return 'Updates ?'
-        return 'Updates ' + str(len(result.stdout.splitlines()))
-    result = run(['sh', '-c', command], timeout=120)
-    return 'Updates ' + (result.stdout.strip() if result.returncode == 0 else '?')
+        count = str(len(result.stdout.splitlines())) if result.returncode in (0, 2) else '?'
+    else:
+        result = run(['sh', '-c', command], timeout=120)
+        count = result.stdout.strip() if result.returncode == 0 else '?'
+    dots = splinterdots_updates()
+    return f'Updates {count}' + (f' · SplinterDots {dots}' if dots else '')
 
 
 def notifications():

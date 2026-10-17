@@ -23,7 +23,7 @@ qt6-multimedia
 qt6-5compat
 qt5-wayland
 qt6-wayland
-wofi
+librsvg
 mako
 awww
 

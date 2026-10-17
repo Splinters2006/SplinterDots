@@ -541,6 +541,7 @@ link_file "$ROOT_DIR/scripts/splinter-wallpaper" "$HOME_DIR/.local/bin/splinter-
 link_file "$ROOT_DIR/scripts/splinter-screenshot" "$HOME_DIR/.local/bin/splinter-screenshot"
 link_file "$ROOT_DIR/scripts/splinter-calendar-menu" "$HOME_DIR/.local/bin/splinter-calendar-menu"
 link_file "$ROOT_DIR/scripts/splinter-media-menu" "$HOME_DIR/.local/bin/splinter-media-menu"
+link_file "$ROOT_DIR/scripts/splinter-launcher" "$HOME_DIR/.local/bin/splinter-launcher"
 link_file "$ROOT_DIR/scripts/splinter-cava-read" "$HOME_DIR/.local/bin/splinter-cava-read"
 link_file "$ROOT_DIR/scripts/splinter-cava-daemon" "$HOME_DIR/.local/bin/splinter-cava-daemon"
 link_file "$ROOT_DIR/scripts/splinter-apply-kitty-theme" "$HOME_DIR/.local/bin/splinter-apply-kitty-theme"

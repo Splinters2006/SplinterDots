@@ -21,8 +21,22 @@ class BarActionsTests(unittest.TestCase):
 
     def test_updates_zero_and_failure_are_distinct(self):
         for response, expected in [(result('', 2), 'Updates 0'), (result('a 1 -> 2\nb 3 -> 4\n'), 'Updates 2'), (result('', 1), 'Updates ?')]:
-            with patch.object(actions, 'run', return_value=response):
+            with patch.object(actions, 'run', return_value=response), patch.object(actions, 'splinterdots_updates', return_value=0):
                 self.assertEqual(actions.updates('checkupdates'), expected)
+
+    def test_updates_include_pending_splinterdots_commits(self):
+        with patch.object(actions, 'run', return_value=result('a 1 -> 2\n')), patch.object(actions, 'splinterdots_updates', return_value=3):
+            self.assertEqual(actions.updates('checkupdates'), 'Updates 1 · SplinterDots 3')
+
+    def test_splinterdots_updates_counts_upstream_commits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / '.git').mkdir()
+            with patch.object(actions, 'splinterdots_repo', return_value=repo), patch.object(actions, 'run', side_effect=[result(), result('4\n')]) as run:
+                self.assertEqual(actions.splinterdots_updates(), 4)
+                self.assertEqual(run.call_args.args[0][-2:], ['--count', 'HEAD..@{upstream}'])
+            with patch.object(actions, 'splinterdots_repo', return_value=repo), patch.object(actions, 'run', return_value=result('', 1)):
+                self.assertEqual(actions.splinterdots_updates(), 0)
 
     def test_notifications_flat_and_grouped_json(self):
         for raw in ['[{"id": 1}, {"id": 2}]', '{"data": [[{"id": 1}], [{"id": 2}]]}']:

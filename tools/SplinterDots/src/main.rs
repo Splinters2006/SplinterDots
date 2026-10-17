@@ -23,7 +23,7 @@ const SETTINGS_KEYS: &[(&str, &str)] = &[
     ("DOTFILES_WALLPAPER_DIR", "~/Pictures/Wallpapers"),
     ("DOTFILES_TERMINAL", "splinter-kitty"),
     ("DOTFILES_FILE_MANAGER", "thunar"),
-    ("DOTFILES_APP_LAUNCHER", "wofi --show drun"),
+    ("DOTFILES_APP_LAUNCHER", "splinter-launcher"),
     ("DOTFILES_BAR_POSITION", "top"),
     ("DOTFILES_BAR_HEIGHT", "34"),
     ("DOTFILES_BAR_RADIUS", "10"),
@@ -34,8 +34,6 @@ const SETTINGS_KEYS: &[(&str, &str)] = &[
     ("DOTFILES_BAR_WORKSPACE_COUNT", "9"),
     ("DOTFILES_BAR_REACTIVE_MS", "120"),
     ("DOTFILES_BAR_STATUS_MS", "1500"),
-    ("DOTFILES_BAR_ICON_PACK", "nerd"),
-    ("DOTFILES_BAR_ICON_FONT", "Symbols Nerd Font"),
     ("DOTFILES_BAR_LEFT_WIDGETS", ""),
     ("DOTFILES_BAR_CENTER_WIDGETS", ""),
     ("DOTFILES_BAR_RIGHT_WIDGETS", ""),
@@ -72,7 +70,6 @@ const SETTINGS_KEYS: &[(&str, &str)] = &[
     ("DOTFILES_WIDGET_CUSTOM_TEXT_VALUE", "Hello"),
     ("DOTFILES_WIDGET_CUSTOM_SCRIPT_COMMAND", "date +%H:%M"),
     ("DOTFILES_WIDGET_CUSTOM_SCRIPT_INTERVAL", "5000"),
-    ("DOTFILES_WIDGET_SPACER_WIDTH", "16"),
 ];
 
 const EXCLUDED_HYPR_OPTIONS: &[&str] = &[
@@ -353,6 +350,8 @@ struct SplinterDots {
     addon_refresh_marker_seen: bool,
     addon_category_filter: String,
     preview_font_families: HashMap<String, FontFamily>,
+    icon_theme_previews: HashMap<String, Vec<egui::TextureHandle>>,
+    cursor_theme_previews: HashMap<String, Vec<egui::TextureHandle>>,
     dragged_bar_widget: Option<(String, usize)>,
     status: String,
     no_show_on_startup: bool,
@@ -596,6 +595,8 @@ impl SplinterDots {
             no_show_on_startup,
             loaded_ui_font: String::new(),
             preview_font_families: HashMap::new(),
+            icon_theme_previews: HashMap::new(),
+            cursor_theme_previews: HashMap::new(),
             dragged_bar_widget: None,
         }
     }
@@ -929,6 +930,8 @@ impl SplinterDots {
         // font previews too, while preserving unsaved settings and selections.
         self.loaded_ui_font.clear();
         self.preview_font_families.clear();
+        self.icon_theme_previews.clear();
+        self.cursor_theme_previews.clear();
         self.status = "Installation finished. Fonts and available packages refreshed".to_string();
     }
 
@@ -960,6 +963,9 @@ impl SplinterDots {
                 self.saved_theme_on_open = self.value("DOTFILES_THEME");
                 self.theme_was_saved = true;
                 self.theme_draft = None;
+                // Fonts, icons and cursors; done before the bar restarts so it picks up the icon theme.
+                self.apply_style_pack();
+                let style_status = self.status.clone();
                 self.restart_bar();
                 let bar_status = self.status.clone();
                 let reloaded = Command::new("hyprctl").arg("reload").output()
@@ -967,6 +973,8 @@ impl SplinterDots {
                 run_quiet("makoctl", &["reload"]);
                 self.status = if bar_status.starts_with("Could not") {
                     format!("Saved. {bar_status}")
+                } else if !style_status.starts_with("Font and icon") {
+                    format!("Saved. {style_status}")
                 } else if !reloaded {
                     "Saved. Reload Hyprland to activate keybind changes".into()
                 } else { "Saved and applied".into() };
@@ -1135,6 +1143,36 @@ impl SplinterDots {
             self.status =
                 "Could not open folder picker. Install zenity/kdialog or type the path manually."
                     .to_string();
+        }
+    }
+
+    // Rasterize a few sample icons and cursors from every installed theme, once per session.
+    fn load_icon_theme_previews(&mut self, ctx: &egui::Context) {
+        for choice in icon_theme_choices() {
+            if self.icon_theme_previews.contains_key(choice.value) {
+                continue;
+            }
+            let textures = ICON_PREVIEW_NAMES
+                .iter()
+                .filter_map(|names| find_theme_icon(choice.value, names))
+                .filter_map(|path| load_icon_texture(ctx, &path))
+                .collect();
+            self.icon_theme_previews.insert(choice.value.to_string(), textures);
+        }
+
+        for choice in cursor_theme_choices() {
+            if self.cursor_theme_previews.contains_key(choice.value) {
+                continue;
+            }
+            let textures = CURSOR_PREVIEW_NAMES
+                .iter()
+                .filter_map(|names| find_cursor_file(choice.value, names))
+                .filter_map(|path| {
+                    let image = load_xcursor_image(&fs::read(&path).ok()?, 32)?;
+                    Some(ctx.load_texture(format!("cursor-preview-{}", path.display()), image, egui::TextureOptions::LINEAR))
+                })
+                .collect();
+            self.cursor_theme_previews.insert(choice.value.to_string(), textures);
         }
     }
 
@@ -1502,6 +1540,7 @@ misc               = 313244
 
         let result = Command::new("quickshell")
             .args(["-c", "splinterbar"])
+            .env("QS_ICON_THEME", self.value("DOTFILES_ICON_THEME"))
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn();
@@ -1510,34 +1549,6 @@ misc               = 313244
             Ok(_) => "QML bar restarted".to_string(),
             Err(err) => format!("Could not restart QML bar: {err}"),
         };
-    }
-
-    fn install_selected_icon_font(&mut self) {
-        let pack = self.value("DOTFILES_BAR_ICON_PACK");
-        let package = match pack.as_str() {
-            "fontawesome" => "otf-font-awesome",
-            "nerd" => "ttf-nerd-fonts-symbols",
-            _ => {
-                self.status = "Text icons do not need an extra font".to_string();
-                return;
-            }
-        };
-
-        let terminal = self.value("DOTFILES_TERMINAL");
-        let command = format!(
-            "if pacman -Qi {pkg} >/dev/null 2>&1; then echo '{pkg} already installed'; \
-             elif command -v paru >/dev/null 2>&1; then paru -S --needed {pkg}; \
-             elif command -v yay >/dev/null 2>&1; then yay -S --needed {pkg}; \
-             else sudo pacman -S --needed {pkg}; fi; echo; read -rp 'Press enter to close...'",
-            pkg = package
-        );
-
-        let _ = Command::new("sh")
-            .arg("-c")
-            .arg(format!("{} -e sh -c {}", terminal, shell_quote(&command)))
-            .spawn();
-
-        self.status = format!("Opening installer for {package}");
     }
 
     fn keybind_hint_rows(&self) -> Vec<(String, String)> {
@@ -2443,6 +2454,8 @@ misc               = 313244
                             .max_height(620.0)
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
+                                self.load_icon_theme_previews(ui.ctx());
+                                let no_icon_previews = HashMap::new();
                                 let mut font = self.value("DOTFILES_UI_FONT");
                                 if let Some(package) = style_choice_grid(
                                     ui,
@@ -2451,6 +2464,7 @@ misc               = 313244
                                     &mut font,
                                     font_choices(),
                                     &self.preview_font_families,
+                                    &no_icon_previews,
                                 ) {
                                     self.install_style_package(package);
                                 }
@@ -2466,6 +2480,7 @@ misc               = 313244
                                     &mut icon_theme,
                                     icon_theme_choices(),
                                     &self.preview_font_families,
+                                    &self.icon_theme_previews,
                                 ) {
                                     self.install_style_package(package);
                                 }
@@ -2481,16 +2496,14 @@ misc               = 313244
                                     &mut cursor_theme,
                                     cursor_theme_choices(),
                                     &self.preview_font_families,
+                                    &self.cursor_theme_previews,
                                 ) {
                                     self.install_style_package(package);
                                 }
                                 self.set_value("DOTFILES_CURSOR_THEME", cursor_theme);
 
-                                ui.add_space(18.0);
-
-                                if primary_button(ui, &theme, "Apply font and icon settings").clicked() {
-                                    self.apply_style_pack();
-                                }
+                                ui.add_space(8.0);
+                                ui.label(RichText::new("Fonts, icons and cursors apply when you press Save.").color(theme.muted).size(11.0));
                             });
         });
     }
@@ -2715,7 +2728,7 @@ misc               = 313244
                         ..Default::default()
                     }
                     .show(ui, |ui| {
-                        ui.horizontal(|ui| {
+                        let header = ui.horizontal(|ui| {
                             ui.label(RichText::new("󰍢").color(theme.muted));
                             ui.label(
                                 RichText::new(widget_label(widget))
@@ -2740,12 +2753,17 @@ misc               = 313244
                                 }
                             });
                         });
-                    })
-                    .response;
 
-                    // Only the left/middle part of the card is draggable.
-                    // The right side is reserved for the remove button.
-                    let mut drag_rect = card_response.rect;
+                        self.inline_widget_settings(ui, theme, widget);
+                        header.response.rect
+                    });
+                    let header_rect = card_response.inner;
+                    let card_response = card_response.response;
+
+                    // Only the left/middle part of the header is draggable.
+                    // The right side is reserved for the remove button and
+                    // anything below the header holds inline settings.
+                    let mut drag_rect = header_rect.expand2(Vec2::new(10.0, 8.0));
                     drag_rect.max.x = (drag_rect.max.x - 46.0).max(drag_rect.min.x);
 
                     let drag_response = ui.interact(
@@ -2836,6 +2854,56 @@ misc               = 313244
         });
     }
 
+
+    // Editable settings shown directly inside a widget's card in the layout editor.
+    fn inline_widget_settings(&mut self, ui: &mut egui::Ui, theme: &AppTheme, widget: &str) {
+        let key = match widget {
+            "custom_text" => "DOTFILES_WIDGET_CUSTOM_TEXT_VALUE",
+            "custom_script" => "DOTFILES_WIDGET_CUSTOM_SCRIPT_COMMAND",
+            _ => return,
+        };
+
+        ui.add_space(6.0);
+        let mut value = self.value(key);
+        let hint = if widget == "custom_text" { "Text shown on the bar" } else { "Shell command, e.g. date +%H:%M" };
+        let edit = egui::TextEdit::singleline(&mut value)
+            .hint_text(hint)
+            .desired_width(f32::INFINITY);
+        let edit = if widget == "custom_script" { edit.code_editor() } else { edit };
+        ui.add(edit);
+        self.set_value(key, value);
+
+        if widget != "custom_script" {
+            return;
+        }
+
+        ui.horizontal(|ui| {
+            let mut seconds = self
+                .value("DOTFILES_WIDGET_CUSTOM_SCRIPT_INTERVAL")
+                .parse::<f64>()
+                .unwrap_or(5000.0)
+                / 1000.0;
+            ui.label(RichText::new("Every").color(theme.muted).size(11.0));
+            ui.add(egui::DragValue::new(&mut seconds).range(1.0..=3600.0).speed(0.5).suffix(" s"));
+            self.set_value(
+                "DOTFILES_WIDGET_CUSTOM_SCRIPT_INTERVAL",
+                ((seconds * 1000.0).round() as i64).to_string(),
+            );
+
+            if ui.button("Test").clicked() {
+                let output = Command::new("sh")
+                    .args(["-c", &self.value("DOTFILES_WIDGET_CUSTOM_SCRIPT_COMMAND")])
+                    .output();
+                self.status = match output {
+                    Ok(out) if out.status.success() => {
+                        format!("Script output: {}", shorten_text(String::from_utf8_lossy(&out.stdout).trim(), 80))
+                    }
+                    Ok(out) => format!("Script failed: {}", shorten_text(String::from_utf8_lossy(&out.stderr).trim(), 80)),
+                    Err(err) => format!("Could not run script: {err}"),
+                };
+            }
+        });
+    }
 
     fn persist_bar_layout(&mut self) {
         self.sync_widget_toggles_from_layout();
@@ -2977,18 +3045,11 @@ misc               = 313244
 
             Self::card(&theme, ui, |ui| {
                 ui.label(RichText::new("Widget settings").strong().size(18.0));
-                for (label, key) in [
-                    ("Custom text", "DOTFILES_WIDGET_CUSTOM_TEXT_VALUE"),
-                    ("Custom script / shell command", "DOTFILES_WIDGET_CUSTOM_SCRIPT_COMMAND"),
-                    ("Updates command", "DOTFILES_WIDGET_UPDATES_COMMAND"),
-                ] {
-                    let mut value = self.value(key);
-                    labeled_text(ui, label, &mut value);
-                    self.set_value(key, value);
-                }
-                slider_value(ui, &theme, &mut self.values, "DOTFILES_WIDGET_CUSTOM_SCRIPT_INTERVAL", 1000.0, 60000.0);
-                slider_value(ui, &theme, &mut self.values, "DOTFILES_WIDGET_SPACER_WIDTH", 1.0, 300.0);
-                ui.label("Custom commands run as your user. Wallpaper buttons use the folder selected in Appearance.");
+                let mut updates_command = self.value("DOTFILES_WIDGET_UPDATES_COMMAND");
+                labeled_text(ui, "Updates command", &mut updates_command);
+                self.set_value("DOTFILES_WIDGET_UPDATES_COMMAND", updates_command);
+                ui.label("Custom Text and Custom Script are edited directly on their cards in the layout above.");
+                ui.label("Updates also counts new SplinterDots commits. Custom commands run as your user. Wallpaper buttons use the folder selected in Appearance.");
                 ui.label("Click Updates to refresh; Keyboard to cycle layouts; Notifications to restore or dismiss alerts.");
             });
 
@@ -3011,14 +3072,6 @@ misc               = 313244
                 slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_FONT_SIZE", 8.0, 24.0);
                 slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_SPACING", 4.0, 40.0);
                 slider_value(ui, &theme, &mut self.values, "DOTFILES_BAR_BORDER_WIDTH", 0.0, 4.0);
-
-                combo_value(ui, &mut self.values, "DOTFILES_BAR_ICON_PACK", &["nerd", "fontawesome", "text"]);
-                combo_value(
-                    ui,
-                    &mut self.values,
-                    "DOTFILES_BAR_ICON_FONT",
-                    &["Symbols Nerd Font", "Font Awesome 6 Free", "Font Awesome 6 Brands", "Sans"],
-                );
             });
         });
     }
@@ -3160,6 +3213,10 @@ fn read_settings(paths: &Paths) -> HashMap<String, String> {
     load_shell_values(&paths.repo_settings(), &mut values);
     load_shell_values(&paths.local_conf, &mut values);
     migrate_system_widgets(&mut values);
+    // splinter-launcher replaced wofi as the default; keep customized launchers.
+    if values.get("DOTFILES_APP_LAUNCHER").map(String::as_str) == Some("wofi --show drun") {
+        values.insert("DOTFILES_APP_LAUNCHER".into(), "splinter-launcher".into());
+    }
     values
 }
 
@@ -3737,6 +3794,15 @@ fn write_colors(paths: &Paths, values: &HashMap<String, String>) -> Result<(), S
 
     fs::write(&paths.hypr_colors, colors).map_err(err_string)?;
 
+    // Full palette for shell scripts and Quickshell menus such as splinter-launcher.
+    ensure_dir(&paths.dotfiles_dir)?;
+    let shared = format!(
+        "# Generated by SplinterDots\nPALETTE_ACCENT=\"{}\"\nPALETTE_BACKGROUND=\"{}\"\nPALETTE_SURFACE=\"{}\"\nPALETTE_TEXT=\"{}\"\nPALETTE_MUTED=\"{}\"\nPALETTE_BORDER=\"{}\"\nPALETTE_ACTIVE_TEXT=\"{}\"\n",
+        palette.accent, palette.background, palette.surface, palette.text,
+        palette.muted, palette.inactive_border, palette.active_text,
+    );
+    fs::write(paths.dotfiles_dir.join("palette.conf"), shared).map_err(err_string)?;
+
     let mako = format!(
         "background-color={}\ntext-color={}\nborder-color={}\nborder-size=2\nborder-radius=8\npadding=12\ndefault-timeout=5000\n",
         palette.background, palette.text, palette.accent,
@@ -3751,7 +3817,7 @@ fn write_quickshell_bar(paths: &Paths, values: &HashMap<String, String>) -> Resu
     migrate_system_widgets(&mut migrated);
     let values = &migrated;
     let palette = theme_palette(values);
-    let icons = icons_for(&value_or(values, "DOTFILES_BAR_ICON_PACK"));
+    let icons = bar_icons();
     let position = value_or(values, "DOTFILES_BAR_POSITION");
 
     let top = if position == "top" { "true" } else { "false" };
@@ -3766,7 +3832,7 @@ fn write_quickshell_bar(paths: &Paths, values: &HashMap<String, String>) -> Resu
     let workspace_count = clamp_i(value_or(values, "DOTFILES_BAR_WORKSPACE_COUNT"), 9, 1, 20);
     let reactive_ms = clamp_i(value_or(values, "DOTFILES_BAR_REACTIVE_MS"), 120, 40, 1000);
     let status_ms = clamp_i(value_or(values, "DOTFILES_BAR_STATUS_MS"), 1500, 500, 6000);
-    let icon_font = value_or(values, "DOTFILES_BAR_ICON_FONT");
+    let icon_font = BAR_ICON_FONT.to_string();
 
     let bg_alpha = (opacity * 255.0) as i32;
     let bg_color = format!("#{:02x}{}", bg_alpha, palette.bar_rgb);
@@ -3930,6 +3996,7 @@ __RIGHT_SECTION__
         .replace("__CENTER_SECTION__", &center_section)
         .replace("__RIGHT_SECTION__", &right_section);
 
+    fs::write(paths.quickshell_dir.join("ThemedLabel.qml"), include_str!("widgets/ThemedLabel.qml")).map_err(err_string)?;
     fs::write(&paths.quickshell_file, qml).map_err(err_string)
 }
 
@@ -4018,17 +4085,18 @@ fn bar_widget_qml(
         }
         "custom_text" => static_text_qml(id, palette, height, radius, font_size, icon_font,
             &value_or(values, "DOTFILES_WIDGET_CUSTOM_TEXT_VALUE")),
+        // Script output is user content, so it is never turned into icons.
         "custom_script" => command_text_qml(id, palette, height, radius, font_size, icon_font,
             &widget_action(&["script", &value_or(values, "DOTFILES_WIDGET_CUSTOM_SCRIPT_COMMAND")]),
-            value_or(values, "DOTFILES_WIDGET_CUSTOM_SCRIPT_INTERVAL").parse::<i64>().unwrap_or(5000).clamp(1000, 3600000), None),
-        "spacer" => format!("Item {{ width: {}; height: 1 }}", value_or(values, "DOTFILES_WIDGET_SPACER_WIDTH").parse::<i64>().unwrap_or(16).clamp(1, 300)),
+            value_or(values, "DOTFILES_WIDGET_CUSTOM_SCRIPT_INTERVAL").parse::<i64>().unwrap_or(5000).clamp(1000, 3600000), None)
+            .replacen("ThemedLabel {", "Text {", 1),
 
         "system" => command_text_qml(id, palette, height, radius, font_size, icon_font,
             &format!("python -c {} {}", shell_escape(include_str!("widgets/system.py")), shell_escape(&value_or(values, "DOTFILES_WIDGET_DISK_PATH"))), status_ms.max(1000), None),
         "gpu" => command_text_qml(id, palette, height, radius, font_size, icon_font, "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | awk '{print \"󰢮 \" $1 \"%\"}'", status_ms, None),
         "media_controls" | "media" | "media_controller" | "media-controller" | "media_prev" | "media-play" | "media-next" => media_controls_qml(id, palette, height, radius, font_size, icon_font),
 
-        "launcher" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰀻", "wofi --show drun"),
+        "launcher" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰀻", "splinter-launcher"),
         "power" => command_button_qml(id, palette, height, radius, font_size, icon_font, "⏻", &widget_action(&["power"])),
         "lock" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "hyprlock || loginctl lock-session"),
         "screenshot" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰄀", "splinter-screenshot area"),
@@ -4093,9 +4161,9 @@ fn idle_inhibitor_qml(id: &str, palette: &Palette, height: i64, radius: i64, fon
     format!(r#"Rectangle {{
       id: {name}
       property bool active: false
-      width: 102; height: {height}; anchors.verticalCenter: parent.verticalCenter
+      width: 124; height: {height}; anchors.verticalCenter: parent.verticalCenter
       radius: {radius}; color: active ? "{accent}" : "{surface}"
-      Text {{ anchors.centerIn: parent; text: {name}.active ? "Keep awake" : "Idle allowed"
+      ThemedLabel {{ anchors.centerIn: parent; text: {name}.active ? "󰅶 Keep awake" : "󰒲 Idle allowed"
         color: {name}.active ? "{active_text}" : "{text}"; font.pixelSize: {font_size}; font.family: {font}
       }}
       IdleInhibitor {{ window: {name}.QsWindow.window; enabled: {name}.active }}
@@ -4187,7 +4255,17 @@ fn window_title_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_
 
 fn network_widget_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_size: i64, icon_font: &str, interval: i64) -> String {
     let qml = command_text_qml(id, palette, height, radius, font_size, icon_font,
-        r#"LC_ALL=C nmcli -t -f DEVICE,TYPE,STATE device 2>/dev/null | awk -F: '$3 ~ /^connected/ && $2!="loopback" {print ($2=="wifi" ? "Wi-Fi " : "LAN ") $1; found=1; exit} END {if (!found) print "Network offline"}'"#,
+        // Wi-Fi shows a signal-strength glyph that ThemedLabel turns into a themed icon.
+        r#"set -- $(LC_ALL=C nmcli -t -f DEVICE,TYPE,STATE device 2>/dev/null | awk -F: '$3 ~ /^connected/ && $2!="loopback" {print $2, $1; exit}')
+case "$1" in
+  wifi)
+    signal=$(LC_ALL=C nmcli -t -f IN-USE,SIGNAL device wifi list --rescan no 2>/dev/null | awk -F: '$1=="*" {print $2; exit}')
+    signal=${signal:-0}
+    if [ "$signal" -ge 75 ]; then icon=󰤨; elif [ "$signal" -ge 50 ]; then icon=󰤥; elif [ "$signal" -ge 25 ]; then icon=󰤢; else icon=󰤟; fi
+    printf '%s %s' "$icon" "$2" ;;
+  "") printf '󰤮 Offline' ;;
+  *) printf 'LAN %s' "$2" ;;
+esac"#,
         interval, None)
 ;
     let controls = format!(r#"
@@ -4230,7 +4308,7 @@ fn easyeffects_widget_qml(
               border.color: effectsEnabled ? "__ACCENT__" : "__MUTED__"
               border.width: 1
 
-              Text {
+              ThemedLabel {
                 anchors.centerIn: parent
                 text: __ID__.effectsEnabled ? "󰓃 FX ON" : "󰓃 FX OFF"
                 color: "__TEXT__"
@@ -4313,9 +4391,9 @@ fn bluetooth_widget_qml(
               border.color: powered ? "__ACCENT__" : "__MUTED__"
               border.width: 1
 
-              Text {
+              ThemedLabel {
                 anchors.centerIn: parent
-                text: __ID__.powered ? " Bluetooth" : " Off"
+                text: __ID__.powered ? " Bluetooth" : "󰂲 Off"
                 color: "__TEXT__"
                 font.pixelSize: __FONT_SIZE__
                 font.bold: true
@@ -4416,7 +4494,7 @@ fn volume_widget_qml(
               border.color: "__ACCENT__"
               border.width: 1
 
-              Text {
+              ThemedLabel {
                 anchors.centerIn: parent
                 text: __ID__.volumeText
                 color: "__TEXT__"
@@ -4560,7 +4638,7 @@ fn command_text_qml(
               border.width: 1
               visible: __ID__.text.length > 0
 
-              Text {
+              ThemedLabel {
                 id: __ID__
                 anchors.centerIn: parent
                 width: implicitWidth
@@ -4628,7 +4706,7 @@ fn command_button_qml(
               border.color: "__MUTED__"
               border.width: 1
 
-              Text {
+              ThemedLabel {
                 anchors.centerIn: parent
                 text: "__LABEL__"
                 color: "__TEXT__"
@@ -4975,7 +5053,7 @@ fn media_controls_qml(
                 border.color: "__ACCENT__"
                 border.width: 1
 
-                Text {{
+                ThemedLabel {{
                   anchors.centerIn: parent
                   text: ""
                   color: "__TEXT__"
@@ -5048,56 +5126,25 @@ struct IconSet {
     keyboard: &'static str,
 }
 
-fn icons_for(pack: &str) -> IconSet {
-    match pack {
-        "fontawesome" => IconSet {
-            clock: "",
-            volume: "",
-            muted: "",
-            network: "",
-            battery: "",
-            cpu: "",
-            memory: "",
-            temp: "",
-            disk: "",
-            brightness: "",
-            bluetooth: "",
-            media: "",
-            updates: "",
-            keyboard: "",
-        },
-        "text" => IconSet {
-            clock: "TIME",
-            volume: "VOL",
-            muted: "MUTE",
-            network: "NET",
-            battery: "BAT",
-            cpu: "CPU",
-            memory: "RAM",
-            temp: "TEMP",
-            disk: "DISK",
-            brightness: "BRI",
-            bluetooth: "BT",
-            media: "MEDIA",
-            updates: "UPD",
-            keyboard: "KB",
-        },
-        _ => IconSet {
-            clock: "",
-            volume: "",
-            muted: "",
-            network: "󰤨",
-            battery: "󰁹",
-            cpu: "",
-            memory: "",
-            temp: "",
-            disk: "󰋊",
-            brightness: "󰃠",
-            bluetooth: "",
-            media: "",
-            updates: "󰚰",
-            keyboard: "",
-        },
+// The bar always uses Nerd Font glyphs, which ship with the default font set.
+const BAR_ICON_FONT: &str = "Symbols Nerd Font";
+
+fn bar_icons() -> IconSet {
+    IconSet {
+        clock: "",
+        volume: "",
+        muted: "",
+        network: "󰤨",
+        battery: "󰁹",
+        cpu: "",
+        memory: "",
+        temp: "",
+        disk: "󰋊",
+        brightness: "󰃠",
+        bluetooth: "",
+        media: "",
+        updates: "󰚰",
+        keyboard: "",
     }
 }
 
@@ -5323,6 +5370,165 @@ fn wallpaper_preview_cache_path(path: &Path) -> PathBuf {
         .join("splinterdots")
         .join("wallpaper-previews")
         .join(format!("{safe}.png"))
+}
+
+// Sample icons shown on icon theme cards; each slot lists fallbacks in order.
+const ICON_PREVIEW_NAMES: &[&[&str]] = &[
+    &["folder", "inode-directory"],
+    &["utilities-terminal", "org.gnome.Terminal", "terminal"],
+    &["firefox", "web-browser", "internet-web-browser"],
+    &["accessories-text-editor", "text-editor", "org.gnome.TextEditor"],
+    &["multimedia-audio-player", "audio-player", "applications-multimedia", "audio-x-generic"],
+    &["preferences-system", "systemsettings", "org.gnome.Settings"],
+];
+
+fn icon_theme_dirs(theme: &str) -> Vec<PathBuf> {
+    let home = home_dir();
+    [home.join(".local/share/icons"), home.join(".icons"), PathBuf::from("/usr/share/icons")]
+        .into_iter()
+        .map(|root| root.join(theme))
+        .filter(|dir| dir.is_dir())
+        .collect()
+}
+
+// Size encoded in an icon directory name such as "48x48", "48@2x" or "scalable".
+fn icon_dir_size(name: &str) -> Option<u32> {
+    if name == "scalable" {
+        return Some(48);
+    }
+    let digits: String = name.chars().take_while(|ch| ch.is_ascii_digit()).collect();
+    digits.parse().ok()
+}
+
+/// Finds the best-sized icon in a theme (or the themes it inherits from).
+/// Handles both "48x48/apps/name" and "apps/48/name" directory layouts.
+fn find_theme_icon(theme: &str, names: &[&str]) -> Option<PathBuf> {
+    let mut themes = vec![theme.to_string()];
+    let mut index = 0;
+    while index < themes.len() && index < 4 {
+        let dirs = icon_theme_dirs(&themes[index]);
+        for name in names {
+            let mut best: Option<(u32, PathBuf)> = None;
+            for dir in &dirs {
+                for outer in fs::read_dir(dir).into_iter().flatten().flatten() {
+                    for inner in fs::read_dir(outer.path()).into_iter().flatten().flatten() {
+                        let outer_name = outer.file_name().to_string_lossy().to_string();
+                        let inner_name = inner.file_name().to_string_lossy().to_string();
+                        if outer_name.contains("symbolic") || inner_name.contains("symbolic") {
+                            continue;
+                        }
+                        let Some(size) = icon_dir_size(&outer_name).or_else(|| icon_dir_size(&inner_name)) else {
+                            continue;
+                        };
+                        let rank = size.abs_diff(48) + if size < 32 { 100 } else { 0 };
+                        for ext in ["svg", "png"] {
+                            let path = inner.path().join(format!("{name}.{ext}"));
+                            if path.exists() && best.as_ref().map_or(true, |(r, _)| rank < *r) {
+                                best = Some((rank, path));
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some((_, path)) = best {
+                return Some(path);
+            }
+        }
+        for dir in &dirs {
+            let inherits = fs::read_to_string(dir.join("index.theme")).unwrap_or_default();
+            if let Some(line) = inherits.lines().find(|line| line.starts_with("Inherits=")) {
+                for parent in line.trim_start_matches("Inherits=").split(',').map(str::trim) {
+                    if !parent.is_empty() && parent != "hicolor" && !themes.iter().any(|t| t == parent) {
+                        themes.push(parent.to_string());
+                    }
+                }
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
+// Sample cursors shown on cursor theme cards; each slot lists fallbacks in order.
+const CURSOR_PREVIEW_NAMES: &[&[&str]] = &[
+    &["left_ptr", "default", "arrow"],
+    &["pointer", "hand2", "hand1"],
+    &["text", "xterm"],
+    &["wait", "watch"],
+    &["progress", "left_ptr_watch"],
+    &["grabbing", "fleur", "move"],
+    &["not-allowed", "crossed_circle", "no-drop"],
+];
+
+fn find_cursor_file(theme: &str, names: &[&str]) -> Option<PathBuf> {
+    let dirs = icon_theme_dirs(theme);
+    names
+        .iter()
+        .flat_map(|name| dirs.iter().map(move |dir| dir.join("cursors").join(name)))
+        .find(|path| path.is_file())
+}
+
+/// Decodes the image closest to `target` pixels from an Xcursor file.
+fn load_xcursor_image(bytes: &[u8], target: u32) -> Option<egui::ColorImage> {
+    const IMAGE_TYPE: u32 = 0xfffd_0002;
+    let u32_at = |offset: usize| -> Option<u32> {
+        Some(u32::from_le_bytes(bytes.get(offset..offset + 4)?.try_into().ok()?))
+    };
+    if bytes.get(0..4)? != b"Xcur" {
+        return None;
+    }
+
+    let toc_count = u32_at(12)? as usize;
+    let mut best: Option<(u32, usize)> = None;
+    for entry in 0..toc_count.min(64) {
+        let base = 16 + entry * 12;
+        let (kind, size, position) = (u32_at(base)?, u32_at(base + 4)?, u32_at(base + 8)? as usize);
+        if kind == IMAGE_TYPE && best.map_or(true, |(best_size, _)| size.abs_diff(target) < best_size.abs_diff(target)) {
+            best = Some((size, position));
+        }
+    }
+
+    let (_, position) = best?;
+    let (width, height) = (u32_at(position + 16)? as usize, u32_at(position + 20)? as usize);
+    if width == 0 || height == 0 || width > 512 || height > 512 {
+        return None;
+    }
+    let pixels = bytes.get(position + 36..position + 36 + width * height * 4)?;
+    // Pixels are premultiplied ARGB stored little endian, i.e. BGRA bytes.
+    let rgba: Vec<egui::Color32> = pixels
+        .chunks_exact(4)
+        .map(|px| egui::Color32::from_rgba_premultiplied(px[2], px[1], px[0], px[3]))
+        .collect();
+    Some(egui::ColorImage { size: [width, height], source_size: Vec2::new(width as f32, height as f32), pixels: rgba })
+}
+
+fn load_icon_texture(ctx: &egui::Context, path: &Path) -> Option<egui::TextureHandle> {
+    let mut image_path = path.to_path_buf();
+    if path.extension().is_some_and(|ext| ext == "svg") {
+        // SVG icons are rasterized once through librsvg and cached next to wallpaper previews.
+        let cached = wallpaper_preview_cache_path(path).with_extension("icon.png");
+        let cached = cached.parent()?.parent()?.join("icon-previews").join(cached.file_name()?);
+        if !cached.exists() {
+            fs::create_dir_all(cached.parent()?).ok()?;
+            Command::new("rsvg-convert")
+                .args(["-w", "64", "-h", "64", "-o"])
+                .arg(&cached)
+                .arg(path)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .ok()?;
+        }
+        image_path = cached;
+    }
+
+    let image = image::open(&image_path)
+        .ok()?
+        .resize(64, 64, image::imageops::FilterType::Lanczos3)
+        .to_rgba8();
+    let size = [image.width() as usize, image.height() as usize];
+    let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &image.into_raw());
+    Some(ctx.load_texture(format!("icon-preview-{}", path.display()), color_image, egui::TextureOptions::LINEAR))
 }
 
 
@@ -5601,6 +5807,7 @@ fn style_choice_grid(
     current: &mut String,
     choices: &[StyleChoice],
     preview_font_families: &HashMap<String, FontFamily>,
+    icon_previews: &HashMap<String, Vec<egui::TextureHandle>>,
 ) -> Option<&'static str> {
     let mut package_to_install = None;
     let is_font_picker = title.to_ascii_lowercase().contains("font");
@@ -5666,6 +5873,15 @@ Aa Bb Gg Mm Ww 0123 Il1 O0")
                                         "Install to preview"
                                     }).color(theme.muted).size(12.0));
                                 }
+                            }
+
+                            if let Some(textures) = icon_previews.get(choice.value).filter(|t| !t.is_empty()) {
+                                ui.add_space(6.0);
+                                ui.horizontal_wrapped(|ui| {
+                                    for texture in textures {
+                                        ui.add(egui::Image::new(texture).fit_to_exact_size(Vec2::splat(28.0)));
+                                    }
+                                });
                             }
 
                             if let Some(package) = choice.package {
@@ -6056,7 +6272,6 @@ fn bar_widget_choices() -> &'static [BarWidgetChoice] {
 
         BarWidgetChoice { id: "custom_text",        label: "Custom Text",           setting: "DOTFILES_WIDGET_CUSTOM_TEXT" },
         BarWidgetChoice { id: "custom_script",      label: "Custom Script",         setting: "DOTFILES_WIDGET_CUSTOM_SCRIPT" },
-        BarWidgetChoice { id: "spacer",             label: "Spacer",                setting: "DOTFILES_WIDGET_SPACER" },
         BarWidgetChoice { id: "power",              label: "Power Menu",            setting: "DOTFILES_WIDGET_POWER" },
     ]
 }
@@ -6087,6 +6302,8 @@ fn migrate_system_widgets(values: &mut HashMap<String, String>) {
         let widgets = split_csv(&value_or(values, zone_key(zone))).into_iter()
             .map(|id| normalize_bar_widget_id(&id).to_string())
             .filter(|id| {
+                // The spacer widget was removed; drop it from saved layouts.
+                if id == "spacer" { return false; }
                 if id != "system" { return true; }
                 let keep = !system_seen;
                 system_seen = true;
@@ -6449,7 +6666,7 @@ mod tests {
         let mut values = HashMap::from([
             (zone_key("left").to_string(), "workspaces,cpu,window-title,memory".to_string()),
             (zone_key("center").to_string(), "datetime".to_string()),
-            (zone_key("right").to_string(), "network,temp,disk,system,volume".to_string()),
+            (zone_key("right").to_string(), "network,temp,spacer,disk,system,volume".to_string()),
         ]);
         migrate_system_widgets(&mut values);
         assert_eq!(values[zone_key("left")], "workspaces,system,window_title");
@@ -6466,10 +6683,10 @@ mod tests {
     fn changed_widgets_generate_valid_commands_and_unique_ids() {
         let values = defaults_map();
         let palette = theme_palette(&values);
-        let icons = icons_for("nerd");
+        let icons = bar_icons();
         let mut ids = HashSet::new();
         let mut snippets = Vec::new();
-        for (index, widget) in ["network", "window_title", "system", "network", "volume", "microphone", "updates", "keyboard", "notifications", "idle_inhibitor", "wallpaper_prev", "wallpaper_shuffle", "wallpaper_next", "custom_text", "custom_script", "spacer", "power"].iter().enumerate() {
+        for (index, widget) in ["network", "window_title", "system", "network", "volume", "microphone", "updates", "keyboard", "notifications", "idle_inhibitor", "wallpaper_prev", "wallpaper_shuffle", "wallpaper_next", "custom_text", "custom_script", "power"].iter().enumerate() {
             let qml = bar_widget_qml(widget, &format!("left_{index}"), &values, &palette,
                 &icons, 34, 8, 12, 5, 1500, "Sans");
             for line in qml.lines() {
@@ -6703,7 +6920,7 @@ mod tests {
                 screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(420.0, 500.0))),
                 events, ..Default::default()
             }, |ui| {
-                install = style_choice_grid(ui, &theme, "UI font", &mut current, &choices, &HashMap::new());
+                install = style_choice_grid(ui, &theme, "UI font", &mut current, &choices, &HashMap::new(), &HashMap::new());
             });
             (output, install)
         };
@@ -6971,4 +7188,38 @@ mod tests {
         assert_eq!(lua_app_command("$browser"), "browser");
         assert_eq!(lua_app_command("spotify"), "\"spotify\"");
     }
+
+    #[test]
+    fn xcursor_decoder_picks_nearest_size_and_converts_bgra() {
+        let image = |size: u32, bgra: [u8; 4]| {
+            let mut chunk = Vec::new();
+            for value in [36, 0xfffd_0002, size, 1, size, size, 0, 0, 0] {
+                chunk.extend_from_slice(&u32::to_le_bytes(value));
+            }
+            for _ in 0..size * size {
+                chunk.extend_from_slice(&bgra);
+            }
+            chunk
+        };
+        let (small, large) = (image(2, [0, 0, 255, 255]), image(4, [255, 0, 0, 255]));
+        let mut file = b"Xcur".to_vec();
+        for value in [16u32, 0x10000, 2] {
+            file.extend_from_slice(&value.to_le_bytes());
+        }
+        let first = 16 + 2 * 12;
+        for (size, position) in [(2u32, first), (4, first + small.len())] {
+            for value in [0xfffd_0002, size, position as u32] {
+                file.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        file.extend(small);
+        file.extend(large);
+
+        let decoded = load_xcursor_image(&file, 4).unwrap();
+        assert_eq!(decoded.size, [4, 4]);
+        assert_eq!(decoded.pixels[0], egui::Color32::from_rgb(0, 0, 255));
+        assert_eq!(load_xcursor_image(&file, 1).unwrap().pixels[0], egui::Color32::from_rgb(255, 0, 0));
+        assert!(load_xcursor_image(b"nope", 32).is_none());
+    }
+
 }
