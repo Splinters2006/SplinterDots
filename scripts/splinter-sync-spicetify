@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Apply the saved SplinterDots palette without changing extensions or Marketplace."""
+import argparse
+import configparser
+from pathlib import Path
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+
+def run(*args):
+    result = subprocess.run(args, stdin=subprocess.DEVNULL, capture_output=True,
+                            text=True, timeout=90)
+    if result.returncode:
+        detail = re.sub(r'\x1b\[[0-9;]*m', '', result.stderr or result.stdout).strip()
+        raise RuntimeError(detail or f'{args[0]} exited with status {result.returncode}')
+    return result.stdout.strip()
+
+
+def theme_colors(colors):
+    background, surface, text, muted, accent, border, active_text = colors
+    fields = {
+        'text': text, 'subtext': muted, 'main': background,
+        'sidebar': surface, 'player': surface, 'card': surface,
+        'shadow': background, 'selected-row': border, 'button': accent,
+        'button-active': accent, 'button-disabled': border, 'tab-active': surface,
+        'notification': surface, 'notification-error': 'e67e80', 'misc': border,
+        'highlight': surface, 'highlight-elevated': border, 'button-text': active_text,
+    }
+    return '[SplinterDots]\n' + ''.join(f'{key} = {value}\n' for key, value in fields.items())
+
+
+def sync(colors):
+    if not shutil.which('spicetify'):
+        return
+    config_path = Path(run('spicetify', '-c'))
+    if not config_path.is_file():
+        raise RuntimeError('Spicetify is not configured. Run splinter-setup-spicetify first.')
+    config = configparser.ConfigParser(interpolation=None, strict=False)
+    config.read(config_path)
+    theme_dir = config_path.parent / 'Themes' / 'SplinterDots'
+    css = (Path(__file__).resolve().parents[1] / 'files/spicetify/SplinterDots/user.css').read_text()
+    ini = theme_colors(colors)
+    already_current = (
+        config.get('Setting', 'current_theme', fallback='') == 'SplinterDots'
+        and config.get('Setting', 'color_scheme', fallback='') == 'SplinterDots'
+        and config.get('Setting', 'inject_css', fallback='') == '1'
+        and config.get('Setting', 'replace_colors', fallback='') == '1'
+    )
+    # A success receipt is written only after apply succeeds. Failed applies remain retryable.
+    receipt = theme_dir / '.splinter-applied'
+    fingerprint = ini + '\n' + css
+    unchanged = all(path.is_file() and path.read_text() == contents for path, contents in [
+        (theme_dir / 'color.ini', ini), (theme_dir / 'user.css', css), (receipt, fingerprint)])
+    if already_current and unchanged:
+        return
+    theme_dir.mkdir(parents=True, exist_ok=True)
+    (theme_dir / 'color.ini').write_text(ini)
+    (theme_dir / 'user.css').write_text(css)
+    run('spicetify', 'config', 'current_theme', 'SplinterDots', 'color_scheme', 'SplinterDots',
+        'inject_css', '1', 'replace_colors', '1')
+    # apply supports older and current CLI releases; do not use `update`, which can
+    # mean upgrading the CLI. Only restart Spotify if it was already running.
+    running = subprocess.run(['pgrep', '-u', str(os.getuid()), '-x', 'spotify'],
+                             capture_output=True, timeout=5).returncode == 0
+    if not config.get('Backup', 'version', fallback='').strip():
+        run('spicetify', 'backup')
+    run('spicetify', 'apply', *([] if running else ['--no-restart']))
+    receipt.write_text(fingerprint)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('colors', nargs=7, metavar='HEX')
+    args = parser.parse_args()
+    colors = [value.removeprefix('#').lower() for value in args.colors]
+    if not all(re.fullmatch(r'[0-9a-f]{6}', value) for value in colors):
+        parser.error('Colors must be six-digit hexadecimal values')
+    try:
+        sync(colors)
+    except (OSError, RuntimeError, subprocess.TimeoutExpired, configparser.Error) as error:
+        print(f'Could not update Spotify theme: {error}', file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

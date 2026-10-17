@@ -1,0 +1,23 @@
+/* SplinterDots: colors come from color.ini, regenerated when a theme is saved. */
+.Root,
+.Root__main-view {
+  background: var(--spice-main) !important;
+  color: var(--spice-text);
+}
+.Root__nav-bar {
+  background: var(--spice-sidebar) !important;
+}
+.Root__now-playing-bar {
+  background: var(--spice-player) !important;
+}
+.main-card-card {
+  background: var(--spice-card) !important;
+  border-radius: 14px !important;
+}
+.main-card-card:hover {
+  background: var(--spice-selected-row) !important;
+}
+::selection {
+  background: var(--spice-button);
+  color: var(--spice-button-text);
+}

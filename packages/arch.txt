@@ -11,6 +11,7 @@ starship
 
 # Required Hyprland desktop
 hyprland
+hyprlock
 xorg-xwayland
 xdg-desktop-portal
 xdg-desktop-portal-hyprland
@@ -32,6 +33,7 @@ thunar
 polkit-gnome
 
 # Required desktop helpers
+pacman-contrib
 python
 fastfetch
 wl-clipboard

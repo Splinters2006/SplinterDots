@@ -16,6 +16,8 @@ const SETTINGS_KEYS: &[(&str, &str)] = &[
     ("DOTFILES_ICON_THEME", "Papirus-Dark"),
     ("DOTFILES_CURSOR_THEME", "Bibata-Modern-Ice"),
     ("DOTFILES_THEME", "dark"),
+    ("DOTFILES_CUSTOM_BACKGROUND", "#18202b"),
+    ("DOTFILES_CUSTOM_SURFACE", "#283445"),
     ("DOTFILES_ACCENT", "#89b4fa"),
     ("DOTFILES_WALLPAPER", ""),
     ("DOTFILES_WALLPAPER_DIR", "~/Pictures/Wallpapers"),
@@ -67,6 +69,10 @@ const SETTINGS_KEYS: &[(&str, &str)] = &[
         "checkupdates 2>/dev/null | wc -l",
     ),
     ("DOTFILES_WIDGET_KEYBOARD_LABEL", "KB"),
+    ("DOTFILES_WIDGET_CUSTOM_TEXT_VALUE", "Hello"),
+    ("DOTFILES_WIDGET_CUSTOM_SCRIPT_COMMAND", "date +%H:%M"),
+    ("DOTFILES_WIDGET_CUSTOM_SCRIPT_INTERVAL", "5000"),
+    ("DOTFILES_WIDGET_SPACER_WIDTH", "16"),
 ];
 
 const EXCLUDED_HYPR_OPTIONS: &[&str] = &[
@@ -80,7 +86,69 @@ struct Keybind {
     key: String,
     kind: String,
     value: String,
+    #[serde(default = "default_use_super")]
+    use_super: bool,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct KeybindScheme {
+    name: String,
+    bindings: Vec<Keybind>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct KeybindSchemes {
+    active: usize,
+    schemes: Vec<KeybindScheme>,
+}
+
+impl KeybindSchemes {
+    fn from_bindings(bindings: Vec<Keybind>) -> Self {
+        Self { active: 0, schemes: vec![KeybindScheme { name: "Default".to_string(), bindings }] }
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        if self.schemes.is_empty() || self.active >= self.schemes.len() {
+            return Err("Select a valid keybind scheme".to_string());
+        }
+        let mut names = std::collections::HashSet::new();
+        for scheme in &self.schemes {
+            if scheme.name.trim().is_empty() || !names.insert(scheme.name.trim().to_lowercase()) {
+                return Err("Give each scheme a unique, non-empty name".to_string());
+            }
+            for binding in &scheme.bindings {
+                render_keybind(binding).map_err(|err| format!("{}: {err}", scheme.name))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn unique_name(&self, base: &str) -> String {
+        let mut name = base.to_string();
+        let mut number = 2;
+        while self.schemes.iter().any(|scheme| scheme.name.trim().eq_ignore_ascii_case(&name)) {
+            name = format!("{base} {number}");
+            number += 1;
+        }
+        name
+    }
+}
+
+fn default_use_super() -> bool {
+    true
+}
+
+const MOUSE_BUTTONS: &[(&str, &str)] = &[
+    ("mouse:272", "Left button"),
+    ("mouse:273", "Right button"),
+    ("mouse:274", "Middle button"),
+    ("mouse:275", "Side / back button"),
+    ("mouse:276", "Extra / forward button"),
+    ("mouse_up", "Scroll up"),
+    ("mouse_down", "Scroll down"),
+    ("mouse_left", "Scroll left"),
+    ("mouse_right", "Scroll right"),
+];
 
 #[derive(Clone, Debug, Deserialize)]
 struct HyprSchemaFile {
@@ -159,6 +227,74 @@ impl Tab {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct CustomTheme {
+    id: String,
+    name: String,
+    background: [u8; 3],
+    surface: [u8; 3],
+    accent: [u8; 3],
+}
+
+impl CustomTheme {
+    fn starter(light: bool) -> Self {
+        Self {
+            id: String::new(), name: "My theme".into(),
+            background: if light { [240, 244, 250] } else { [24, 32, 43] },
+            surface: if light { [255, 255, 255] } else { [40, 52, 69] },
+            accent: if light { [37, 99, 235] } else { [137, 180, 250] },
+        }
+    }
+
+    fn put_values(&self, values: &mut HashMap<String, String>) {
+        values.insert("DOTFILES_THEME".into(), format!("custom:{}", self.id));
+        values.insert("DOTFILES_CUSTOM_BACKGROUND".into(), rgb_hex(self.background));
+        values.insert("DOTFILES_CUSTOM_SURFACE".into(), rgb_hex(self.surface));
+        values.insert("DOTFILES_ACCENT".into(), rgb_hex(self.accent));
+    }
+}
+
+fn rgb_hex(rgb: [u8; 3]) -> String {
+    format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])
+}
+
+fn readable_text(rgb: [u8; 3]) -> Color32 {
+    let linear = rgb.map(|v| {
+        let v = v as f32 / 255.0;
+        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    });
+    let luminance = linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+    if luminance > 0.179 { Color32::BLACK } else { Color32::WHITE }
+}
+
+fn mix_color(a: Color32, b: Color32, amount: f32) -> Color32 {
+    let blend = |x: u8, y: u8| (x as f32 * (1.0 - amount) + y as f32 * amount).round() as u8;
+    Color32::from_rgb(blend(a.r(), b.r()), blend(a.g(), b.g()), blend(a.b(), b.b()))
+}
+
+fn custom_app_theme(values: &HashMap<String, String>) -> AppTheme {
+    let color = |key: &str| parse_hex_color(&value_or(values, key)).unwrap_or(Color32::from_rgb(24, 32, 43));
+    let bg = color("DOTFILES_CUSTOM_BACKGROUND");
+    let surface = color("DOTFILES_CUSTOM_SURFACE");
+    let text = readable_text(surface.to_array()[..3].try_into().unwrap());
+    let accent = color("DOTFILES_ACCENT");
+    AppTheme {
+        accent, bg, sidebar: surface, panel: surface, panel_soft: surface,
+        input: mix_color(surface, text, 0.06), card: surface,
+        card_hover: mix_color(surface, text, 0.12), text,
+        muted: mix_color(surface, text, 0.75), border: mix_color(surface, text, 0.4),
+        success: accent, danger: if text == Color32::BLACK { Color32::from_rgb(180, 25, 45) } else { Color32::from_rgb(255, 160, 170) },
+    }
+}
+
+fn save_custom_theme_file(path: &Path, themes: &[CustomTheme]) -> Result<(), String> {
+    ensure_parent(path)?;
+    let text = serde_json::to_string_pretty(themes).map_err(err_string)?;
+    let temporary = path.with_extension("json.tmp");
+    fs::write(&temporary, text + "\n").map_err(err_string)?;
+    fs::rename(temporary, path).map_err(err_string)
+}
+
 #[derive(Clone)]
 struct AppTheme {
     accent: Color32,
@@ -195,10 +331,15 @@ struct Paths {
 
 struct SplinterDots {
     paths: Paths,
+    custom_themes: Vec<CustomTheme>,
+    theme_draft: Option<CustomTheme>,
+    app_theme_sync: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
     tab: Tab,
     values: HashMap<String, String>,
     keybinds: Vec<Keybind>,
-    saved_keybinds: Vec<Keybind>,
+    keybind_schemes: KeybindSchemes,
+    saved_keybind_schemes: KeybindSchemes,
+    confirm_delete_scheme: bool,
     selected_keybind: Option<usize>,
     hypr_schema: Vec<HyprOption>,
     hypr_values: HashMap<String, String>,
@@ -230,6 +371,14 @@ impl Drop for SplinterDots {
 }
 
 fn main() -> eframe::Result<()> {
+    if env::args().any(|arg| arg == "--refresh-bar") {
+        let paths = Paths::new();
+        if let Err(error) = write_quickshell_bar(&paths, &read_settings(&paths)) {
+            eprintln!("Could not regenerate the bar: {error}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1160.0, 780.0])
@@ -409,8 +558,11 @@ impl SplinterDots {
     fn new() -> Self {
         let paths = Paths::new();
         let values = read_settings(&paths);
-        let keybinds = load_keybinds(&paths);
-        let saved_keybinds = keybinds.clone();
+        let custom_themes = fs::read_to_string(paths.dotfiles_dir.join("themes.json"))
+            .ok().and_then(|text| serde_json::from_str::<Vec<CustomTheme>>(&text).ok()).unwrap_or_default();
+        let keybind_schemes = load_keybind_schemes(&paths);
+        let keybinds = keybind_schemes.schemes[keybind_schemes.active].bindings.clone();
+        let saved_keybind_schemes = keybind_schemes.clone();
         let hypr_schema = load_hypr_schema(&paths);
         let hypr_values = load_hypr_values(&paths, &hypr_schema);
         let wallpaper_images = scan_wallpaper_dir(&value_or(&values, "DOTFILES_WALLPAPER_DIR"));
@@ -421,10 +573,15 @@ impl SplinterDots {
             saved_theme_on_open: value_or(&values, "DOTFILES_THEME").to_string(),
             theme_was_saved: false,
             paths,
+            custom_themes,
+            theme_draft: None,
+            app_theme_sync: None,
             tab: Tab::Overview,
             values,
             keybinds,
-            saved_keybinds,
+            keybind_schemes,
+            saved_keybind_schemes,
+            confirm_delete_scheme: false,
             selected_keybind: None,
             hypr_schema,
             hypr_values,
@@ -446,7 +603,7 @@ impl SplinterDots {
     fn sync_ui_font(&mut self, ctx: &egui::Context) {
         let selected_font = self.value("DOTFILES_UI_FONT");
 
-        if self.loaded_ui_font == selected_font && !self.preview_font_families.is_empty() {
+        if self.loaded_ui_font == selected_font {
             return;
         }
 
@@ -479,55 +636,22 @@ impl SplinterDots {
             }
         }
 
-        // 2. Selected global UI font.
-        if let Some(path) = font_file_candidates(&selected_font).first() {
-            if let Ok(bytes) = fs::read(path) {
-                fonts.font_data.insert(
-                    "splinter-ui-font".to_string(),
-                    FontData::from_owned(bytes).into(),
-                );
-
-                fonts
-                    .families
-                    .entry(FontFamily::Proportional)
-                    .or_default()
-                    .insert(0, "splinter-ui-font".to_string());
-
-                fonts
-                    .families
-                    .entry(FontFamily::Monospace)
-                    .or_default()
-                    .insert(0, "splinter-ui-font".to_string());
+        // UI and preview families have independent font data and names.
+        if let Some(data) = load_font_family(&selected_font) {
+            fonts.font_data.insert("splinter-ui-font".into(), data.into());
+            for family in [FontFamily::Proportional, FontFamily::Monospace] {
+                fonts.families.entry(family).or_default().insert(0, "splinter-ui-font".into());
             }
         }
 
-        // 3. Separate preview font families for every font card.
         for choice in font_choices() {
-            let candidates = font_file_candidates(choice.value);
-            let Some(path) = candidates.first() else {
-                continue;
-            };
-
-            let Ok(bytes) = fs::read(path) else {
-                continue;
-            };
-
+            let Some(data) = load_font_family(choice.value) else { continue; };
             let family_name = format!("preview-{}", normalize_font_name(choice.value));
-            let font_id = format!("{}-{}", family_name, path.display());
-
-            fonts.font_data.insert(
-                font_id.clone(),
-                FontData::from_owned(bytes).into(),
-            );
-
-            fonts
-                .families
-                .entry(FontFamily::Name(family_name.clone().into()))
-                .or_default()
-                .push(font_id);
-
-            self.preview_font_families
-                .insert(choice.value.to_string(), FontFamily::Name(family_name.into()));
+            let font_id = format!("{family_name}-data");
+            fonts.font_data.insert(font_id.clone(), data.into());
+            let family = FontFamily::Name(family_name.into());
+            fonts.families.insert(family.clone(), vec![font_id]);
+            self.preview_font_families.insert(choice.value.to_string(), family);
         }
 
         ctx.set_fonts(fonts);
@@ -554,6 +678,9 @@ impl SplinterDots {
     }
 
     fn app_theme(&self) -> AppTheme {
+        if self.value("DOTFILES_THEME").starts_with("custom:") {
+            return custom_app_theme(&self.values);
+        }
         let selected = self.value("DOTFILES_THEME");
         let fallback_accent = match selected.as_str() {
             "midnight" => "#8b98ff",
@@ -696,7 +823,7 @@ impl SplinterDots {
         }
     }
 
-    fn apply_style(&self, ctx: &egui::Context) {
+    fn apply_style(&self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
 
         let mut visuals = if self.value("DOTFILES_THEME") == "light" {
@@ -724,7 +851,7 @@ impl SplinterDots {
         visuals.selection.bg_fill = theme.accent;
         visuals.hyperlink_color = theme.accent;
 
-        let mut style = (*ctx.style()).clone();
+        let mut style = (**ui.style()).clone();
         style.visuals = visuals;
         style.spacing.item_spacing = Vec2::new(10.0, 8.0);
         style.spacing.button_padding = Vec2::new(14.0, 9.0);
@@ -737,11 +864,36 @@ impl SplinterDots {
         style
             .text_styles
             .insert(egui::TextStyle::Button, FontId::proportional(14.0));
-        ctx.set_style(style);
+        ui.set_style(style);
+    }
+
+    fn keybind_scheme_snapshot(&self) -> KeybindSchemes {
+        let mut schemes = self.keybind_schemes.clone();
+        schemes.schemes[schemes.active].bindings = self.keybinds.clone();
+        schemes
+    }
+
+    fn select_keybind_scheme(&mut self, index: usize) {
+        self.keybind_schemes.schemes[self.keybind_schemes.active].bindings = self.keybinds.clone();
+        self.keybind_schemes.active = index;
+        self.keybinds = self.keybind_schemes.schemes[index].bindings.clone();
+        self.selected_keybind = None;
+        self.confirm_delete_scheme = false;
+        self.update_keybind_dirty_status();
+    }
+
+    fn add_keybind_scheme(&mut self, duplicate: bool) {
+        let bindings = if duplicate { self.keybinds.clone() } else { default_keybinds() };
+        let base = if duplicate {
+            format!("{} copy", self.keybind_schemes.schemes[self.keybind_schemes.active].name)
+        } else { "New scheme".to_string() };
+        let name = self.keybind_schemes.unique_name(&base);
+        self.keybind_schemes.schemes.push(KeybindScheme { name, bindings });
+        self.select_keybind_scheme(self.keybind_schemes.schemes.len() - 1);
     }
 
     fn keybind_changes_pending(&self) -> bool {
-        self.keybinds != self.saved_keybinds
+        self.keybind_scheme_snapshot() != self.saved_keybind_schemes
     }
 
     fn update_keybind_dirty_status(&mut self) {
@@ -752,15 +904,14 @@ impl SplinterDots {
         }
     }
 
-    fn save_keybind_changes(&mut self) {
-        if !self.keybind_changes_pending() {
-            self.status = "No keybind changes to save".to_string();
-            return;
-        }
-
-        self.save_all();
-        self.saved_keybinds = self.keybinds.clone();
-        self.status = "Keybind changes saved".to_string();
+    fn persist_keybind_schemes(&mut self) -> Result<(), String> {
+        let schemes = self.keybind_scheme_snapshot();
+        schemes.validate()?;
+        write_keybinds(&self.paths, &self.values, &self.keybinds)?;
+        save_keybind_schemes(&self.paths, &schemes)?;
+        self.keybind_schemes = schemes.clone();
+        self.saved_keybind_schemes = schemes;
+        Ok(())
     }
 
     fn refresh_addons_if_needed(&mut self) {
@@ -774,25 +925,30 @@ impl SplinterDots {
     }
 
     fn refresh_after_addon_install(&mut self) {
-        self.values = read_settings(&self.paths);
-        self.keybinds = load_keybinds(&self.paths);
+        // Package availability is checked by the picker on every render. Rebuild
+        // font previews too, while preserving unsaved settings and selections.
+        self.loaded_ui_font.clear();
+        self.preview_font_families.clear();
+        self.status = "Installation finished. Fonts and available packages refreshed".to_string();
+    }
 
-        // Refresh visual/generated state that addons may affect.
-        if let Err(err) = write_quickshell_bar(&self.paths, &self.values) {
-            self.status = format!("Addon installed, but bar refresh failed: {err}");
-            return;
+    fn prepare_save(&mut self) -> Result<(), String> {
+        self.keybind_scheme_snapshot().validate()?;
+        if self.theme_draft.is_some() {
+            self.store_theme_draft()?;
+            self.theme_draft.as_ref().unwrap().put_values(&mut self.values);
         }
-
-        self.status = "Addon installed. Refreshed installed addons.".to_string();
+        self.sync_widget_toggles_from_layout();
+        Ok(())
     }
 
     fn save_all(&mut self) {
         let result = (|| -> Result<(), String> {
+            self.prepare_save()?;
             write_local_conf(&self.paths, &self.values)?;
-            save_keybinds(&self.paths, &self.keybinds)?;
+            self.persist_keybind_schemes()?;
             save_hypr_values(&self.paths, &self.hypr_values)?;
             write_colors(&self.paths, &self.values)?;
-            write_keybinds(&self.paths, &self.values, &self.keybinds)?;
             write_hyprland_settings(&self.paths, &self.hypr_schema, &self.hypr_values)?;
             write_quickshell_bar(&self.paths, &self.values)?;
             self.save_startup_choice()?;
@@ -801,11 +957,59 @@ impl SplinterDots {
 
         match result {
             Ok(()) => {
-                self.saved_keybinds = self.keybinds.clone();
-                self.status = "Saved".to_string();
+                self.saved_theme_on_open = self.value("DOTFILES_THEME");
+                self.theme_was_saved = true;
+                self.theme_draft = None;
+                self.restart_bar();
+                let bar_status = self.status.clone();
+                let reloaded = Command::new("hyprctl").arg("reload").output()
+                    .is_ok_and(|output| output.status.success());
+                run_quiet("makoctl", &["reload"]);
+                self.status = if bar_status.starts_with("Could not") {
+                    format!("Saved. {bar_status}")
+                } else if !reloaded {
+                    "Saved. Reload Hyprland to activate keybind changes".into()
+                } else { "Saved and applied".into() };
+                self.start_app_theme_sync();
             }
             Err(err) => {
                 self.status = format!("Save failed: {err}");
+            }
+        }
+    }
+
+    fn start_app_theme_sync(&mut self) {
+        if self.app_theme_sync.is_some() { return; }
+        let colors = app_theme_palette_args(&self.values);
+        let helper = self.paths.script("splinter-sync-theme");
+        let font = self.value("DOTFILES_UI_FONT");
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.app_theme_sync = Some(receiver);
+        self.status.push_str(". Updating app themes…");
+        std::thread::spawn(move || {
+            let result = Command::new("python3").arg(helper).args(colors).arg("--font").arg(font).output()
+                .map_err(err_string).and_then(|output| {
+                    if output.status.success() { Ok(()) }
+                    else { Err(String::from_utf8_lossy(&output.stderr).trim().to_string()) }
+                });
+            let _ = sender.send(result);
+        });
+    }
+
+    fn poll_app_theme_sync(&mut self, ctx: &egui::Context) {
+        let Some(receiver) = &self.app_theme_sync else { return; };
+        match receiver.try_recv() {
+            Ok(result) => {
+                self.app_theme_sync = None;
+                self.status = match result {
+                    Ok(()) => self.status.replace(". Updating app themes…", ". App themes synced; reopen browser and GTK apps to refresh colors"),
+                    Err(err) => format!("Settings saved. {err}"),
+                };
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(100)),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.app_theme_sync = None;
+                self.status = "Settings saved. Could not finish updating app themes".into();
             }
         }
     }
@@ -1111,56 +1315,8 @@ impl SplinterDots {
 
 
     fn install_style_package(&mut self, package: &str) {
-        let terminal = self.value("DOTFILES_TERMINAL");
-        let helper = self.paths.script("splinterdots-style");
-        let spicetify_setup = self.paths.script("splinter-setup-spicetify");
-
-        let package_list = package
-            .split_whitespace()
-            .filter(|pkg| !pkg.trim().is_empty())
-            .collect::<Vec<_>>();
-
-        if package_list.is_empty() {
-            self.status = "No package selected".to_string();
-            return;
-        }
-
-        let mut commands = package_list
-            .iter()
-            .map(|pkg| {
-                format!(
-                    "{} install {}",
-                    shell_quote(&helper.to_string_lossy()),
-                    shell_quote(pkg),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        if package_list.contains(&"spicetify-cli") || package_list.contains(&"spicetify") {
-            commands.push(shell_quote(&spicetify_setup.to_string_lossy()).to_string());
-        }
-
-        let command = format!(
-            "{}; mkdir -p \"${{XDG_CACHE_HOME:-$HOME/.cache}}/splinterdots\"; touch \"${{XDG_CACHE_HOME:-$HOME/.cache}}/splinterdots/addons-refresh\"; echo; read -rp 'Press enter to close...'",
-            commands.join(" && "),
-        );
-
-        let result = Command::new("sh")
-            .arg("-c")
-            .arg(format!(
-                "{} -e sh -c {}",
-                shell_quote(&terminal),
-                shell_quote(&command),
-            ))
-            .spawn();
-
-        self.status = match result {
-            Ok(_) => {
-                self.configure_addon_after_install(package);
-                format!("Opening installer for {package}")
-            }
-            Err(err) => format!("Could not open installer: {err}"),
-        };
+        // Pass arguments directly; the shared installer owns success/failure and refresh.
+        self.install_addon_package(package);
     }
 
     fn apply_style_pack(&mut self) {
@@ -1299,6 +1455,10 @@ misc               = 313244
         let terminal = self.value("DOTFILES_TERMINAL");
         let installer = self.paths.script("splinter-install-addon");
         let packages = package.split_whitespace().collect::<Vec<_>>();
+        if packages.is_empty() {
+            self.status = "No package selected".to_string();
+            return;
+        }
 
         let result = Command::new(&terminal)
             .arg("-e")
@@ -1314,6 +1474,7 @@ misc               = 313244
 
 
     fn preview_theme(&mut self, theme_name: &str) {
+        self.theme_draft = None;
         self.values
             .insert("DOTFILES_THEME".to_string(), theme_name.to_string());
 
@@ -1349,11 +1510,6 @@ misc               = 313244
             Ok(_) => "QML bar restarted".to_string(),
             Err(err) => format!("Could not restart QML bar: {err}"),
         };
-    }
-
-    fn save_and_restart_bar(&mut self) {
-        self.save_all();
-        self.restart_bar();
     }
 
     fn install_selected_icon_font(&mut self) {
@@ -1399,7 +1555,7 @@ misc               = 313244
                 .iter()
                 .find(|sc| sc.name.eq_ignore_ascii_case(name))
             {
-                rows.push((format_keybind_key(&sc.key), label.to_string()));
+                rows.push((format_keybind_key(sc), label.to_string()));
             }
         }
 
@@ -1412,17 +1568,17 @@ misc               = 313244
         rows
     }
 
-    fn sidebar(&mut self, ctx: &egui::Context) {
+    fn sidebar(&mut self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
 
-        egui::SidePanel::left("sidebar")
-            .exact_width(234.0)
+        egui::Panel::left("sidebar")
+            .exact_size(234.0)
             .frame(Frame {
                 fill: theme.sidebar,
                 inner_margin: Margin::same(18),
                 ..Default::default()
             })
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.label(
                         RichText::new("SplinterDots")
@@ -1524,7 +1680,10 @@ misc               = 313244
             stroke: Stroke::new(1.0, theme.border),
             ..Default::default()
         }
-        .show(ui, add_contents)
+        .show(ui, |ui| {
+            ui.visuals_mut().override_text_color = Some(theme.text);
+            add_contents(ui)
+        })
         .inner
     }
 
@@ -1540,7 +1699,10 @@ misc               = 313244
             stroke: Stroke::new(1.0, theme.border),
             ..Default::default()
         }
-        .show(ui, add_contents)
+        .show(ui, |ui| {
+            ui.visuals_mut().override_text_color = Some(theme.text);
+            add_contents(ui)
+        })
         .inner
     }
 
@@ -1769,9 +1931,55 @@ misc               = 313244
         );
         ui.add_space(14.0);
 
-        let panel_height = 430.0;
+        Self::card(&theme, ui, |ui| {
+            ui.label(RichText::new("Keybind schemes").strong());
+            let mut selected = self.keybind_schemes.active;
+            ui.horizontal_wrapped(|ui| {
+                egui::ComboBox::from_id_salt("keybind-scheme")
+                    .selected_text(&self.keybind_schemes.schemes[selected].name)
+                    .show_ui(ui, |ui| {
+                        for (index, scheme) in self.keybind_schemes.schemes.iter().enumerate() {
+                            ui.selectable_value(&mut selected, index, &scheme.name);
+                        }
+                    });
+                if selected != self.keybind_schemes.active {
+                    self.select_keybind_scheme(selected);
+                }
+                if ui.button("New scheme").clicked() { self.add_keybind_scheme(false); }
+                if ui.button("Duplicate").clicked() { self.add_keybind_scheme(true); }
+                if ui.add_enabled(self.keybind_schemes.schemes.len() > 1, egui::Button::new("Delete scheme")).clicked() {
+                    self.confirm_delete_scheme = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("Name");
+                let active = self.keybind_schemes.active;
+                if ui.text_edit_singleline(&mut self.keybind_schemes.schemes[active].name).changed() {
+                    self.update_keybind_dirty_status();
+                }
+            });
+            if self.confirm_delete_scheme {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("Delete this scheme and its bindings?");
+                    if ui.button("Confirm delete").clicked() {
+                        self.keybind_schemes.schemes.remove(self.keybind_schemes.active);
+                        self.keybind_schemes.active = 0;
+                        self.keybinds = self.keybind_schemes.schemes[0].bindings.clone();
+                        self.selected_keybind = None;
+                        self.confirm_delete_scheme = false;
+                        self.update_keybind_dirty_status();
+                    }
+                    if ui.button("Cancel").clicked() { self.confirm_delete_scheme = false; }
+                });
+            }
+            ui.label(RichText::new("Switching keeps your edits. Use Save changes at the bottom right to apply the selected scheme and save all schemes.").color(theme.muted));
+        });
+        ui.add_space(12.0);
 
-        ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        // Keep both panels within the viewport so a long list cannot scroll the
+        // selected binding's editor off-screen.
+        let panel_height = (ui.available_height() - 120.0).max(80.0);
+
             ui.columns(2, |columns| {
                 Frame {
                     fill: theme.card,
@@ -1781,17 +1989,29 @@ misc               = 313244
                     ..Default::default()
                 }
                 .show(&mut columns[0], |ui| {
-                    ui.set_min_height(panel_height);
+                    ScrollArea::vertical()
+                        .id_salt("keybind-list-scroll")
+                        .max_height(panel_height)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
 
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("Current keybinds").strong().size(18.0));
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.small_button("+ Mouse").clicked() {
+                                let mut binding = sc("New mouse binding", "mouse:275", "keyboard", "Return");
+                                binding.use_super = false;
+                                self.keybinds.push(binding);
+                                self.selected_keybind = Some(self.keybinds.len() - 1);
+                                self.update_keybind_dirty_status();
+                            }
                             if ui.small_button("+ Add").clicked() {
                                 self.keybinds.push(Keybind {
                                     name: "New keybind".to_string(),
                                     key: "N".to_string(),
                                     kind: "app".to_string(),
                                     value: self.value("DOTFILES_TERMINAL"),
+                                    use_super: true,
                                 });
                                 self.selected_keybind = Some(self.keybinds.len().saturating_sub(1));
                                 self.update_keybind_dirty_status();
@@ -1818,7 +2038,7 @@ misc               = 313244
                             let response = ui
                                 .add_sized(
                                     [ui.available_width(), 28.0],
-                                    egui::SelectableLabel::new(
+                                    egui::Button::selectable(
                                         selected,
                                         RichText::new(keybind_display(keybind)).size(14.0),
                                     ),
@@ -1835,15 +2055,12 @@ misc               = 313244
                     ui.add_space(6.0);
 
                     ui.horizontal_wrapped(|ui| {
-                        if primary_button(ui, &theme, if self.keybind_changes_pending() { "Save changes *" } else { "Saved" }).clicked() {
-                            self.save_keybind_changes();
-                        }
-
-                        if ui.button("Reset").clicked() {
+                        if ui.button("Reset scheme").clicked() {
                             self.keybinds = default_keybinds();
                             self.selected_keybind = None;
                             self.update_keybind_dirty_status();
                         }
+                    });
                     });
                 });
 
@@ -1855,7 +2072,11 @@ misc               = 313244
                     ..Default::default()
                 }
                 .show(&mut columns[1], |ui| {
-                    ui.set_min_height(panel_height);
+                    ScrollArea::vertical()
+                        .id_salt(("keybind-editor-scroll", self.keybind_schemes.active, self.selected_keybind))
+                        .max_height(panel_height)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
 
                     ui.label(RichText::new("Edit selected").strong().size(18.0));
                     ui.add_space(8.0);
@@ -1886,7 +2107,27 @@ misc               = 313244
 
                         ui.add_space(6.0);
 
-                        
+                        ui.label(RichText::new("Trigger (key or mouse button)").color(theme.muted));
+                        egui::ComboBox::from_id_salt("mouse-button-editor")
+                            .selected_text("Choose mouse button / wheel")
+                            .show_ui(ui, |ui| {
+                                for &(code, label) in MOUSE_BUTTONS {
+                                    if ui.selectable_label(false, label).clicked() {
+                                        let mut parts = combo_parts(&keybind.key);
+                                        parts.pop();
+                                        parts.push(code.to_string());
+                                        keybind.key = parts.join(" + ");
+                                        changed = true;
+                                    }
+                                }
+                            });
+                        ui.scope(|ui| {
+                            let widgets = &mut ui.visuals_mut().widgets;
+                            for state in [&mut widgets.inactive, &mut widgets.hovered, &mut widgets.active] {
+                                state.bg_stroke = Stroke::new(1.5, theme.text);
+                            }
+                            changed |= ui.checkbox(&mut keybind.use_super, "Require Super").changed();
+                        });
                         changed |= ui
                             .add_sized(
                                 [ui.available_width(), 34.0],
@@ -1895,7 +2136,7 @@ misc               = 313244
                             .changed();
 
                         ui.label(
-                            RichText::new("Examples: RETURN · D · SHIFT, S · CTRL, ALT, T")
+                            RichText::new("Examples: Return · SHIFT, S · CTRL + mouse:275 · mouse:277")
                                 .color(theme.muted)
                                 .size(11.0),
                         );
@@ -1907,10 +2148,14 @@ misc               = 313244
                             .selected_text(match keybind.kind.as_str() {
                                 "app" => "App / script",
                                 "command" => "Command",
-                                "hyprland" => "Hyprland action",
+                                "hyprland" | "desktop" => "Hyprland action",
+                                "keyboard" => "Keyboard shortcut",
                                 _ => "App / script",
                             })
                             .show_ui(ui, |ui| {
+                                changed |= ui
+                                    .selectable_value(&mut keybind.kind, "keyboard".to_string(), "Keyboard shortcut")
+                                    .changed();
                                 changed |= ui
                                     .selectable_value(&mut keybind.kind, "app".to_string(), "App / script")
                                     .changed();
@@ -1932,13 +2177,14 @@ misc               = 313244
                             )
                             .changed();
 
+                        ui.label(RichText::new(match keybind.kind.as_str() {
+                            "keyboard" => "Send a key or shortcut to the focused app: Return · Escape · CTRL + C · ALT + Left. Sends a tap per click.",
+                            "hyprland" | "desktop" => "Examples: killactive · fullscreen · workspace 2 · movewindow (drag) · resizewindow (drag)",
+                            _ => "Enter an app, script, or shell command to run.",
+                        }).color(theme.muted).size(11.0));
                         ui.add_space(18.0);
 
                         ui.horizontal(|ui| {
-                            if primary_button(ui, &theme, if self.keybind_changes_pending() { "Save changes *" } else { "Saved" }).clicked() {
-                                self.save_keybind_changes();
-                            }
-
                             if ui.button("Delete keybind").clicked() {
                                 delete = true;
                             }
@@ -1952,6 +2198,7 @@ misc               = 313244
                     } else if changed {
                         self.update_keybind_dirty_status();
                     }
+                    });
                 });
             });
 
@@ -1960,29 +2207,135 @@ misc               = 313244
             Self::card(&theme, ui, |ui| {
                 ui.label(RichText::new("Mouse controls").strong());
                 ui.label(
-                    RichText::new("Super + left mouse drag moves windows. Super + right mouse drag resizes windows.")
+                    RichText::new("Use + Mouse to add a button or wheel binding without Super. Add modifiers in the trigger field. Super + left/right drag moves/resizes windows unless overridden.")
                         .color(theme.muted),
                 );
             });
+    }
+
+    fn store_theme_draft(&mut self) -> Result<(), String> {
+        let mut draft = self.theme_draft.clone().ok_or("Create a theme first")?;
+        draft.name = draft.name.trim().to_string();
+        if draft.name.is_empty() { return Err("Give your theme a name first".into()); }
+        if self.custom_themes.iter().any(|t| t.id != draft.id && t.name.eq_ignore_ascii_case(&draft.name)) {
+            return Err("That name is already used. Choose another name".into());
+        }
+        if draft.id.is_empty() {
+            draft.id = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .map_err(err_string)?.as_nanos().to_string();
+        }
+        let mut themes = self.custom_themes.clone();
+        if let Some(existing) = themes.iter_mut().find(|t| t.id == draft.id) { *existing = draft.clone(); }
+        else { themes.push(draft.clone()); }
+        save_custom_theme_file(&self.paths.dotfiles_dir.join("themes.json"), &themes)?;
+        self.custom_themes = themes;
+        self.theme_draft = Some(draft);
+        Ok(())
+    }
+
+    fn use_custom_theme(&mut self, theme: &CustomTheme) {
+        theme.put_values(&mut self.values);
+        self.theme_draft = None;
+        self.status = format!("Theme '{}' selected. Save changes to apply it", theme.name);
+    }
+
+    fn custom_theme_editor(&mut self, ui: &mut egui::Ui, theme: &AppTheme) {
+        Self::card(theme, ui, |ui| {
+            ui.label(RichText::new("Your themes").strong().size(18.0));
+            ui.label("Create a look for SplinterDots, Kitty, GTK apps, Spotify, and your desktop.");
+            if ui.button("+ Create a theme").clicked() {
+                let mut draft = CustomTheme::starter(false);
+                draft.background = [theme.bg.r(), theme.bg.g(), theme.bg.b()];
+                draft.surface = [theme.card.r(), theme.card.g(), theme.card.b()];
+                draft.accent = [theme.accent.r(), theme.accent.g(), theme.accent.b()];
+                self.theme_draft = Some(draft);
+            }
+            for saved in self.custom_themes.clone() {
+                ui.horizontal_wrapped(|ui| {
+                    let selected = self.value("DOTFILES_THEME") == format!("custom:{}", saved.id);
+                    ui.label(RichText::new(&saved.name).strong());
+                    if selected { ui.label("In use"); }
+                    if ui.button("Use theme").clicked() { self.use_custom_theme(&saved); }
+                    if ui.button("Edit").clicked() { self.theme_draft = Some(saved.clone()); }
+                    if ui.button("Make a copy").clicked() {
+                        let mut copy = saved.clone(); copy.id.clear(); copy.name = format!("{} copy", saved.name);
+                        self.theme_draft = Some(copy);
+                    }
+                });
+            }
+            let Some(draft) = &mut self.theme_draft else { return; };
+            ui.separator();
+            ui.horizontal(|ui| { ui.label("Theme name"); ui.text_edit_singleline(&mut draft.name); });
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Start with:");
+                for (label, light) in [("Light colors", true), ("Dark colors", false)] {
+                    if ui.button(label).clicked() {
+                        let starter = CustomTheme::starter(light);
+                        draft.background = starter.background; draft.surface = starter.surface; draft.accent = starter.accent;
+                    }
+                }
+            });
+            ui.columns(2, |cols| {
+                for (label, color) in [("Background", &mut draft.background), ("Panels", &mut draft.surface), ("Highlight color", &mut draft.accent)] {
+                    cols[0].horizontal(|ui| { ui.color_edit_button_srgb(color); ui.label(label); });
+                }
+                cols[0].label("Click a color to change it. Text colors adjust automatically.");
+                let bg = Color32::from_rgb(draft.background[0], draft.background[1], draft.background[2]);
+                let panel = Color32::from_rgb(draft.surface[0], draft.surface[1], draft.surface[2]);
+                let accent = Color32::from_rgb(draft.accent[0], draft.accent[1], draft.accent[2]);
+                Frame::new().fill(bg).inner_margin(16.0).corner_radius(12).show(&mut cols[1], |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.label(RichText::new("Live preview").color(readable_text(draft.background)).strong());
+                    Frame::new().fill(panel).inner_margin(12.0).corner_radius(8).show(ui, |ui| {
+                        ui.label(RichText::new("Your everyday workspace").color(readable_text(draft.surface)));
+                        ui.label(RichText::new("A notification or settings panel").color(readable_text(draft.surface)));
+                        ui.add(egui::Button::new(RichText::new("Example button").color(readable_text(draft.accent))).fill(accent));
+                    });
+                });
+            });
+            if readable_text(draft.background) != readable_text(draft.surface) {
+                ui.label("Tip: similar brightness for Background and Panels makes desktop bar labels easier to read.");
+                if ui.button("Match panels to background").clicked() {
+                    let bg = Color32::from_rgb(draft.background[0], draft.background[1], draft.background[2]);
+                    let panel = mix_color(bg, readable_text(draft.background), 0.08);
+                    draft.surface = [panel.r(), panel.g(), panel.b()];
+                }
+            }
+            ui.label("Use Save changes at the bottom right to save and apply this theme.");
+            if ui.button("Discard draft").clicked() { self.theme_draft = None; }
         });
+        ui.add_space(12.0);
     }
 
     fn appearance_tab(&mut self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
+        ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+            self.custom_theme_editor(ui, &theme);
+            // Keep each card usable as the window or UI font size changes.
+            let card_width = (ui.text_style_height(&egui::TextStyle::Body) * 23.0).max(360.0);
+            if ui.available_width() >= card_width * 3.0 + 32.0 {
+                ui.columns(3, |cols| {
+                    self.appearance_theme_card(&mut cols[0], &theme);
+                    self.appearance_wallpaper_card(&mut cols[1], &theme);
+                    self.appearance_fonts_card(&mut cols[2], &theme);
+                });
+            } else if ui.available_width() >= card_width * 2.0 + 16.0 {
+                ui.columns(2, |cols| {
+                    self.appearance_theme_card(&mut cols[0], &theme);
+                    self.appearance_wallpaper_card(&mut cols[1], &theme);
+                });
+                self.appearance_fonts_card(ui, &theme);
+            } else {
+                self.appearance_theme_card(ui, &theme);
+                self.appearance_wallpaper_card(ui, &theme);
+                self.appearance_fonts_card(ui, &theme);
+            }
+        });
+    }
 
-        ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                ui.label(RichText::new("Appearance").strong().size(28.0));
-                ui.label(
-                    RichText::new("Themes, fonts, icons, cursor theme, and wallpapers.")
-                        .color(theme.muted),
-                );
-                ui.add_space(18.0);
-
-                ui.columns(3, |columns| {
-                    // COLUMN 1: Theme
-                    Self::card(&theme, &mut columns[0], |ui| {
+    fn appearance_theme_card(&mut self, ui: &mut egui::Ui, theme: &AppTheme) {
+        Self::card(theme, ui, |ui| {
                         ui.label(RichText::new("Theme").strong().size(18.0));
                         ui.label(
                             RichText::new("Choose the overall SplinterDots look.")
@@ -1992,11 +2345,8 @@ misc               = 313244
 
                         let current_theme = self.value("DOTFILES_THEME");
 
-                       egui::Grid::new("theme-pill-grid")
-                           .num_columns(2)
-                           .spacing([10.0, 10.0])
-                           .show(ui, |ui| {
-                               for (i, choice) in [
+                       ui.horizontal_wrapped(|ui| {
+                               for choice in [
                                    ("midnight", "Midnight"),
                                    ("catppuccin", "Catppuccin"),
                                    ("nord", "Nord"),
@@ -2007,7 +2357,6 @@ misc               = 313244
                                    ("dracula", "Dracula"),
                                ]
                                .iter()
-                               .enumerate()
                                {
                                    let selected = current_theme == choice.0;
 
@@ -2015,28 +2364,23 @@ misc               = 313244
                                        self.preview_theme(choice.0);
                                    }
 
-                                   if i % 2 == 1 {
-                                       ui.end_row();
-                                   }
                                }
-                           });
-
-                       ui.add_space(16.0);
-
-                        let mut accent = self.value("DOTFILES_ACCENT");
-                        labeled_text(ui, "Accent color", &mut accent);
-                        self.set_value("DOTFILES_ACCENT", accent);
-
+                        });
+                        ui.add_space(16.0);
+                        let color = parse_hex_color(&self.value("DOTFILES_ACCENT")).unwrap_or(theme.accent);
+                        let mut accent = [color.r(), color.g(), color.b()];
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label("Accent color");
+                            if ui.color_edit_button_srgb(&mut accent).changed() {
+                                self.set_value("DOTFILES_ACCENT", rgb_hex(accent));
+                            }
+                        });
                         ui.add_space(8.0);
+        });
+    }
 
-                        if primary_button(ui, &theme, "Apply theme").clicked() {
-                            self.save_all();
-                            self.status = "Theme updated".to_string();
-                        }
-                    });
-
-                    // COLUMN 2: Wallpaper
-                    Self::card(&theme, &mut columns[1], |ui| {
+    fn appearance_wallpaper_card(&mut self, ui: &mut egui::Ui, theme: &AppTheme) {
+        Self::card(theme, ui, |ui| {
                         ui.label(RichText::new("Wallpaper").strong().size(18.0));
                         ui.label(
                             RichText::new("Choose a folder and click a wallpaper preview.")
@@ -2048,7 +2392,7 @@ misc               = 313244
                         ui.label(RichText::new("Wallpaper folder").color(theme.muted));
 
                         if ui
-                            .text_edit_singleline(&mut wallpaper_dir)
+                            .add(egui::TextEdit::singleline(&mut wallpaper_dir).desired_width(ui.available_width()))
                             .on_hover_text("Example: ~/Pictures/Wallpapers")
                             .changed()
                         {
@@ -2076,22 +2420,17 @@ misc               = 313244
                                 self.refresh_wallpapers();
                             }
                         });
-
                         ui.add_space(8.0);
-
                         let current = self.value("DOTFILES_WALLPAPER");
                         if !current.trim().is_empty() {
-                            ui.label(
-                                RichText::new(format!("Current: {}", shorten_text(&current, 48)))
-                                    .color(theme.muted),
-                            );
+                            ui.label(RichText::new(format!("Current: {}", shorten_text(&current, 48))).color(theme.muted));
                         }
+                        self.wallpaper_grid(ui, theme);
+        });
+    }
 
-                        self.wallpaper_grid(ui, &theme);
-                    });
-
-                    // COLUMN 3: Fonts
-                    Self::card(&theme, &mut columns[2], |ui| {
+    fn appearance_fonts_card(&mut self, ui: &mut egui::Ui, theme: &AppTheme) {
+        Self::card(theme, ui, |ui| {
                         ui.label(RichText::new("Fonts and icon packs").strong().size(18.0));
                         ui.label(
                             RichText::new("Items marked as requiring download need to be installed separately.")
@@ -2153,9 +2492,7 @@ misc               = 313244
                                     self.apply_style_pack();
                                 }
                             });
-                    });
-                });
-            });
+        });
     }
 
     fn addons_tab(&mut self, ui: &mut egui::Ui) {
@@ -2453,29 +2790,12 @@ misc               = 313244
 
                 ui.add_space(8.0);
 
-                ui.menu_button("Add widget...", |ui| {
-                    ui.set_min_width(260.0);
-
-                    for choice in bar_widget_choices() {
-                        let already_added = widgets.iter().any(|item| item == choice.id);
-                        let label = if already_added {
-                            format!("✓ {}", choice.label)
-                        } else {
-                            choice.label.to_string()
-                        };
-
-                        if ui
-                            .add_enabled(!already_added, egui::Button::new(label))
-                            .clicked()
-                        {
-                            widgets.push(choice.id.to_string());
-                            self.set_value(&key, widgets.join(","));
-                            self.set_bool_value(choice.setting, true);
-                            self.status = format!("Added {} widget", choice.label);
-                            ui.close();
-                        }
-                    }
-                });
+                if let Some(choice) = bar_widget_picker(ui, zone, &widgets) {
+                    widgets.push(choice.id.to_string());
+                    self.set_value(&key, widgets.join(","));
+                    self.set_bool_value(choice.setting, true);
+                    self.status = format!("Added {} widget", choice.label);
+                }
             })
             .response;
 
@@ -2649,15 +2969,27 @@ misc               = 313244
         });
 
         ui.add_space(8.0);
-                    if primary_button(ui, &theme, "Save and restart bar").clicked() {
-                        self.sync_widget_toggles_from_layout();
-                        self.save_and_restart_bar();
-                    }
-
                     if ui.button("Restart bar only").clicked() {
                         self.restart_bar();
                     }
                 });
+            });
+
+            Self::card(&theme, ui, |ui| {
+                ui.label(RichText::new("Widget settings").strong().size(18.0));
+                for (label, key) in [
+                    ("Custom text", "DOTFILES_WIDGET_CUSTOM_TEXT_VALUE"),
+                    ("Custom script / shell command", "DOTFILES_WIDGET_CUSTOM_SCRIPT_COMMAND"),
+                    ("Updates command", "DOTFILES_WIDGET_UPDATES_COMMAND"),
+                ] {
+                    let mut value = self.value(key);
+                    labeled_text(ui, label, &mut value);
+                    self.set_value(key, value);
+                }
+                slider_value(ui, &theme, &mut self.values, "DOTFILES_WIDGET_CUSTOM_SCRIPT_INTERVAL", 1000.0, 60000.0);
+                slider_value(ui, &theme, &mut self.values, "DOTFILES_WIDGET_SPACER_WIDTH", 1.0, 300.0);
+                ui.label("Custom commands run as your user. Wallpaper buttons use the folder selected in Appearance.");
+                ui.label("Click Updates to refresh; Keyboard to cycle layouts; Notifications to restore or dismiss alerts.");
             });
 
             Self::card(&theme, ui, |ui| {
@@ -2752,38 +3084,33 @@ const WIDGET_TOGGLES: &[(&str, &str)] = &[
 ];
 
 impl eframe::App for SplinterDots {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.poll_app_theme_sync(ui.ctx());
         self.refresh_addons_if_needed();
-        self.sync_ui_font(ctx);
-        self.apply_style(ctx);
+        self.sync_ui_font(ui.ctx());
+        self.apply_style(ui);
         let theme = self.app_theme();
 
-        self.sidebar(ctx);
+        self.sidebar(ui);
 
-        egui::TopBottomPanel::bottom("bottom_save_bar")
+        egui::Panel::bottom("bottom_save_bar")
             .frame(Frame {
                 fill: theme.sidebar,
                 inner_margin: Margin::symmetric(22, 12),
                 stroke: Stroke::new(1.0, theme.border),
                 ..Default::default()
             })
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.checkbox(&mut self.no_show_on_startup, "Don't show on startup");
 
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if primary_button(
-                            ui,
-                            &theme,
-                            if self.keybind_changes_pending() {
-                                "Save changes *"
-                            } else {
-                                "Saved"
-                            },
-                        )
-                        .clicked()
+                        if ui.add_enabled_ui(self.app_theme_sync.is_none(), |ui| {
+                            primary_button(ui, &theme, "Save changes")
+                        }).inner.clicked()
                         {
                             self.save_all();
+                            ui.ctx().request_repaint();
                         }
 
                         if !self.status.is_empty() {
@@ -2808,7 +3135,10 @@ impl eframe::App for SplinterDots {
                 inner_margin: Margin::same(22),
                 ..Default::default()
             })
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
+                if self.value("DOTFILES_THEME").starts_with("custom:") {
+                    ui.visuals_mut().override_text_color = Some(readable_text(theme.bg.to_array()[..3].try_into().unwrap()));
+                }
                 self.page_header(ui);
 
                 match self.tab {
@@ -2930,21 +3260,35 @@ fn sc(name: &str, key: &str, kind: &str, value: &str) -> Keybind {
         key: key.to_string(),
         kind: kind.to_string(),
         value: value.to_string(),
+        use_super: true,
     }
 }
 
-fn load_keybinds(paths: &Paths) -> Vec<Keybind> {
-    let Ok(content) = fs::read_to_string(&paths.keybinds_json) else {
-        return default_keybinds();
-    };
-
-    serde_json::from_str::<Vec<Keybind>>(&content).unwrap_or_else(|_| default_keybinds())
+fn decode_keybind_schemes(content: &str) -> Result<KeybindSchemes, String> {
+    // Existing installations store a plain list. Preserve it as the Default scheme.
+    if let Ok(bindings) = serde_json::from_str::<Vec<Keybind>>(content) {
+        return Ok(KeybindSchemes::from_bindings(bindings));
+    }
+    let schemes: KeybindSchemes = serde_json::from_str(content).map_err(err_string)?;
+    if schemes.schemes.is_empty() || schemes.active >= schemes.schemes.len() {
+        return Err("Invalid keybind scheme selection".to_string());
+    }
+    Ok(schemes)
 }
 
-fn save_keybinds(paths: &Paths, keybinds: &[Keybind]) -> Result<(), String> {
+fn load_keybind_schemes(paths: &Paths) -> KeybindSchemes {
+    fs::read_to_string(&paths.keybinds_json).ok()
+        .and_then(|content| decode_keybind_schemes(&content).ok())
+        .unwrap_or_else(|| KeybindSchemes::from_bindings(default_keybinds()))
+}
+
+fn save_keybind_schemes(paths: &Paths, schemes: &KeybindSchemes) -> Result<(), String> {
+    schemes.validate()?;
     ensure_dir(&paths.dotfiles_dir)?;
-    let text = serde_json::to_string_pretty(keybinds).map_err(err_string)?;
-    fs::write(&paths.keybinds_json, text + "\n").map_err(err_string)
+    let text = serde_json::to_string_pretty(schemes).map_err(err_string)?;
+    let temporary = paths.keybinds_json.with_extension("json.tmp");
+    fs::write(&temporary, text + "\n").map_err(err_string)?;
+    fs::rename(temporary, &paths.keybinds_json).map_err(err_string)
 }
 
 fn load_hypr_schema(paths: &Paths) -> Vec<HyprOption> {
@@ -3007,27 +3351,16 @@ fn write_keybinds(
         format!("local menu = {:?}", value_or(values, "DOTFILES_APP_LAUNCHER")),
         format!("local browser = {:?}", value_or(values, "DOTFILES_BROWSER")),
         String::new(),
-        "hl.bind(mainMod .. \" + mouse:272\", hl.dsp.window.drag(), { mouse = true })".to_string(),
-        "hl.bind(mainMod .. \" + mouse:273\", hl.dsp.window.resize(), { mouse = true })".to_string(),
-        String::new(),
     ];
 
-    for keybind in keybinds {
-        let key = lua_key_combo(&keybind.key);
-        if keybind.kind == "app" {
-            lines.push(format!(
-                "hl.bind({key}, hl.dsp.exec_cmd({}))",
-                lua_app_command(&keybind.value)
-            ));
-        } else {
-            let dispatcher = match keybind.value.as_str() {
-                "killactive" => "hl.dsp.window.close()".to_string(),
-                "fullscreen" => "hl.dsp.window.fullscreen()".to_string(),
-                "togglefloating" => "hl.dsp.window.float({ action = \"toggle\" })".to_string(),
-                value => format!("hl.dsp.exec_cmd({:?})", format!("hyprctl dispatch {value}")),
-            };
-            lines.push(format!("hl.bind({key}, {dispatcher})"));
+    for (button, action) in [("mouse:272", "movewindow"), ("mouse:273", "resizewindow")] {
+        let default = sc("Default mouse drag", button, "hyprland", action);
+        if !keybinds.iter().any(|binding| trigger_parts(binding) == trigger_parts(&default)) {
+            lines.push(render_keybind(&default)?);
         }
+    }
+    for keybind in keybinds {
+        lines.push(render_keybind(keybind)?);
     }
 
     lines.extend([
@@ -3064,16 +3397,75 @@ fn lua_app_command(value: &str) -> String {
     }
 }
 
-fn lua_key_combo(key: &str) -> String {
-    let key = key.trim();
-    if key.to_uppercase().starts_with("SHIFT,") {
-        format!(
-            "mainMod .. \" + SHIFT + {}\"",
-            key.split_once(',').map(|(_, k)| k.trim()).unwrap_or("")
-        )
-    } else {
-        format!("mainMod .. \" + {key}\"")
+fn combo_parts(value: &str) -> Vec<String> {
+    value.split([',', '+'])
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(|part| match part.to_ascii_uppercase().as_str() {
+            "SUPER" | "META" | "WIN" | "$MOD" | "MOD" => "SUPER".to_string(),
+            "CTRL" | "CONTROL" => "CTRL".to_string(),
+            "SHIFT" => "SHIFT".to_string(),
+            "ALT" => "ALT".to_string(),
+            "ENTER" | "RETURN" => "Return".to_string(),
+            "SPACE" => "space".to_string(),
+            _ => part.to_string(),
+        })
+        .collect()
+}
+
+fn trigger_parts(binding: &Keybind) -> Vec<String> {
+    let mut parts = combo_parts(&binding.key);
+    if binding.use_super && !parts.iter().any(|part| part == "SUPER") {
+        parts.insert(0, "SUPER".to_string());
     }
+    parts
+}
+
+fn validate_combo(parts: &[String]) -> Result<(), String> {
+    let Some((key, mods)) = parts.split_last() else {
+        return Err("Enter a trigger or keyboard shortcut".to_string());
+    };
+    let is_modifier = |part: &str| matches!(part, "SUPER" | "CTRL" | "SHIFT" | "ALT");
+    if is_modifier(key) || key.chars().any(char::is_whitespace) || key.chars().any(char::is_control)
+        || mods.iter().any(|part| !is_modifier(part)) {
+        return Err("Use modifiers followed by one key/button, e.g. CTRL + mouse:275".to_string());
+    }
+    Ok(())
+}
+
+fn render_keybind(binding: &Keybind) -> Result<String, String> {
+    let parts = trigger_parts(binding);
+    validate_combo(&parts).map_err(|err| format!("{}: {err}", binding.name))?;
+    let key = format!("{:?}", parts.join(" + "));
+    let value = binding.value.trim();
+    if value.is_empty() {
+        return Err(format!("{}: Enter an action", binding.name));
+    }
+    let mut flags = "";
+    let dispatcher = match binding.kind.as_str() {
+        "app" => format!("hl.dsp.exec_cmd({})", lua_app_command(value)),
+        "command" => format!("hl.dsp.exec_cmd({value:?})"),
+        "keyboard" => {
+            let shortcut = combo_parts(value);
+            validate_combo(&shortcut).map_err(|err| format!("{}: {err}", binding.name))?;
+            let (target, mods) = shortcut.split_last().unwrap();
+            format!("hl.dsp.send_shortcut({{ mods = {:?}, key = {target:?} }})", mods.join(" "))
+        }
+        _ => match value {
+            "killactive" => "hl.dsp.window.close()".to_string(),
+            "fullscreen" => "hl.dsp.window.fullscreen()".to_string(),
+            "togglefloating" => "hl.dsp.window.float({ action = \"toggle\" })".to_string(),
+            "movewindow" | "resizewindow" => {
+                if !parts.last().unwrap().starts_with("mouse:") {
+                    return Err(format!("{}: Window dragging requires a mouse button", binding.name));
+                }
+                flags = ", { mouse = true }";
+                if value == "movewindow" { "hl.dsp.window.drag()" } else { "hl.dsp.window.resize()" }.to_string()
+            }
+            _ => format!("hl.dsp.exec_cmd({:?})", format!("hyprctl dispatch {value}")),
+        },
+    };
+    Ok(format!("hl.bind({key}, {dispatcher}{flags})"))
 }
 
 fn write_hyprland_settings(
@@ -3227,6 +3619,17 @@ struct Palette {
 fn theme_palette(values: &HashMap<String, String>) -> Palette {
     let selected = value_or(values, "DOTFILES_THEME");
     let accent = value_or(values, "DOTFILES_ACCENT");
+    if selected.starts_with("custom:") {
+        let theme = custom_app_theme(values);
+        let hex = |c: Color32| rgb_hex([c.r(), c.g(), c.b()]);
+        return Palette {
+            accent: hex(theme.accent), background: hex(theme.bg), surface: hex(theme.panel),
+            text: hex(readable_text([theme.bg.r(), theme.bg.g(), theme.bg.b()])),
+            muted: hex(mix_color(theme.bg, readable_text([theme.bg.r(), theme.bg.g(), theme.bg.b()]), 0.75)),
+            inactive_border: hex(theme.border), bar_rgb: hex(theme.bg).trim_start_matches('#').into(),
+            active_text: hex(readable_text([theme.accent.r(), theme.accent.g(), theme.accent.b()])),
+        };
+    }
 
     match selected.as_str() {
         "light" => Palette {
@@ -3310,6 +3713,12 @@ fn theme_palette(values: &HashMap<String, String>) -> Palette {
             active_text: "#11111b".to_string(),
         },
     }
+}
+
+fn app_theme_palette_args(values: &HashMap<String, String>) -> Vec<String> {
+    let palette = theme_palette(values);
+    vec![palette.background, palette.surface, palette.text, palette.muted,
+         palette.accent, palette.inactive_border, palette.active_text]
 }
 
 fn write_colors(paths: &Paths, values: &HashMap<String, String>) -> Result<(), String> {
@@ -3406,6 +3815,7 @@ fn write_quickshell_bar(paths: &Paths, values: &HashMap<String, String>) -> Resu
 
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Wayland
 import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
@@ -3595,9 +4005,23 @@ fn bar_widget_qml(
         "battery" => command_text_qml(id, palette, height, radius, font_size, icon_font, "for bat in /sys/class/power_supply/*; do [ \"$(cat \"$bat/type\" 2>/dev/null)\" = Battery ] || continue; capacity=$(cat \"$bat/capacity\" 2>/dev/null) || continue; status=$(cat \"$bat/status\" 2>/dev/null); if [ \"$status\" = Charging ]; then icon='󰂄'; else icon='󰁹'; fi; printf '%s %s%%' \"$icon\" \"$capacity\"; break; done", status_ms, None),
         "brightness" => command_text_qml(id, palette, height, radius, font_size, icon_font, "brightnessctl -m 2>/dev/null | awk -F, '{print \"󰃠 \" $4}'", status_ms, None),
         "updates" => {
-            let command = value_or(values, "DOTFILES_WIDGET_UPDATES_COMMAND");
-            command_text_qml(id, palette, height, radius, font_size, icon_font, &format!("upd=$({}); [ -n \"$upd\" ] && [ \"$upd\" != \"0\" ] && printf '󰚰 %s' \"$upd\"", command), status_ms * 4, None)
+            let command = widget_action(&["updates", &value_or(values, "DOTFILES_WIDGET_UPDATES_COMMAND")]);
+            interactive_text_qml(id, palette, height, radius, font_size, icon_font, &command, 900_000, None)
         }
+        "notifications" => interactive_text_qml(id, palette, height, radius, font_size, icon_font,
+            &widget_action(&["notifications"]), status_ms.max(1500), Some(&widget_action(&["notification-menu"]))),
+        "idle_inhibitor" => idle_inhibitor_qml(id, palette, height, radius, font_size, icon_font),
+        "wallpaper_prev" | "wallpaper_shuffle" | "wallpaper_next" => {
+            let action = widget.strip_prefix("wallpaper_").unwrap_or("shuffle");
+            let label = match action { "prev" => "◀", "next" => "▶", _ => "Shuffle" };
+            command_button_qml(id, palette, height, radius, font_size, icon_font, label, &widget_action(&["wallpaper", action]))
+        }
+        "custom_text" => static_text_qml(id, palette, height, radius, font_size, icon_font,
+            &value_or(values, "DOTFILES_WIDGET_CUSTOM_TEXT_VALUE")),
+        "custom_script" => command_text_qml(id, palette, height, radius, font_size, icon_font,
+            &widget_action(&["script", &value_or(values, "DOTFILES_WIDGET_CUSTOM_SCRIPT_COMMAND")]),
+            value_or(values, "DOTFILES_WIDGET_CUSTOM_SCRIPT_INTERVAL").parse::<i64>().unwrap_or(5000).clamp(1000, 3600000), None),
+        "spacer" => format!("Item {{ width: {}; height: 1 }}", value_or(values, "DOTFILES_WIDGET_SPACER_WIDTH").parse::<i64>().unwrap_or(16).clamp(1, 300)),
 
         "system" => command_text_qml(id, palette, height, radius, font_size, icon_font,
             &format!("python -c {} {}", shell_escape(include_str!("widgets/system.py")), shell_escape(&value_or(values, "DOTFILES_WIDGET_DISK_PATH"))), status_ms.max(1000), None),
@@ -3605,7 +4029,7 @@ fn bar_widget_qml(
         "media_controls" | "media" | "media_controller" | "media-controller" | "media_prev" | "media-play" | "media-next" => media_controls_qml(id, palette, height, radius, font_size, icon_font),
 
         "launcher" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰀻", "wofi --show drun"),
-        "power" => command_button_qml(id, palette, height, radius, font_size, icon_font, "⏻", "wlogout || systemctl poweroff"),
+        "power" => command_button_qml(id, palette, height, radius, font_size, icon_font, "⏻", &widget_action(&["power"])),
         "lock" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "hyprlock || loginctl lock-session"),
         "screenshot" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰄀", "splinter-screenshot area"),
         "wallpaper" => command_button_qml(id, palette, height, radius, font_size, icon_font, "", "dir=\"$HOME/Pictures/Wallpapers\"; file=$(find \"$dir\" -maxdepth 1 -type f | shuf -n1); [ -n \"$file\" ] && splinter-wallpaper \"$file\""),
@@ -3615,10 +4039,69 @@ fn bar_widget_qml(
         "weather" => command_text_qml(id, palette, height, radius, font_size, icon_font, "curl -fsS 'wttr.in/?format=1' 2>/dev/null", 900_000, None),
         "notes" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰎞", "xdg-open \"$HOME/Notes\""),
         "todo" => command_button_qml(id, palette, height, radius, font_size, icon_font, "󰄬", "xdg-open \"$HOME/todo.txt\""),
-        "keyboard" => command_text_qml(id, palette, height, radius, font_size, icon_font, "hyprctl devices -j 2>/dev/null | grep -m1 -o '\"active_keymap\":\"[^\"]*' | cut -d'\"' -f4 | sed 's/^/ /'", status_ms, None),
+        "keyboard" => interactive_text_qml(id, palette, height, radius, font_size, icon_font,
+            &widget_action(&["keyboard"]), status_ms, Some(&widget_action(&["keyboard-next"]))),
 
         _ => command_text_qml(id, palette, height, radius, font_size, icon_font, &format!("printf {}", shell_escape(widget)), status_ms, None),
     }
+}
+
+fn widget_action(args: &[&str]) -> String {
+    format!("python3 -c {} {}", shell_escape(include_str!("widgets/actions.py")),
+        args.iter().map(|arg| shell_escape(arg)).collect::<Vec<_>>().join(" "))
+}
+
+fn interactive_text_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_size: i64,
+    icon_font: &str, command: &str, interval: i64, action: Option<&str>) -> String {
+    let mut qml = command_text_qml(id, palette, height, radius, font_size, icon_font, command, interval, None);
+    qml = qml.replace("text: \"\"", "text: \"…\"");
+    let status = qml_id(id, "proc");
+    let click = qml_id(id, "action");
+    let controls = if let Some(action) = action {
+        format!(r#"
+              MouseArea {{ anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                onClicked: {{ if (!{click}.running) {click}.running = true }}
+              }}
+              Process {{
+                id: {click}
+                command: ["sh", "-c", {command}]
+                onExited: {{ if (!{status}.running) {status}.running = true }}
+              }}
+"#, command=json_string(action))
+    } else {
+        format!("MouseArea {{ anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: {{ if (!{status}.running) {status}.running = true }} }}")
+    };
+    let end = qml.rfind('}').unwrap();
+    qml.insert_str(end, &controls);
+    qml
+}
+
+fn static_text_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_size: i64,
+    icon_font: &str, text: &str) -> String {
+    format!(r#"Rectangle {{
+      width: {id}.implicitWidth + 20; height: {height}; anchors.verticalCenter: parent.verticalCenter
+      radius: {radius}; color: "{surface}"
+      Text {{ id: {id}; anchors.centerIn: parent; text: {text}; textFormat: Text.PlainText
+        color: "{color}"; font.pixelSize: {font_size}; font.family: {font}
+      }}
+    }}"#, id=qml_id(id,"customText"), height=(height-8).max(22), radius=(radius-4).max(6),
+        surface=palette.surface, color=palette.text, text=json_string(text), font=json_string(icon_font))
+}
+
+fn idle_inhibitor_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_size: i64, icon_font: &str) -> String {
+    let name = qml_id(id, "idle");
+    format!(r#"Rectangle {{
+      id: {name}
+      property bool active: false
+      width: 102; height: {height}; anchors.verticalCenter: parent.verticalCenter
+      radius: {radius}; color: active ? "{accent}" : "{surface}"
+      Text {{ anchors.centerIn: parent; text: {name}.active ? "Keep awake" : "Idle allowed"
+        color: {name}.active ? "{active_text}" : "{text}"; font.pixelSize: {font_size}; font.family: {font}
+      }}
+      IdleInhibitor {{ window: {name}.QsWindow.window; enabled: {name}.active }}
+      MouseArea {{ anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: {name}.active = !{name}.active }}
+    }}"#, height=(height-8).max(22), radius=(radius-4).max(6), accent=palette.accent,
+       surface=palette.surface, text=palette.text, active_text=palette.active_text, font=json_string(icon_font))
 }
 
 fn window_title_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_size: i64) -> String {
@@ -3762,28 +4245,25 @@ fn easyeffects_widget_qml(
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                  __TOGGLE_ID__.running = false
-                  __TOGGLE_ID__.running = true
+                  if (!__TOGGLE_ID__.running) __TOGGLE_ID__.running = true
                 }
               }
 
               Process {
                 id: __STATUS_ID__
-                command: ["sh", "-c", "pgrep -x easyeffects >/dev/null && printf 1 || printf 0"]
+                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then QT_QPA_PLATFORM=offscreen timeout 2s easyeffects --bypass 3 2>/dev/null; else printf 1; fi"]
                 running: true
                 stdout: StdioCollector {
-                  onStreamFinished: __ID__.effectsEnabled = this.text.trim() === "1"
+                  onStreamFinished: __ID__.effectsEnabled = this.text.trim() === "2"
                 }
               }
 
               Process {
                 id: __TOGGLE_ID__
-                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then pkill -x easyeffects; else easyeffects --service-mode >/dev/null 2>&1 & fi; sleep 0.4; printf done"]
-                stdout: StdioCollector {
-                  onStreamFinished: {
-                    __STATUS_ID__.running = false
-                    __STATUS_ID__.running = true
-                  }
+                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then QT_QPA_PLATFORM=offscreen timeout 3s easyeffects --hide-window --bypass-toggle; else easyeffects --service-mode --hide-window >/dev/null 2>&1 & for attempt in 1 2 3 4 5 6 7 8 9 10; do sleep 0.3; state=$(QT_QPA_PLATFORM=offscreen timeout 1s easyeffects --bypass 3 2>/dev/null); case $state in 1|2) QT_QPA_PLATFORM=offscreen timeout 3s easyeffects --hide-window --bypass 2; exit $?;; esac; done; exit 1; fi"]
+                onExited: {
+                  __STATUS_ID__.running = false
+                  __STATUS_ID__.running = true
                 }
               }
 
@@ -4930,100 +5410,30 @@ fn theme_label(theme: &str) -> &'static str {
     }
 }
 
-fn install_global_egui_font(ctx: &egui::Context, preferred_font: &str) {
-    let mut fonts = egui::FontDefinitions::default();
-
-    let candidates = font_file_candidates(preferred_font);
-
-    for path in candidates {
-        let Ok(bytes) = fs::read(&path) else {
-            continue;
-        };
-
-        let font_id = format!("splinter-ui-font-{}", path.display());
-
-        fonts.font_data.insert(
-            font_id.clone(),
-            FontData::from_owned(bytes).into(),
-        );
-
-        fonts
-            .families
-            .entry(FontFamily::Proportional)
-            .or_default()
-            .insert(0, font_id.clone());
-
-        fonts
-            .families
-            .entry(FontFamily::Monospace)
-            .or_default()
-            .insert(0, font_id);
-
-        ctx.set_fonts(fonts);
-        return;
+fn parse_fontconfig_match(preferred: &str, output: &str) -> Option<(PathBuf, u32)> {
+    let mut lines = output.lines();
+    let families = lines.next()?;
+    let wanted = normalize_font_name(preferred);
+    // fc-match silently substitutes another family for missing fonts. Never
+    // present that substitute as a preview of the requested family.
+    if !families.split(',').any(|family| normalize_font_name(family.trim()) == wanted) {
+        return None;
     }
+    let path = lines.next()?.trim();
+    if path.is_empty() { return None; }
+    let index = lines.next()?.trim().parse().ok()?;
+    Some((PathBuf::from(path), index))
 }
 
-fn font_file_candidates(preferred_font: &str) -> Vec<PathBuf> {
-    let wanted = normalize_font_name(preferred_font);
-    let mut candidates = Vec::new();
-
-    for dir in font_search_dirs() {
-        collect_font_candidates(&dir, &wanted, &mut candidates);
-    }
-
-    candidates
-}
-
-fn font_search_dirs() -> Vec<PathBuf> {
-    let mut dirs = vec![
-        PathBuf::from("/usr/share/fonts"),
-        PathBuf::from("/usr/local/share/fonts"),
-    ];
-
-    if let Some(home) = env::var_os("HOME").map(PathBuf::from) {
-        dirs.push(home.join(".local/share/fonts"));
-        dirs.push(home.join(".fonts"));
-    }
-
-    dirs
-}
-
-fn collect_font_candidates(dir: &Path, wanted: &str, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-
-        if path.is_dir() {
-            collect_font_candidates(&path, wanted, out);
-            continue;
-        }
-
-        let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
-            continue;
-        };
-
-        let ext = ext.to_ascii_lowercase();
-        if ext != "ttf" && ext != "otf" {
-            continue;
-        }
-
-        let name = normalize_font_name(
-            &path.file_stem()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default(),
-        );
-
-        if name.contains(wanted)
-            || wanted.contains(&name)
-            || name.contains(&wanted.replace("nerdfont", ""))
-        {
-            out.push(path);
-        }
-    }
+fn load_font_family(preferred: &str) -> Option<FontData> {
+    let output = Command::new("fc-match")
+        .args(["-f", "%{family}\n%{file}\n%{index}\n", &format!("{preferred}:style=Regular")])
+        .output().ok()?;
+    if !output.status.success() { return None; }
+    let (path, index) = parse_fontconfig_match(preferred, &String::from_utf8_lossy(&output.stdout))?;
+    let mut data = FontData::from_owned(fs::read(path).ok()?);
+    data.index = index;
+    Some(data)
 }
 
 fn normalize_font_name(name: &str) -> String {
@@ -5195,28 +5605,25 @@ fn style_choice_grid(
     let mut package_to_install = None;
     let is_font_picker = title.to_ascii_lowercase().contains("font");
 
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(title).strong().size(16.0));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.label(
-                RichText::new("Click a card to select it")
-                    .color(theme.muted)
-                    .size(11.0),
-            );
-        });
-    });
+    ui.label(RichText::new(title).strong().size(16.0));
+    ui.label(RichText::new("Select a style or install it first").color(theme.muted).size(11.0));
+    let columns = if !is_font_picker && ui.available_width() >= 480.0 { 2 } else { 1 };
+    let content_width = ((ui.available_width() - 8.0 * (columns - 1) as f32)
+        / columns as f32 - 28.0).max(1.0);
 
     ui.add_space(8.0);
 
-    egui::Grid::new(format!("style-choice-grid-{title}"))
-        .num_columns(if is_font_picker { 1 } else { 2 })
+    egui::Grid::new(("style-choice-grid", title, content_width.round() as u32))
+        .num_columns(columns)
+        .min_col_width(0.0)
+        .max_col_width(content_width + 28.0)
         .spacing([8.0, 8.0])
         .show(ui, |ui| {
             for (index, choice) in choices.iter().enumerate() {
                 let selected = current == choice.value;
                 let installed = choice.package.map(is_package_installed).unwrap_or(true);
 
-                let response = Frame {
+                Frame {
                     fill: if selected {
                         theme.card_hover
                     } else {
@@ -5231,34 +5638,34 @@ fn style_choice_grid(
                     ..Default::default()
                 }
                 .show(ui, |ui| {
-                    if is_font_picker {
-                        ui.set_min_width(ui.available_width() - 10.0);
-                        ui.set_min_height(92.0);
-                    } else {
-                        ui.set_min_width(200.0);
-                    }
+                    ui.set_width(content_width);
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                    if is_font_picker { ui.set_min_height(92.0); }
 
-                    ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
                         ui.vertical(|ui| {
-                            ui.label(
-                                RichText::new(choice.label)
-                                    .strong()
-                                    .size(15.0)
-                                    .color(theme.text),
-                            );
+                            if ui.selectable_label(selected,
+                                RichText::new(choice.label).strong().size(15.0).color(theme.text)
+                            ).clicked() {
+                                *current = choice.value.to_string();
+                            }
 
                             if is_font_picker {
                                 ui.add_space(5.0);
-                                let preview_family = preview_font_families
-                                    .get(choice.value)
-                                    .cloned()
-                                    .unwrap_or(FontFamily::Proportional);
-
-                                ui.label(
-                                    RichText::new("AaBbCc 123")
-                                        .font(FontId::new(17.0, preview_family))
-                                        .color(theme.text),
-                                );
+                                if let Some(family) = preview_font_families.get(choice.value) {
+                                    ui.label(
+                                        RichText::new("The quick brown fox
+Aa Bb Gg Mm Ww 0123 Il1 O0")
+                                            .font(FontId::new(22.0, family.clone()))
+                                            .color(theme.text),
+                                    );
+                                } else {
+                                    ui.label(RichText::new(if installed {
+                                        "Preview unavailable — font family not found"
+                                    } else {
+                                        "Install to preview"
+                                    }).color(theme.muted).size(12.0));
+                                }
                             }
 
                             if let Some(package) = choice.package {
@@ -5272,7 +5679,7 @@ fn style_choice_grid(
                             }
                         });
 
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.horizontal_wrapped(|ui| {
                             if selected {
                                 ui.label(
                                     RichText::new("Selected")
@@ -5280,7 +5687,8 @@ fn style_choice_grid(
                                         .size(11.0)
                                         .strong(),
                                 );
-                            } else if !installed {
+                            }
+                            if !installed {
                                 if ui.button("Install").clicked() {
                                     package_to_install = choice.package;
                                 }
@@ -5293,17 +5701,9 @@ fn style_choice_grid(
                             }
                         });
                     });
-                })
-                .response
-                .interact(egui::Sense::click());
+                });
 
-                if response.clicked() {
-                    *current = choice.value.to_string();
-                }
-
-                if !is_font_picker && index % 2 == 1 {
-                    ui.end_row();
-                } else if is_font_picker {
+                if (index + 1) % columns == 0 {
                     ui.end_row();
                 }
             }
@@ -5520,6 +5920,106 @@ struct BarWidgetChoice {
 }
 
 
+fn matching_bar_widgets(query: &str) -> Vec<&'static BarWidgetChoice> {
+    let query = query.trim().to_lowercase();
+    let mut choices: Vec<_> = bar_widget_choices().iter()
+        .filter(|choice| choice.label.to_lowercase().starts_with(&query)).collect();
+    choices.sort_by_cached_key(|choice| choice.label.to_lowercase());
+    choices
+}
+
+#[derive(Clone, Default)]
+struct WidgetPickerState {
+    open: bool,
+    prefix: String,
+    typed_at: f64,
+    highlighted: Option<String>,
+}
+
+impl WidgetPickerState {
+    fn type_letters(&mut self, text: &str, now: f64, added: &[String]) {
+        let text = text.to_lowercase();
+        let cycle = self.prefix == text && text.chars().count() == 1 && now - self.typed_at < 1.0;
+        if now - self.typed_at >= 1.0 || cycle { self.prefix.clear(); }
+        self.prefix.push_str(&text);
+        self.typed_at = now;
+        let matches: Vec<_> = matching_bar_widgets(&self.prefix).into_iter()
+            .filter(|c| !added.iter().any(|w| w == c.id)).collect();
+        let index = if cycle {
+            matches.iter().position(|c| self.highlighted.as_deref() == Some(c.id))
+                .map(|i| (i + 1) % matches.len()).unwrap_or(0)
+        } else { 0 };
+        self.highlighted = matches.get(index).map(|c| c.id.to_string());
+    }
+}
+
+fn bar_widget_picker(ui: &mut egui::Ui, zone: &str, widgets: &[String]) -> Option<&'static BarWidgetChoice> {
+    let mut selected = None;
+    ui.push_id(("widget-picker", zone), |ui| {
+        let state_id = ui.id().with("keyboard-selection");
+        let mut state = ui.data_mut(|data| data.get_temp::<WidgetPickerState>(state_id).unwrap_or_default());
+        let response = ui.menu_button("Add widget...", |ui| {
+            ui.set_min_width(260.0);
+            if !state.open { state = WidgetPickerState::default(); }
+            let previous = state.highlighted.clone();
+            let choices = matching_bar_widgets("");
+            let now = ui.input(|input| input.time);
+            // Consume keys only while this menu is open, without a text field.
+            let events = ui.input_mut(|input| {
+                let mut events = Vec::new();
+                input.events.retain(|event| {
+                    let handled = matches!(event, egui::Event::Text(_)) || matches!(event,
+                        egui::Event::Key { key: egui::Key::Enter | egui::Key::Backspace | egui::Key::ArrowDown | egui::Key::ArrowUp, .. });
+                    if handled { events.push(event.clone()); }
+                    !handled
+                });
+                events
+            });
+            for event in events {
+                match event {
+                    egui::Event::Text(text) => state.type_letters(&text, now, widgets),
+                    egui::Event::Key { key: egui::Key::Enter, pressed: true, .. } if state.open => {
+                        selected = choices.iter().copied().find(|c| state.highlighted.as_deref() == Some(c.id));
+                        if selected.is_some() { ui.close(); }
+                    }
+                    egui::Event::Key { key: egui::Key::Backspace, pressed: true, .. } => {
+                        state.prefix.pop();
+                        state.highlighted = matching_bar_widgets(&state.prefix).into_iter()
+                            .find(|c| !widgets.iter().any(|w| w == c.id)).map(|c| c.id.to_string());
+                    }
+                    egui::Event::Key { key: key @ (egui::Key::ArrowDown | egui::Key::ArrowUp), pressed: true, .. } => {
+                        let available: Vec<_> = choices.iter().filter(|c| !widgets.iter().any(|w| w == c.id)).collect();
+                        if !available.is_empty() {
+                            let current = available.iter().position(|c| state.highlighted.as_deref() == Some(c.id));
+                            let index = match (current, key) {
+                                (Some(i), egui::Key::ArrowUp) => (i + available.len() - 1) % available.len(),
+                                (Some(i), _) => (i + 1) % available.len(),
+                                (None, _) => 0,
+                            };
+                            state.highlighted = Some(available[index].id.to_string());
+                            state.prefix.clear();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                for choice in choices {
+                    let added = widgets.iter().any(|w| w == choice.id);
+                    let label = if added { format!("✓ {}", choice.label) } else { choice.label.into() };
+                    let highlighted = state.highlighted.as_deref() == Some(choice.id);
+                    let row = ui.add_enabled(!added, egui::Button::new(label).selected(highlighted));
+                    if highlighted && state.highlighted != previous { row.scroll_to_me(Some(Align::Center)); }
+                    if row.clicked() { selected = Some(choice); ui.close(); }
+                }
+            });
+        });
+        state.open = response.inner.is_some();
+        ui.data_mut(|data| data.insert_temp(state_id, state));
+    });
+    selected
+}
+
 fn bar_widget_choices() -> &'static [BarWidgetChoice] {
     &[
         BarWidgetChoice { id: "workspaces",         label: "Workspaces",            setting: "DOTFILES_WIDGET_WORKSPACES" },
@@ -5655,12 +6155,12 @@ fn remove_widget_from_zones(values: &mut HashMap<String, String>, widget: &str) 
 }
 
 fn keybind_display(keybind: &Keybind) -> String {
-    format!("{}  {}", format_keybind_key(&keybind.key), keybind.name)
+    format!("{}  {}", format_keybind_key(keybind), keybind.name)
 }
 
 fn primary_button(ui: &mut egui::Ui, theme: &AppTheme, text: &str) -> egui::Response {
     ui.add(
-        egui::Button::new(RichText::new(text).strong().color(Color32::WHITE))
+        egui::Button::new(RichText::new(text).strong().color(readable_text([theme.accent.r(), theme.accent.g(), theme.accent.b()])))
             .fill(theme.accent)
             .min_size(Vec2::new(120.0, 34.0)),
     )
@@ -5803,36 +6303,12 @@ fn friendly_kind(kind: &str) -> &'static str {
     }
 }
 
-fn format_keybind_key(key: &str) -> String {
-    let normalized = key
-        .replace(',', "+")
-        .replace("  ", " ");
-
-    let mut parts = normalized
-        .split('+')
-        .map(|part| part.trim())
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let upper = part.to_uppercase();
-            match upper.as_str() {
-                "SUPER" | "META" | "WIN" | "$MOD" | "MOD" => "SUPER".to_string(),
-                "SHIFT" => "SHIFT".to_string(),
-                "CTRL" | "CONTROL" => "CTRL".to_string(),
-                "ALT" => "ALT".to_string(),
-                "RETURN" | "ENTER" => "ENTER".to_string(),
-                "SPACE" => "SPACE".to_string(),
-                other => other.to_string(),
-            }
-        })
-        .collect::<Vec<_>>();
-
-    parts.retain(|part| part != "SUPER");
-
-    if parts.is_empty() {
-        "SUPER".to_string()
-    } else {
-        format!("SUPER + {}", parts.join(" + "))
-    }
+fn format_keybind_key(binding: &Keybind) -> String {
+    trigger_parts(binding).iter().map(|part| {
+        MOUSE_BUTTONS.iter().find(|(code, _)| code == part)
+            .map(|(_, label)| (*label).to_string())
+            .unwrap_or_else(|| part.to_uppercase())
+    }).collect::<Vec<_>>().join(" + ")
 }
 
 fn json_string(value: &str) -> String {
@@ -5993,7 +6469,7 @@ mod tests {
         let icons = icons_for("nerd");
         let mut ids = HashSet::new();
         let mut snippets = Vec::new();
-        for (index, widget) in ["network", "window_title", "system", "network", "volume", "microphone"].iter().enumerate() {
+        for (index, widget) in ["network", "window_title", "system", "network", "volume", "microphone", "updates", "keyboard", "notifications", "idle_inhibitor", "wallpaper_prev", "wallpaper_shuffle", "wallpaper_next", "custom_text", "custom_script", "spacer", "power"].iter().enumerate() {
             let qml = bar_widget_qml(widget, &format!("left_{index}"), &values, &palette,
                 &icons, 34, 8, 12, 5, 1500, "Sans");
             for line in qml.lines() {
@@ -6015,13 +6491,51 @@ mod tests {
                 fs::write(Path::new(&dir).join(format!("widget_{index}.qml")), snippet).unwrap();
             }
             fs::write(Path::new(&dir).join("shell.qml"), format!(
-                "import Quickshell\nimport Quickshell.Io\nimport QtQuick\nShellRoot {{ FloatingWindow {{ implicitWidth: 1600; implicitHeight: 50; Row {{ {} }} }} }}", snippets.join("\n")
+                "import Quickshell\nimport Quickshell.Io\nimport Quickshell.Wayland\nimport QtQuick\nShellRoot {{ FloatingWindow {{ visible: false; implicitWidth: 1600; implicitHeight: 50; Row {{ {} }} }} }}", snippets.join("\n")
             )).unwrap();
         }
     }
 
     #[test]
-    fn easyeffects_widget_reports_and_toggles_process_state() {
+    fn widget_picker_searches_by_typing_and_adds_with_enter() {
+        assert_eq!(matching_bar_widgets("KeYb")[0].id, "keyboard");
+        assert!(matching_bar_widgets("ram").is_empty());
+        let labels: Vec<_> = matching_bar_widgets("").iter().map(|c| c.label.to_lowercase()).collect();
+        assert!(labels.windows(2).all(|pair| pair[0] <= pair[1]));
+        assert_eq!(matching_bar_widgets("V").iter().map(|c| c.id).collect::<Vec<_>>(), vec!["visualizer", "volume"]);
+        assert_eq!(matching_bar_widgets("wallpaper next")[0].id, "wallpaper_next");
+        assert!(matching_bar_widgets("no-such-widget").is_empty());
+        let ctx = egui::Context::default();
+        let mut render = |events| {
+            let mut selected = None;
+            let output = ctx.run_ui(egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(500.0, 600.0))),
+                events, ..Default::default()
+            }, |ui| selected = bar_widget_picker(ui, "left", &[]).map(|c| c.id));
+            (output, selected)
+        };
+        let (output, _) = render(vec![]);
+        let pos = output.shapes.iter().find_map(|shape| match &shape.shape {
+            egui::epaint::Shape::Text(t) if t.galley.text() == "Add widget..." => Some(t.pos + t.galley.size() * 0.5),
+            _ => None,
+        }).unwrap();
+        output.drop_without_applying_deltas();
+        for pressed in [true, false] {
+            render(vec![egui::Event::PointerMoved(pos), egui::Event::PointerButton {
+                pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE,
+            }]).0.drop_without_applying_deltas();
+        }
+        render(vec![egui::Event::Text("V".into())]).0.drop_without_applying_deltas();
+        render(vec![egui::Event::Text("V".into())]).0.drop_without_applying_deltas();
+        let (output, selected) = render(vec![egui::Event::Key {
+            key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE,
+        }]);
+        output.drop_without_applying_deltas();
+        assert_eq!(selected, Some("volume"));
+    }
+
+    #[test]
+    fn easyeffects_widget_reports_and_toggles_bypass_state() {
         let palette = theme_palette(&HashMap::new());
         let qml = easyeffects_widget_qml(
             "left_0",
@@ -6036,7 +6550,10 @@ mod tests {
         assert!(qml.contains("FX ON"));
         assert!(qml.contains("FX OFF"));
         assert!(qml.contains("pgrep -x easyeffects"));
-        assert!(qml.contains("pkill -x easyeffects"));
+        assert!(!qml.contains("pkill"));
+        assert!(qml.contains("--hide-window --bypass-toggle"));
+        assert!(qml.contains("--bypass 3"));
+        assert!(qml.contains("this.text.trim() === \"2\""));
         assert!(qml.contains("easyeffects --service-mode"));
         assert!(!qml.contains("--gapplication-service"));
         assert!(!qml.contains("__ID__"));
@@ -6074,6 +6591,376 @@ mod tests {
         assert!(bluetooth.contains("width: 86"));
         assert!(bluetooth.contains("Rectangle"));
         assert!(bluetooth.contains("Bluetooth"));
+    }
+
+    #[test]
+    fn spotify_uses_the_saved_desktop_palette_for_every_theme() {
+        for name in ["midnight", "catppuccin", "nord", "gruvbox", "sakura", "cyberpunk", "everforest", "dracula", "light", "custom:test"] {
+            let mut values = defaults_map();
+            values.insert("DOTFILES_THEME".into(), name.into());
+            values.insert("DOTFILES_ACCENT".into(), "#aabbcc".into());
+            let palette = theme_palette(&values);
+            assert_eq!(app_theme_palette_args(&values), vec![palette.background,
+                palette.surface, palette.text, palette.muted, "#aabbcc".into(),
+                palette.inactive_border, palette.active_text]);
+        }
+    }
+
+    #[test]
+    fn custom_theme_colors_reach_app_and_desktop_palette() {
+        for light in [false, true] {
+            let mut values = defaults_map();
+            let mut theme = CustomTheme::starter(light);
+            theme.id = "test".into();
+            theme.put_values(&mut values);
+            let app = custom_app_theme(&values);
+            let palette = theme_palette(&values);
+            assert_eq!(palette.background, rgb_hex(theme.background));
+            assert_eq!(palette.surface, rgb_hex(theme.surface));
+            assert_eq!(palette.accent, rgb_hex(theme.accent));
+            assert_eq!(app.text, readable_text(theme.surface));
+            assert_eq!(palette.active_text, rgb_hex(readable_text(theme.accent).to_array()[..3].try_into().unwrap()));
+            assert_eq!(readable_text(theme.background), if light { Color32::BLACK } else { Color32::WHITE });
+        }
+    }
+
+    #[test]
+    fn theme_creator_saves_edits_and_rejects_duplicate_names() {
+        let temp = env::temp_dir().join(format!("splinter-theme-test-{}", std::process::id()));
+        let mut app = SplinterDots::new();
+        app.theme_was_saved = true;
+        app.paths.dotfiles_dir = temp.clone();
+        app.paths.local_conf = temp.join("local.conf");
+        app.custom_themes.clear();
+        let original_values = app.values.clone();
+        app.theme_draft = Some(CustomTheme::starter(false));
+        app.store_theme_draft().unwrap();
+        assert_eq!(app.values, original_values); // Saving to the library does not apply it.
+        let id = app.theme_draft.as_ref().unwrap().id.clone();
+        app.theme_draft.as_mut().unwrap().name = "Evening".into();
+        app.store_theme_draft().unwrap();
+        assert_eq!(app.custom_themes.len(), 1);
+        assert_eq!(app.custom_themes[0].id, id);
+        let saved: Vec<CustomTheme> = serde_json::from_str(&fs::read_to_string(temp.join("themes.json")).unwrap()).unwrap();
+        assert_eq!(saved, app.custom_themes);
+        app.theme_draft.as_mut().unwrap().put_values(&mut app.values);
+        write_local_conf(&app.paths, &app.values).unwrap();
+        let restored = read_settings(&app.paths);
+        assert_eq!(theme_palette(&restored).background, rgb_hex(saved[0].background));
+        app.theme_draft.as_mut().unwrap().id.clear();
+        assert!(app.store_theme_draft().is_err());
+        app.theme_draft.as_mut().unwrap().name = "  ".into();
+        assert!(app.store_theme_draft().is_err());
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn installed_font_previews_remain_distinct_when_ui_font_changes() {
+        // Exercise real installed fonts through egui, including switching the UI font.
+        if load_font_family("Noto Sans").is_none() || load_font_family("DejaVu Sans").is_none() { return; }
+        let mut app = SplinterDots::new();
+        app.theme_was_saved = true;
+        let ctx = egui::Context::default();
+        let mut baseline = None;
+        for selected in ["Noto Sans", "DejaVu Sans"] {
+            app.set_value("DOTFILES_UI_FONT", selected.into());
+            app.sync_ui_font(&ctx);
+            let mut widths = Vec::new();
+            ctx.run_ui(Default::default(), |ui| {
+                for name in ["Noto Sans", "DejaVu Sans"] {
+                    let family = app.preview_font_families.get(name).unwrap().clone();
+                    let galley = ui.painter().layout_no_wrap("The quick brown fox Aa Gg Ww 0123".into(),
+                        FontId::new(22.0, family.clone()), Color32::WHITE);
+                    assert_eq!(galley.job.sections[0].format.font_id.family, family);
+                    widths.push(galley.size().x);
+                }
+            }).drop_without_applying_deltas();
+            assert_ne!(widths[0], widths[1], "Samples must use different font metrics");
+            if let Some(previous) = &baseline { assert_eq!(&widths, previous); }
+            baseline = Some(widths);
+        }
+    }
+
+    #[test]
+    fn font_previews_reject_substituted_and_similarly_named_families() {
+        assert_eq!(parse_fontconfig_match("Noto Sans", "Noto Sans,Noto Sans Regular\n/fonts/NotoSans-Regular.ttf\n0\n"),
+            Some((PathBuf::from("/fonts/NotoSans-Regular.ttf"), 0)));
+        assert!(parse_fontconfig_match("Noto Sans", "Noto Sans Gujarati\n/fonts/other.ttf\n0\n").is_none());
+        assert!(parse_fontconfig_match("Missing Font", "DejaVu Sans\n/fonts/fallback.ttf\n0\n").is_none());
+        assert_eq!(parse_fontconfig_match("Ubuntu", "Ubuntu\n/fonts/collection.ttc\n2\n"),
+            Some((PathBuf::from("/fonts/collection.ttc"), 2)));
+    }
+
+    #[test]
+    fn selected_missing_font_still_has_a_working_install_button() {
+        let ctx = egui::Context::default();
+        let theme = custom_app_theme(&defaults_map());
+        let choices = [StyleChoice { label: "Missing font", value: "Missing font", package: Some("splinter-test-missing-font") }];
+        let mut current = "Missing font".to_string();
+        let mut render = |events| {
+            let mut install = None;
+            let output = ctx.run_ui(egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(420.0, 500.0))),
+                events, ..Default::default()
+            }, |ui| {
+                install = style_choice_grid(ui, &theme, "UI font", &mut current, &choices, &HashMap::new());
+            });
+            (output, install)
+        };
+        render(vec![]).0.drop_without_applying_deltas();
+        let (output, _) = render(vec![]);
+        assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
+            egui::epaint::Shape::Text(text) if text.galley.text() == "AaBbCc 123")));
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape,
+            egui::epaint::Shape::Text(text) if text.galley.text() == "Install to preview")));
+        let position = output.shapes.iter().find_map(|shape| {
+            if let egui::epaint::Shape::Text(text) = &shape.shape {
+                if text.galley.text() == "Install" {
+                    return Some(text.pos + text.galley.size() * 0.5);
+                }
+            }
+            None
+        }).expect("Install must remain visible for a selected missing font");
+        output.drop_without_applying_deltas();
+        let click = |pressed| egui::Event::PointerButton {
+            pos: position, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE,
+        };
+        render(vec![egui::Event::PointerMoved(position), click(true)]).0.drop_without_applying_deltas();
+        let (output, install) = render(vec![click(false)]);
+        output.drop_without_applying_deltas();
+        assert_eq!(install, Some("splinter-test-missing-font"));
+    }
+
+    #[test]
+    fn installing_fonts_keeps_unsaved_settings_and_refreshes_previews() {
+        let mut app = SplinterDots::new();
+        app.theme_was_saved = true;
+        app.values.insert("DOTFILES_UI_FONT".into(), "Pending font choice".into());
+        app.loaded_ui_font = "Old font".into();
+        app.preview_font_families.insert("Old font".into(), FontFamily::Proportional);
+        app.refresh_after_addon_install();
+        assert_eq!(app.value("DOTFILES_UI_FONT"), "Pending font choice");
+        assert!(app.loaded_ui_font.is_empty());
+        assert!(app.preview_font_families.is_empty());
+    }
+
+    #[test]
+    fn global_save_prepares_theme_draft_and_rejects_invalid_edits() {
+        let temp = env::temp_dir().join(format!("splinter-global-save-test-{}", std::process::id()));
+        let mut app = SplinterDots::new();
+        app.theme_was_saved = true;
+        app.paths.dotfiles_dir = temp.clone();
+        app.custom_themes.clear();
+        app.keybind_schemes = KeybindSchemes::from_bindings(default_keybinds());
+        app.keybinds = default_keybinds();
+        app.theme_draft = Some(CustomTheme::starter(true));
+        app.prepare_save().unwrap();
+        let saved = app.custom_themes[0].clone();
+        assert_eq!(app.value("DOTFILES_THEME"), format!("custom:{}", saved.id));
+        assert!(temp.join("themes.json").exists());
+        app.theme_draft.as_mut().unwrap().name.clear();
+        assert!(app.prepare_save().is_err());
+        assert_eq!(app.custom_themes[0], saved);
+        app.use_custom_theme(&saved);
+        assert!(app.theme_draft.is_none());
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn theme_creator_preview_renders_light_and_dark_without_applying() {
+        let mut app = SplinterDots::new();
+        app.theme_was_saved = true;
+        app.custom_themes.clear();
+        let original_values = app.values.clone();
+        for light in [false, true] {
+            app.theme_draft = Some(CustomTheme::starter(light));
+            egui::__run_test_ui(|ui| {
+                app.apply_style(ui);
+                let theme = app.app_theme();
+                app.custom_theme_editor(ui, &theme);
+            });
+            assert_eq!(app.values, original_values);
+        }
+    }
+
+    #[test]
+    fn schemes_migrate_existing_bindings_and_preserve_active_selection() {
+        let legacy = vec![sc("Copy", "mouse:275", "keyboard", "CTRL + C")];
+        let mut schemes = decode_keybind_schemes(&serde_json::to_string(&legacy).unwrap()).unwrap();
+        assert_eq!(schemes.schemes[0].name, "Default");
+        assert_eq!(schemes.schemes[0].bindings, legacy);
+        schemes.schemes.push(KeybindScheme { name: "Gaming".into(), bindings: vec![] });
+        schemes.active = 1;
+        let restored = decode_keybind_schemes(&serde_json::to_string(&schemes).unwrap()).unwrap();
+        assert_eq!(restored, schemes);
+        assert!(decode_keybind_schemes(r#"{"active":2,"schemes":[]}"#).is_err());
+        schemes.schemes[1].name = " default ".into();
+        assert!(schemes.validate().is_err());
+        schemes.schemes[1].name = " ".into();
+        assert!(schemes.validate().is_err());
+    }
+
+    #[test]
+    fn switching_and_duplicating_schemes_keeps_unsaved_edits() {
+        let mut app = SplinterDots::new();
+        app.theme_was_saved = true;
+        app.keybind_schemes = KeybindSchemes::from_bindings(default_keybinds());
+        app.saved_keybind_schemes = app.keybind_schemes.clone();
+        app.keybinds = default_keybinds();
+        assert!(!app.keybind_changes_pending());
+        app.keybinds[0].name = "Edited binding".into();
+        app.add_keybind_scheme(true);
+        assert_eq!(app.keybinds[0].name, "Edited binding");
+        app.keybinds[0].name = "Gaming binding".into();
+        app.select_keybind_scheme(0);
+        assert_eq!(app.keybinds[0].name, "Edited binding");
+        app.select_keybind_scheme(1);
+        assert_eq!(app.keybinds[0].name, "Gaming binding");
+        assert!(app.keybind_changes_pending());
+        app.select_keybind_scheme(0);
+        app.add_keybind_scheme(true);
+        assert_eq!(app.keybind_schemes.schemes[2].name, "Default copy 2");
+    }
+
+    #[test]
+    fn saving_schemes_persists_all_but_generates_only_the_selected_bindings() {
+        let temp = env::temp_dir().join(format!("splinter-schemes-test-{}", std::process::id()));
+        let mut app = SplinterDots::new();
+        app.theme_was_saved = true;
+        app.paths.dotfiles_dir = temp.clone();
+        app.paths.keybinds_json = temp.join("keybinds.json");
+        app.paths.hypr_dir = temp.join("hypr");
+        app.paths.hypr_keybinds = app.paths.hypr_dir.join("keybindings.lua");
+        app.keybind_schemes = KeybindSchemes::from_bindings(vec![sc("Default app", "B", "command", "default-only-command")]);
+        app.keybinds = app.keybind_schemes.schemes[0].bindings.clone();
+        app.add_keybind_scheme(true);
+        app.keybind_schemes.schemes[1].name = "Gaming".into();
+        app.keybinds = vec![sc("Game", "mouse:275", "keyboard", "Return")];
+        app.persist_keybind_schemes().unwrap();
+        assert!(!app.keybind_changes_pending());
+        let restored = load_keybind_schemes(&app.paths);
+        assert_eq!(restored, app.keybind_scheme_snapshot());
+        assert_eq!(restored.active, 1);
+        let lua = fs::read_to_string(&app.paths.hypr_keybinds).unwrap();
+        assert!(lua.contains("hl.dsp.send_shortcut"));
+        assert!(!lua.contains("default-only-command"));
+        app.keybinds[0].value.clear();
+        assert!(app.persist_keybind_schemes().is_err());
+        assert!(app.keybind_changes_pending());
+        assert_eq!(load_keybind_schemes(&app.paths), restored);
+        assert_eq!(fs::read_to_string(&app.paths.hypr_keybinds).unwrap(), lua);
+        fs::remove_dir_all(temp).unwrap();
+    }
+
+    #[test]
+    fn appearance_cards_fit_when_resizing() {
+        let mut app = SplinterDots::new();
+        app.theme_was_saved = true;
+        app.wallpaper_images.clear();
+        let ctx = egui::Context::default();
+        for width in [600.0, 700.0, 900.0, 1500.0, 700.0] {
+            for _ in 0..3 {
+                let output = ctx.run_ui(egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 4000.0))),
+                    ..Default::default()
+                }, |ui| {
+                    app.appearance_tab(ui);
+                    assert!(ui.min_rect().right() <= width + 1.0,
+                        "Appearance overflows at width {width}: {:?}", ui.min_rect());
+                });
+                let heading = |name: &str| output.shapes.iter().find_map(|shape| {
+                    if let egui::epaint::Shape::Text(text) = &shape.shape {
+                        if text.galley.text() == name { return Some(text.pos); }
+                    }
+                    None
+                }).unwrap_or_else(|| panic!("Missing heading {name} at width {width}"));
+                let theme = heading("Theme");
+                let wallpaper = heading("Wallpaper");
+                let fonts = heading("Fonts and icon packs");
+                if width <= 700.0 {
+                    assert!(theme.y < wallpaper.y && wallpaper.y < fonts.y);
+                } else if width >= 1500.0 {
+                    assert!(theme.x < wallpaper.x && wallpaper.x < fonts.x);
+                }
+                output.drop_without_applying_deltas();
+            }
+        }
+    }
+
+    #[test]
+    fn mouse_editor_renders_with_updated_egui() {
+        let mut app = SplinterDots::new();
+        app.theme_was_saved = true; // Rendering tests must not restore the desktop theme.
+        let mut binding = sc("Copy", "mouse:275", "keyboard", "CTRL + C");
+        binding.use_super = false;
+        app.keybinds = vec![binding];
+        app.selected_keybind = Some(0);
+        egui::__run_test_ui(|ui| {
+            app.apply_style(ui);
+            app.sidebar(ui);
+            egui::CentralPanel::default().show(ui, |ui| app.keybinds_tab(ui));
+        });
+    }
+
+    #[test]
+    fn old_keybinds_keep_super_and_mouse_bindings_round_trip() {
+        let old: Keybind = serde_json::from_str(r#"{"name":"Terminal","key":"SHIFT, T","kind":"app","value":"kitty"}"#).unwrap();
+        assert!(old.use_super);
+        assert!(render_keybind(&old).unwrap().contains("SUPER + SHIFT + T"));
+        let mut mouse = sc("Copy", "mouse:275", "keyboard", "CTRL + C");
+        mouse.use_super = false;
+        let saved = serde_json::to_string(&mouse).unwrap();
+        assert_eq!(serde_json::from_str::<Keybind>(&saved).unwrap(), mouse);
+        assert_eq!(render_keybind(&mouse).unwrap(),
+            "hl.bind(\"mouse:275\", hl.dsp.send_shortcut({ mods = \"CTRL\", key = \"C\" }))");
+        mouse.value = "Enter".to_string();
+        assert!(render_keybind(&mouse).unwrap().contains("mods = \"\", key = \"Return\""));
+        assert_eq!(format_keybind_key(&mouse), "Side / back button");
+    }
+
+    #[test]
+    fn mouse_actions_use_correct_dispatchers_and_flags() {
+        let command = sc("Volume", "CTRL, mouse_up", "command", "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+");
+        let lua = render_keybind(&command).unwrap();
+        assert!(lua.contains("SUPER + CTRL + mouse_up"));
+        assert!(lua.contains("hl.dsp.exec_cmd(\"wpctl"));
+        assert!(!lua.contains("hyprctl dispatch"));
+        assert!(!lua.contains("mouse = true"));
+        let close = sc("Close", "mouse:276", "hyprland", "killactive");
+        assert!(render_keybind(&close).unwrap().contains("hl.dsp.window.close()"));
+        let drag = sc("Drag", "mouse:272", "hyprland", "movewindow");
+        assert!(render_keybind(&drag).unwrap().contains("hl.dsp.window.drag(), { mouse = true }"));
+        for binding in default_keybinds() {
+            assert!(render_keybind(&binding).is_ok());
+        }
+    }
+
+    #[test]
+    fn invalid_bindings_are_rejected_before_saving() {
+        for key in ["", "CTRL", "mouse:275 + C", "Return bad"] {
+            assert!(render_keybind(&sc("Bad", key, "keyboard", "Return")).is_err());
+        }
+        assert!(render_keybind(&sc("Bad", "mouse:275", "keyboard", "CTRL")).is_err());
+        assert!(render_keybind(&sc("Bad", "mouse:275", "command", " ")).is_err());
+        assert!(render_keybind(&sc("Bad", "T", "hyprland", "movewindow")).is_err());
+    }
+
+    #[test]
+    fn custom_mouse_binding_replaces_default_drag_in_generated_file() {
+        let temp = env::temp_dir().join(format!("splinter-mouse-test-{}", std::process::id()));
+        let mut paths = Paths::new();
+        paths.hypr_dir = temp.clone();
+        paths.hypr_keybinds = temp.join("keybindings.lua");
+        let binding = sc("Copy", "SUPER + mouse:272", "keyboard", "CTRL + C");
+        write_keybinds(&paths, &HashMap::new(), &[binding]).unwrap();
+        let lua = fs::read_to_string(&paths.hypr_keybinds).unwrap();
+        assert!(!lua.contains("hl.dsp.window.drag()"));
+        assert!(lua.contains("hl.dsp.window.resize()"));
+        assert!(lua.contains("hl.dsp.send_shortcut"));
+        if let Ok(output) = Command::new("luac").arg("-p").arg(&paths.hypr_keybinds).output() {
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        }
+        fs::remove_dir_all(temp).unwrap();
     }
 
     #[test]

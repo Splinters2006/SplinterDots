@@ -1,7 +1,7 @@
 # ~/.profile
 
 DOTFILES_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
-DOTFILES_REPO_CONFIG="$HOME/.config/dotfiles/settings.conf"
+DOTFILES_REPO_CONFIG="$DOTFILES_CONFIG_HOME/settings.conf"
 
 if [ -f "$DOTFILES_REPO_CONFIG" ]; then
   # shellcheck disable=SC1090

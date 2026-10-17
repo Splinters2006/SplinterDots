@@ -51,16 +51,26 @@ apply_style() {
     . "$LOCAL_CONF"
   fi
 
-  mkdir -p "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0"
+  python3 - "${XDG_CONFIG_HOME:-$HOME/.config}" "$DOTFILES_UI_FONT" "$DOTFILES_ICON_THEME" "$DOTFILES_CURSOR_THEME" <<'PYTHON'
+import configparser
+from pathlib import Path
+import sys
 
-  for file in "$HOME/.config/gtk-3.0/settings.ini" "$HOME/.config/gtk-4.0/settings.ini"; do
-    cat > "$file" <<INI
-[Settings]
-gtk-font-name=$DOTFILES_UI_FONT 11
-gtk-icon-theme-name=$DOTFILES_ICON_THEME
-gtk-cursor-theme-name=$DOTFILES_CURSOR_THEME
-INI
-  done
+config, font, icons, cursor = sys.argv[1:]
+for version in (3, 4):
+    file = Path(config) / f"gtk-{version}.0/settings.ini"
+    file.parent.mkdir(parents=True, exist_ok=True)
+    settings = configparser.ConfigParser(interpolation=None, strict=False)
+    settings.optionxform = str
+    if file.exists():
+        settings.read(file)
+    if not settings.has_section("Settings"):
+        settings.add_section("Settings")
+    settings["Settings"].update({"gtk-font-name": f"{font} 11", "gtk-icon-theme-name": icons,
+                                 "gtk-cursor-theme-name": cursor})
+    with file.open("w") as output:
+        settings.write(output)
+PYTHON
 
   echo "Applied style settings."
 }

@@ -2,7 +2,8 @@
 set -euo pipefail
 
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-SETTINGS_FILE="$CONFIG_HOME/dotfiles/settings.conf"
+SETTINGS_FILE="$CONFIG_HOME/dotfiles/local.conf"
+[[ -f "$SETTINGS_FILE" ]] || SETTINGS_FILE="$CONFIG_HOME/dotfiles/settings.conf"
 KITTY_DIR="$CONFIG_HOME/kitty"
 THEMES_DIR="$KITTY_DIR/themes"
 LOG="/tmp/splinter-kitty-theme.log"
@@ -20,6 +21,7 @@ theme="${theme//\'/}"
 theme="${theme//\"/}"
 
 case "$theme" in
+  custom:*) theme="splinterdots-generated" ;;
   midnight|catppuccin|gruvbox|sakura|neon|monochrome|nord|light) ;;
   gruvbox-dark) theme="gruvbox" ;;
   cyberpunk) theme="neon" ;;

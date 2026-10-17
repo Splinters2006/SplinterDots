@@ -3,6 +3,7 @@
 
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Wayland
 import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
@@ -189,7 +190,7 @@ Variants {
 
             Rectangle {
               id: volume_left_2
-              property string volumeText: " --%"
+              property string volumeText: " --%"
               property real wheelRemainder: 0
               property int pendingSteps: 0
               property bool adjustingVolume: false
@@ -200,7 +201,7 @@ Variants {
                 var steps = pendingSteps
                 pendingSteps = 0
                 volumeAdjust_left_2.command = ["wpctl", "set-volume", "--limit", "1.0",
-                  "@DEFAULT_AUDIO_SINK@", (Math.abs(steps) * 5) + "%" + (steps > 0 ? "+" : "-")]
+                  "@DEFAULT_AUDIO_SOURCE@", (Math.abs(steps) * 5) + "%" + (steps > 0 ? "+" : "-")]
                 volumeAdjust_left_2.running = true
               }
               function refreshVolume() {
@@ -231,13 +232,13 @@ Variants {
 
               Process {
                 id: volumeStatus_left_2
-                command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'"]
+                command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \" muted\"; else print \" \" v \"%\"}'"]
                 running: true
                 onExited: {
                   if (volume_left_2.refreshPending) Qt.callLater(volume_left_2.refreshVolume)
                 }
                 stdout: StdioCollector {
-                  onStreamFinished: volume_left_2.volumeText = this.text.trim() || "Audio unavailable"
+                  onStreamFinished: volume_left_2.volumeText = this.text.trim() || "Mic unavailable"
                 }
               }
 
@@ -254,7 +255,7 @@ Variants {
 
               Process {
                 id: volumeClick_left_2
-                command: ["sh", "-c", "pavucontrol"]
+                command: ["sh", "-c", "pavucontrol --tab=4"]
               }
 
               Process {
@@ -267,7 +268,7 @@ Variants {
               }
               Process {
                 id: volumeMute_left_2
-                command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]
+                command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"]
                 onExited: volume_left_2.refreshVolume()
               }
 
@@ -278,7 +279,7 @@ Variants {
                 cursorShape: Qt.PointingHandCursor
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 onClicked: mouse => {
-                  if (mouse.button === Qt.RightButton) {
+                  if (mouse.button === Qt.LeftButton) {
                     if (!volumeMute_left_2.running) volumeMute_left_2.running = true
                   } else if (!volumeClick_left_2.running) {
                     volumeClick_left_2.running = true
@@ -306,171 +307,6 @@ Variants {
                   if (!volumeEvents_left_2.running) volumeEvents_left_2.running = true
                   volume_left_2.refreshVolume()
                 }
-              }
-            }
-
-
-            Rectangle {
-              id: volume_left_3
-              property string volumeText: " --%"
-              property real wheelRemainder: 0
-              property int pendingSteps: 0
-              property bool adjustingVolume: false
-              property bool refreshPending: false
-              function applyVolumeSteps() {
-                if (adjustingVolume || pendingSteps === 0) return
-                adjustingVolume = true
-                var steps = pendingSteps
-                pendingSteps = 0
-                volumeAdjust_left_3.command = ["wpctl", "set-volume", "--limit", "1.0",
-                  "@DEFAULT_AUDIO_SOURCE@", (Math.abs(steps) * 5) + "%" + (steps > 0 ? "+" : "-")]
-                volumeAdjust_left_3.running = true
-              }
-              function refreshVolume() {
-                if (volumeStatus_left_3.running) {
-                  refreshPending = true
-                  return
-                }
-                refreshPending = false
-                volumeStatus_left_3.running = true
-              }
-              width: 86
-              height: 26
-              anchors.verticalCenter: parent.verticalCenter
-              radius: 6
-              color: volumeMouse_left_3.containsMouse ? "#89b4fa" : "#3c3836"
-              border.color: "#89b4fa"
-              border.width: 1
-
-              Text {
-                anchors.centerIn: parent
-                text: volume_left_3.volumeText
-                color: "#ebdbb2"
-                font.pixelSize: 12
-                font.bold: true
-                font.family: "Symbols Nerd Font"
-
-              }
-
-              Process {
-                id: volumeStatus_left_3
-                command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \" muted\"; else print \" \" v \"%\"}'"]
-                running: true
-                onExited: {
-                  if (volume_left_3.refreshPending) Qt.callLater(volume_left_3.refreshVolume)
-                }
-                stdout: StdioCollector {
-                  onStreamFinished: volume_left_3.volumeText = this.text.trim() || "Mic unavailable"
-                }
-              }
-
-              Process {
-                id: volumeEvents_left_3
-                command: ["env", "LC_ALL=C", "pactl", "subscribe"]
-                running: true
-                stdout: SplitParser {
-                  onRead: data => {
-                    if (/ on (sink|source|server) #/.test(data)) volume_left_3.refreshVolume()
-                  }
-                }
-              }
-
-              Process {
-                id: volumeClick_left_3
-                command: ["sh", "-c", "pavucontrol --tab=4"]
-              }
-
-              Process {
-                id: volumeAdjust_left_3
-                onExited: {
-                  volume_left_3.adjustingVolume = false
-                  volume_left_3.refreshVolume()
-                  Qt.callLater(volume_left_3.applyVolumeSteps)
-                }
-              }
-              Process {
-                id: volumeMute_left_3
-                command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"]
-                onExited: volume_left_3.refreshVolume()
-              }
-
-              MouseArea {
-                id: volumeMouse_left_3
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                onClicked: mouse => {
-                  if (mouse.button === Qt.LeftButton) {
-                    if (!volumeMute_left_3.running) volumeMute_left_3.running = true
-                  } else if (!volumeClick_left_3.running) {
-                    volumeClick_left_3.running = true
-                  }
-                }
-                onWheel: wheel => {
-                  var delta = wheel.angleDelta.y !== 0 ? wheel.angleDelta.y / 120 : wheel.pixelDelta.y / 40
-                  var touchpad = wheel.device && wheel.device.type === PointerDevice.TouchPad
-                  if (touchpad || wheel.pixelDelta.y !== 0) delta = -delta
-                  if (delta === 0) return
-                  volume_left_3.wheelRemainder += delta
-                  var steps = Math.trunc(volume_left_3.wheelRemainder)
-                  volume_left_3.wheelRemainder -= steps
-                  volume_left_3.pendingSteps += steps
-                  volume_left_3.applyVolumeSteps()
-                  wheel.accepted = true
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: {
-                  if (!volumeEvents_left_3.running) volumeEvents_left_3.running = true
-                  volume_left_3.refreshVolume()
-                }
-              }
-            }
-
-
-            Rectangle {
-              anchors.verticalCenter: parent.verticalCenter
-              width: txt_left_4.width + 20
-              height: 26
-              radius: 6
-              color: "#3c3836"
-              border.color: "#89b4fa"
-              border.width: 1
-              visible: txt_left_4.text.length > 0
-
-              Text {
-                id: txt_left_4
-                anchors.centerIn: parent
-                width: implicitWidth
-                color: "#ebdbb2"
-                font.pixelSize: 12
-                font.bold: true
-                font.family: "Symbols Nerd Font"
-                text: ""
-                textFormat: Text.PlainText
-                elide: Text.ElideRight
-                maximumLineCount: 1
-              }
-
-              Process {
-                id: proc_left_4
-                command: ["sh", "-c", "for bat in /sys/class/power_supply/*; do [ \"$(cat \"$bat/type\" 2>/dev/null)\" = Battery ] || continue; capacity=$(cat \"$bat/capacity\" 2>/dev/null) || continue; status=$(cat \"$bat/status\" 2>/dev/null); if [ \"$status\" = Charging ]; then icon='󰂄'; else icon='󰁹'; fi; printf '%s %s%%' \"$icon\" \"$capacity\"; break; done"]
-                running: true
-                stdout: StdioCollector {
-                  onStreamFinished: txt_left_4.text = "" + this.text.trim().replace(/\s*\n\s*/g, " ")
-                }
-              }
-
-              Timer {
-                interval: 1500
-                running: true
-                repeat: true
-                onTriggered: { if (!proc_left_4.running) proc_left_4.running = true }
               }
             }
 
@@ -637,19 +473,40 @@ Variants {
             spacing: 7
 
             Rectangle {
-              id: bluetooth_right_0
-              property bool powered: false
+              id: volume_right_0
+              property string volumeText: " --%"
+              property real wheelRemainder: 0
+              property int pendingSteps: 0
+              property bool adjustingVolume: false
+              property bool refreshPending: false
+              function applyVolumeSteps() {
+                if (adjustingVolume || pendingSteps === 0) return
+                adjustingVolume = true
+                var steps = pendingSteps
+                pendingSteps = 0
+                volumeAdjust_right_0.command = ["wpctl", "set-volume", "--limit", "1.0",
+                  "@DEFAULT_AUDIO_SINK@", (Math.abs(steps) * 5) + "%" + (steps > 0 ? "+" : "-")]
+                volumeAdjust_right_0.running = true
+              }
+              function refreshVolume() {
+                if (volumeStatus_right_0.running) {
+                  refreshPending = true
+                  return
+                }
+                refreshPending = false
+                volumeStatus_right_0.running = true
+              }
               width: 86
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: bluetoothMouse_right_0.containsMouse ? "#89b4fa" : "#3c3836"
-              border.color: powered ? "#89b4fa" : "#89b4fa"
+              color: volumeMouse_right_0.containsMouse ? "#89b4fa" : "#3c3836"
+              border.color: "#89b4fa"
               border.width: 1
 
               Text {
                 anchors.centerIn: parent
-                text: bluetooth_right_0.powered ? " Bluetooth" : " Off"
+                text: volume_right_0.volumeText
                 color: "#ebdbb2"
                 font.pixelSize: 12
                 font.bold: true
@@ -658,27 +515,71 @@ Variants {
               }
 
               Process {
-                id: bluetoothStatus_right_0
-                command: ["sh", "-c", "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf 1 || printf 0"]
+                id: volumeStatus_right_0
+                command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{v=int($2*100); if($3==\"[MUTED]\") print \"󰝟 muted\"; else print \" \" v \"%\"}'"]
                 running: true
+                onExited: {
+                  if (volume_right_0.refreshPending) Qt.callLater(volume_right_0.refreshVolume)
+                }
                 stdout: StdioCollector {
-                  onStreamFinished: bluetooth_right_0.powered = this.text.trim() === "1"
+                  onStreamFinished: volume_right_0.volumeText = this.text.trim() || "Audio unavailable"
                 }
               }
 
               Process {
-                id: bluetoothClick_right_0
-                command: ["sh", "-c", "overskride"]
+                id: volumeEvents_right_0
+                command: ["env", "LC_ALL=C", "pactl", "subscribe"]
+                running: true
+                stdout: SplitParser {
+                  onRead: data => {
+                    if (/ on (sink|source|server) #/.test(data)) volume_right_0.refreshVolume()
+                  }
+                }
+              }
+
+              Process {
+                id: volumeClick_right_0
+                command: ["sh", "-c", "pavucontrol"]
+              }
+
+              Process {
+                id: volumeAdjust_right_0
+                onExited: {
+                  volume_right_0.adjustingVolume = false
+                  volume_right_0.refreshVolume()
+                  Qt.callLater(volume_right_0.applyVolumeSteps)
+                }
+              }
+              Process {
+                id: volumeMute_right_0
+                command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]
+                onExited: volume_right_0.refreshVolume()
               }
 
               MouseArea {
-                id: bluetoothMouse_right_0
+                id: volumeMouse_right_0
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  bluetoothClick_right_0.running = false
-                  bluetoothClick_right_0.running = true
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                onClicked: mouse => {
+                  if (mouse.button === Qt.RightButton) {
+                    if (!volumeMute_right_0.running) volumeMute_right_0.running = true
+                  } else if (!volumeClick_right_0.running) {
+                    volumeClick_right_0.running = true
+                  }
+                }
+                onWheel: wheel => {
+                  var delta = wheel.angleDelta.y !== 0 ? wheel.angleDelta.y / 120 : wheel.pixelDelta.y / 40
+                  var touchpad = wheel.device && wheel.device.type === PointerDevice.TouchPad
+                  if (touchpad || wheel.pixelDelta.y !== 0) delta = -delta
+                  if (delta === 0) return
+                  volume_right_0.wheelRemainder += delta
+                  var steps = Math.trunc(volume_right_0.wheelRemainder)
+                  volume_right_0.wheelRemainder -= steps
+                  volume_right_0.pendingSteps += steps
+                  volume_right_0.applyVolumeSteps()
+                  wheel.accepted = true
                 }
               }
 
@@ -687,8 +588,66 @@ Variants {
                 running: true
                 repeat: true
                 onTriggered: {
-                  bluetoothStatus_right_0.running = false
-                  bluetoothStatus_right_0.running = true
+                  if (!volumeEvents_right_0.running) volumeEvents_right_0.running = true
+                  volume_right_0.refreshVolume()
+                }
+              }
+            }
+
+
+            Rectangle {
+              id: bluetooth_right_1
+              property bool powered: false
+              width: 86
+              height: 26
+              anchors.verticalCenter: parent.verticalCenter
+              radius: 6
+              color: bluetoothMouse_right_1.containsMouse ? "#89b4fa" : "#3c3836"
+              border.color: powered ? "#89b4fa" : "#89b4fa"
+              border.width: 1
+
+              Text {
+                anchors.centerIn: parent
+                text: bluetooth_right_1.powered ? " Bluetooth" : " Off"
+                color: "#ebdbb2"
+                font.pixelSize: 12
+                font.bold: true
+                font.family: "Symbols Nerd Font"
+
+              }
+
+              Process {
+                id: bluetoothStatus_right_1
+                command: ["sh", "-c", "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && printf 1 || printf 0"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: bluetooth_right_1.powered = this.text.trim() === "1"
+                }
+              }
+
+              Process {
+                id: bluetoothClick_right_1
+                command: ["sh", "-c", "overskride"]
+              }
+
+              MouseArea {
+                id: bluetoothMouse_right_1
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  bluetoothClick_right_1.running = false
+                  bluetoothClick_right_1.running = true
+                }
+              }
+
+              Timer {
+                interval: 1500
+                running: true
+                repeat: true
+                onTriggered: {
+                  bluetoothStatus_right_1.running = false
+                  bluetoothStatus_right_1.running = true
                 }
               }
             }
@@ -696,16 +655,16 @@ Variants {
 
             Rectangle {
               anchors.verticalCenter: parent.verticalCenter
-              width: txt_right_1.width + 20
+              width: txt_right_2.width + 20
               height: 26
               radius: 6
               color: "#3c3836"
               border.color: "#89b4fa"
               border.width: 1
-              visible: txt_right_1.text.length > 0
+              visible: txt_right_2.text.length > 0
 
               Text {
-                id: txt_right_1
+                id: txt_right_2
                 anchors.centerIn: parent
                 width: implicitWidth
                 color: "#ebdbb2"
@@ -719,11 +678,11 @@ Variants {
               }
 
               Process {
-                id: proc_right_1
+                id: proc_right_2
                 command: ["sh", "-c", "LC_ALL=C nmcli -t -f DEVICE,TYPE,STATE device 2>/dev/null | awk -F: '$3 ~ /^connected/ && $2!=\"loopback\" {print ($2==\"wifi\" ? \"Wi-Fi \" : \"LAN \") $1; found=1; exit} END {if (!found) print \"Network offline\"}'"]
                 running: true
                 stdout: StdioCollector {
-                  onStreamFinished: txt_right_1.text = "" + this.text.trim().replace(/\s*\n\s*/g, " ")
+                  onStreamFinished: txt_right_2.text = "" + this.text.trim().replace(/\s*\n\s*/g, " ")
                 }
               }
 
@@ -731,61 +690,17 @@ Variants {
               MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: { if (!networkMenu_right_1.running) networkMenu_right_1.running = true }
+                onClicked: { if (!networkMenu_right_2.running) networkMenu_right_2.running = true }
               }
               Process {
-                id: networkMenu_right_1
+                id: networkMenu_right_2
                 command: ["kitty", "--title", "Network", "nmtui"]
               }
               Timer {
                 interval: 1500
                 running: true
                 repeat: true
-                onTriggered: { if (!proc_right_1.running) proc_right_1.running = true }
-              }
-            }
-
-
-            Item {
-              id: media_right_2
-              width: 26
-              height: 34
-
-              Process {
-                id: proc_right_2_media_menu
-                command: ["sh", "-c", "$HOME/.local/bin/splinter-media-menu"]
-              }
-
-              Rectangle {
-                anchors.centerIn: parent
-                width: 26
-                height: 26
-                radius: 4
-                color: mediaMouse_right_2.containsMouse ? "#89b4fa" : "#3c3836"
-                border.color: "#89b4fa"
-                border.width: 1
-
-                Text {
-                  anchors.centerIn: parent
-                  text: ""
-                  color: "#ebdbb2"
-                  font.family: "Symbols Nerd Font"
-                  font.pixelSize: 12
-                  font.bold: true
-                }
-
-                MouseArea {
-                  id: mediaMouse_right_2
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  acceptedButtons: Qt.LeftButton
-
-                  onClicked: {
-                    proc_right_2_media_menu.running = false
-                    proc_right_2_media_menu.running = true
-                  }
-                }
+                onTriggered: { if (!proc_right_2.running) proc_right_2.running = true }
               }
             }
 

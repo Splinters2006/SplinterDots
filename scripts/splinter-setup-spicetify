@@ -51,23 +51,8 @@ THEME
 fi
 
 if [ ! -f "$theme_dir/user.css" ]; then
-  cat > "$theme_dir/user.css" <<'CSS'
-.Root,
-.Root__main-view,
-.Root__nav-bar,
-.Root__now-playing-bar {
-  background: #1e2427 !important;
-}
-
-.main-card-card {
-  background: #323f43 !important;
-  border-radius: 14px !important;
-}
-
-.main-card-card:hover {
-  background: #3a494d !important;
-}
-CSS
+  echo "SplinterDots Spicetify CSS is missing from the checkout." >&2
+  exit 1
 fi
 
 if [ -d /opt/spotify ]; then

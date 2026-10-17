@@ -5,6 +5,7 @@ SCRIPT_PATH="$(readlink -f "$0")"
 ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 BIN="$ROOT_DIR/target/release/SplinterDots"
 MANIFEST="$ROOT_DIR/Cargo.toml"
+LOCKFILE="$ROOT_DIR/Cargo.lock"
 MAIN_RS="$ROOT_DIR/tools/SplinterDots/src/main.rs"
 APP_TOML="$ROOT_DIR/tools/SplinterDots/Cargo.toml"
 
@@ -19,7 +20,7 @@ if ! command -v cargo >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -x "$BIN" ] || [ "$MANIFEST" -nt "$BIN" ] || [ "$APP_TOML" -nt "$BIN" ] || [ "$MAIN_RS" -nt "$BIN" ] || [ "$ROOT_DIR/tools/SplinterDots/src/widgets/system.py" -nt "$BIN" ] || [ "$ROOT_DIR/tools/SplinterDots/src/laptop-keybindings.lua" -nt "$BIN" ]; then
+if [ ! -x "$BIN" ] || [ "$MANIFEST" -nt "$BIN" ] || [ "$LOCKFILE" -nt "$BIN" ] || [ "$APP_TOML" -nt "$BIN" ] || [ "$MAIN_RS" -nt "$BIN" ] || [ "$ROOT_DIR/tools/SplinterDots/src/widgets/system.py" -nt "$BIN" ] || [ "$ROOT_DIR/tools/SplinterDots/src/widgets/actions.py" -nt "$BIN" ] || [ "$ROOT_DIR/tools/SplinterDots/src/laptop-keybindings.lua" -nt "$BIN" ]; then
   echo "Building SplinterDots..."
   cargo build --release --manifest-path "$MANIFEST" -p SplinterDots
 fi
