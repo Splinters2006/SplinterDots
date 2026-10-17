@@ -1,4 +1,4 @@
-accent = "rgba(89b4faff)"
-inactive = "rgba(45475aff)"
-background = "rgba(1e1e2eff)"
-text = "rgba(cdd6f4ff)"
+accent = "rgba(eeeeeeff)"
+inactive = "rgba(5f554eff)"
+background = "rgba(3f352fff)"
+text = "rgba(ffffffff)"

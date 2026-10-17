@@ -3,7 +3,7 @@ use eframe::egui::{
     Layout, Margin, RichText, ScrollArea, Stroke, Vec2,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -70,6 +70,8 @@ const SETTINGS_KEYS: &[(&str, &str)] = &[
     ("DOTFILES_WIDGET_CUSTOM_TEXT_VALUE", "Hello"),
     ("DOTFILES_WIDGET_CUSTOM_SCRIPT_COMMAND", "date +%H:%M"),
     ("DOTFILES_WIDGET_CUSTOM_SCRIPT_INTERVAL", "5000"),
+    // YoRHa Terminal add-on background; empty uses the desktop wallpaper.
+    ("DOTFILES_YORHA_BACKGROUND", ""),
 ];
 
 const EXCLUDED_HYPR_OPTIONS: &[&str] = &[
@@ -264,6 +266,45 @@ fn readable_text(rgb: [u8; 3]) -> Color32 {
     if luminance > 0.179 { Color32::BLACK } else { Color32::WHITE }
 }
 
+/// Each built-in theme's signature accent, used when no accent color is set.
+fn default_accent(theme: &str) -> &'static str {
+    match theme {
+        "midnight" => "#8b98ff",
+        "catppuccin" => "#cba6f7",
+        "nord" => "#88c0d0",
+        "gruvbox" => "#fabd2f",
+        "sakura" => "#f5a3c7",
+        "cyberpunk" => "#00e5ff",
+        "everforest" => "#a7c080",
+        "dracula" => "#bd93f9",
+        "light" => "#2563eb",
+        _ => "#89b4fa",
+    }
+}
+
+fn relative_luminance(color: Color32) -> f32 {
+    let linear = [color.r(), color.g(), color.b()].map(|v| {
+        let v = v as f32 / 255.0;
+        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    });
+    linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722
+}
+
+fn contrast_ratio(a: Color32, b: Color32) -> f32 {
+    let (la, lb) = (relative_luminance(a), relative_luminance(b));
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+}
+
+/// Text and muted text colors for content drawn directly on `background`:
+/// the theme's own colors when readable there, otherwise black or white.
+fn text_on(theme: &AppTheme, background: Color32) -> (Color32, Color32) {
+    if contrast_ratio(theme.text, background) >= 4.5 {
+        return (theme.text, theme.muted);
+    }
+    let text = readable_text([background.r(), background.g(), background.b()]);
+    (text, mix_color(background, text, 0.75))
+}
+
 fn mix_color(a: Color32, b: Color32, amount: f32) -> Color32 {
     let blend = |x: u8, y: u8| (x as f32 * (1.0 - amount) + y as f32 * amount).round() as u8;
     Color32::from_rgb(blend(a.r(), b.r()), blend(a.g(), b.g()), blend(a.b(), b.b()))
@@ -352,6 +393,12 @@ struct SplinterDots {
     preview_font_families: HashMap<String, FontFamily>,
     icon_theme_previews: HashMap<String, Vec<egui::TextureHandle>>,
     cursor_theme_previews: HashMap<String, Vec<egui::TextureHandle>>,
+    // Fonts and themes the user added (see splinter-add-style), shown after the built-in choices.
+    custom_styles: CustomStyles,
+    // Search text for the font, icon theme and cursor theme pickers.
+    style_searches: [String; 3],
+    style_delete_confirm: Option<String>,
+    appearance_pair_height: f32,
     dragged_bar_widget: Option<(String, usize)>,
     status: String,
     no_show_on_startup: bool,
@@ -598,6 +645,10 @@ impl SplinterDots {
             preview_font_families: HashMap::new(),
             icon_theme_previews: HashMap::new(),
             cursor_theme_previews: HashMap::new(),
+            custom_styles: CustomStyles::scan(),
+            style_searches: Default::default(),
+            style_delete_confirm: None,
+            appearance_pair_height: 0.0,
             dragged_bar_widget: None,
         }
     }
@@ -646,14 +697,15 @@ impl SplinterDots {
             }
         }
 
-        for choice in font_choices() {
-            let Some(data) = load_font_family(choice.value) else { continue; };
-            let family_name = format!("preview-{}", normalize_font_name(choice.value));
+        let custom_fonts = self.custom_styles.fonts.iter().map(|style| style.value.as_str());
+        for value in font_choices().iter().map(|choice| choice.value).chain(custom_fonts) {
+            let Some(data) = load_font_family(value) else { continue; };
+            let family_name = format!("preview-{}", normalize_font_name(value));
             let font_id = format!("{family_name}-data");
             fonts.font_data.insert(font_id.clone(), data.into());
             let family = FontFamily::Name(family_name.into());
             fonts.families.insert(family.clone(), vec![font_id]);
-            self.preview_font_families.insert(choice.value.to_string(), family);
+            self.preview_font_families.insert(value.to_string(), family);
         }
 
         ctx.set_fonts(fonts);
@@ -684,18 +736,7 @@ impl SplinterDots {
             return custom_app_theme(&self.values);
         }
         let selected = self.value("DOTFILES_THEME");
-        let fallback_accent = match selected.as_str() {
-            "midnight" => "#8b98ff",
-            "catppuccin" => "#cba6f7",
-            "nord" => "#88c0d0",
-            "gruvbox" => "#fabd2f",
-            "sakura" => "#f5a3c7",
-            "cyberpunk" => "#00e5ff",
-            "everforest" => "#a7c080",
-            "dracula" => "#bd93f9",
-            "light" => "#2563eb",
-            _ => "#89b4fa",
-        };
+        let fallback_accent = default_accent(&selected);
 
         let accent = parse_hex_color(&self.value("DOTFILES_ACCENT"))
             .or_else(|| parse_hex_color(fallback_accent))
@@ -828,13 +869,19 @@ impl SplinterDots {
     fn apply_style(&self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
 
-        let mut visuals = if self.value("DOTFILES_THEME") == "light" {
+        // Light cards need egui's light defaults (e.g. custom themes with a light surface).
+        let light_cards = readable_text([theme.card.r(), theme.card.g(), theme.card.b()]) == Color32::BLACK;
+        let mut visuals = if self.value("DOTFILES_THEME") == "light" || light_cards {
             egui::Visuals::light()
         } else {
             egui::Visuals::dark()
         };
 
         visuals.override_text_color = Some(theme.text);
+        // Bold text ignores override_text_color and uses the active widget color instead.
+        visuals.widgets.active.fg_stroke.color = theme.text;
+        visuals.widgets.inactive.fg_stroke.color = theme.text;
+        visuals.widgets.hovered.fg_stroke.color = theme.text;
 
     // Avoid hard black text fields. egui uses `extreme_bg_color` for many
     // TextEdit backgrounds, so keep it theme-specific and softer.
@@ -850,6 +897,10 @@ impl SplinterDots {
         visuals.widgets.inactive.bg_fill = theme.card;
         visuals.widgets.hovered.bg_fill = theme.card_hover;
         visuals.widgets.active.bg_fill = theme.accent;
+        // Buttons draw with weak_bg_fill; keep them on the theme's card colors.
+        visuals.widgets.inactive.weak_bg_fill = theme.card_hover;
+        visuals.widgets.hovered.weak_bg_fill = mix_color(theme.card_hover, theme.text, 0.12);
+        visuals.widgets.active.weak_bg_fill = mix_color(theme.card_hover, theme.text, 0.2);
         visuals.selection.bg_fill = theme.accent;
         visuals.hyperlink_color = theme.accent;
 
@@ -916,6 +967,23 @@ impl SplinterDots {
         Ok(())
     }
 
+    /// Picks up fonts and themes installed outside the app (e.g. from the AUR) without a restart.
+    fn refresh_custom_styles_if_changed(&mut self, ctx: &egui::Context) {
+        const CHECK_EVERY: std::time::Duration = std::time::Duration::from_secs(3);
+        ctx.request_repaint_after(CHECK_EVERY);
+        if self.custom_styles.checked.elapsed() < CHECK_EVERY {
+            return;
+        }
+        self.custom_styles.checked = std::time::Instant::now();
+        if style_dirs_stamp() != self.custom_styles.stamp {
+            let fonts_before = (self.custom_styles.fonts.clone(), self.custom_styles.font_families.len());
+            self.custom_styles = CustomStyles::scan();
+            if (self.custom_styles.fonts.clone(), self.custom_styles.font_families.len()) != fonts_before {
+                self.loaded_ui_font.clear(); // Rebuild font previews.
+            }
+        }
+    }
+
     fn refresh_addons_if_needed(&mut self) {
         let marker = addons_refresh_marker();
 
@@ -933,6 +1001,7 @@ impl SplinterDots {
         self.preview_font_families.clear();
         self.icon_theme_previews.clear();
         self.cursor_theme_previews.clear();
+        self.custom_styles = CustomStyles::scan();
         self.status = "Installation finished. Fonts and available packages refreshed".to_string();
     }
 
@@ -1147,33 +1216,79 @@ impl SplinterDots {
         }
     }
 
+    fn handle_style_action(&mut self, action: StyleAction) {
+        match action {
+            StyleAction::Install(package) => self.install_style_package(package),
+            StyleAction::Delete(value) => self.delete_custom_style(&value),
+        }
+    }
+
+    fn delete_custom_style(&mut self, value: &str) {
+        let styles = &self.custom_styles;
+        let Some(style) = styles.fonts.iter().chain(&styles.added_builtin_fonts).chain(&styles.icons).chain(&styles.cursors)
+            .find(|s| s.value == value).cloned()
+        else {
+            return;
+        };
+        if let Err(err) = delete_style_files(&style) {
+            self.status = format!("Could not delete {}: {err}", style.label);
+            return;
+        }
+        if styles.fonts.contains(&style) || styles.added_builtin_fonts.contains(&style) {
+            let _ = Command::new("fc-cache").arg("-f").arg(&user_font_dirs()[0]).status();
+        }
+        self.custom_styles = CustomStyles::scan();
+        self.loaded_ui_font.clear();
+        let in_use = ["DOTFILES_UI_FONT", "DOTFILES_ICON_THEME", "DOTFILES_CURSOR_THEME"]
+            .iter()
+            .any(|key| self.value(key) == value);
+        self.status = if in_use {
+            format!("Deleted {}. It was selected, so pick another one and save", style.label)
+        } else {
+            format!("Deleted {}", style.label)
+        };
+    }
+
+    /// Opens splinter-add-style's file picker; the lists refresh via the add-on refresh marker.
+    fn add_style_button(&mut self, ui: &mut egui::Ui, kind: &str, label: &str) {
+        if ui.button(label).clicked() {
+            self.status = match Command::new(self.paths.script("splinter-add-style")).arg(kind).spawn() {
+                Ok(_) => format!("Choose {kind} to add in the file picker"),
+                Err(err) => format!("Could not open the file picker: {err}"),
+            };
+        }
+        ui.add_space(6.0);
+    }
+
     // Rasterize a few sample icons and cursors from every installed theme, once per session.
     fn load_icon_theme_previews(&mut self, ctx: &egui::Context) {
-        for choice in icon_theme_choices() {
-            if self.icon_theme_previews.contains_key(choice.value) {
+        let custom_icons: Vec<String> = self.custom_styles.icons.iter().map(|style| style.value.clone()).collect();
+        for value in icon_theme_choices().iter().map(|choice| choice.value.to_string()).chain(custom_icons) {
+            if self.icon_theme_previews.contains_key(&value) {
                 continue;
             }
             let textures = ICON_PREVIEW_NAMES
                 .iter()
-                .filter_map(|names| find_theme_icon(choice.value, names))
+                .filter_map(|names| find_theme_icon(&value, names))
                 .filter_map(|path| load_icon_texture(ctx, &path))
                 .collect();
-            self.icon_theme_previews.insert(choice.value.to_string(), textures);
+            self.icon_theme_previews.insert(value, textures);
         }
 
-        for choice in cursor_theme_choices() {
-            if self.cursor_theme_previews.contains_key(choice.value) {
+        let custom_cursors: Vec<String> = self.custom_styles.cursors.iter().map(|style| style.value.clone()).collect();
+        for value in cursor_theme_choices().iter().map(|choice| choice.value.to_string()).chain(custom_cursors) {
+            if self.cursor_theme_previews.contains_key(&value) {
                 continue;
             }
             let textures = CURSOR_PREVIEW_NAMES
                 .iter()
-                .filter_map(|names| find_cursor_file(choice.value, names))
+                .filter_map(|names| find_cursor_file(&value, names))
                 .filter_map(|path| {
                     let image = load_xcursor_image(&fs::read(&path).ok()?, 32)?;
                     Some(ctx.load_texture(format!("cursor-preview-{}", path.display()), image, egui::TextureOptions::LINEAR))
                 })
                 .collect();
-            self.cursor_theme_previews.insert(choice.value.to_string(), textures);
+            self.cursor_theme_previews.insert(value, textures);
         }
     }
 
@@ -1265,86 +1380,65 @@ impl SplinterDots {
         let images = self.wallpaper_images.clone();
         let mut clicked: Option<PathBuf> = None;
 
-        for path in images.iter() {
-            let selected = path == &current;
-            let texture = self.wallpaper_texture(ui.ctx(), path);
+        // A collage of small thumbnails, as many per row as fit, in a capped scroll area.
+        const GAP: f32 = 8.0;
+        const PADDING: f32 = 4.0;
+        let width = ui.available_width();
+        let columns = ((width + GAP) / (170.0 + GAP)).floor().max(2.0) as usize;
+        let cell_width = (width - GAP * (columns - 1) as f32) / columns as f32;
+        let image_size = Vec2::new(cell_width - PADDING * 2.0, (cell_width - PADDING * 2.0) * 9.0 / 16.0);
+        let cell_size = image_size + Vec2::splat(PADDING * 2.0);
 
-            let preview_width = 340.0_f32.min(ui.available_width() - 36.0);
-            let image_size = Vec2::new(preview_width, preview_width * 9.0 / 16.0);
-
-            let padding = 8.0;
-            let outer_size = Vec2::new(
-                image_size.x + padding * 2.0,
-                image_size.y + padding * 2.0,
-            );
-
-            // Allocate exactly one row with the exact preview-card height.
-            // This prevents egui from vertically centering the wallpaper list
-            // inside a larger leftover area.
-            let row_width = ui.available_width();
-            let (row_rect, _) = ui.allocate_exact_size(
-                Vec2::new(row_width, outer_size.y),
-                egui::Sense::hover(),
-            );
-
-            let outer_rect = egui::Rect::from_center_size(
-                egui::pos2(row_rect.center().x, row_rect.min.y + outer_size.y / 2.0),
-                outer_size,
-            );
-
-            let response = ui.interact(
-                outer_rect,
-                ui.make_persistent_id(path.to_string_lossy()),
-                egui::Sense::click(),
-            );
-
-            ui.painter().rect(
-                outer_rect,
-                CornerRadius::same(14),
-                if selected { theme.card_hover } else { theme.panel_soft },
-                Stroke::new(
-                    if selected { 2.0 } else { 1.0 },
-                    if selected { theme.accent } else { theme.border },
-                ),
-                egui::StrokeKind::Inside,
-            );
-
-            let image_rect = egui::Rect::from_min_size(
-                outer_rect.min + egui::vec2(padding, padding),
-                image_size,
-            );
-
-            if let Some(texture) = texture {
-                ui.painter().image(
-                    texture.id(),
-                    image_rect,
-                    egui::Rect::from_min_max(
-                        egui::pos2(0.0, 0.0),
-                        egui::pos2(1.0, 1.0),
-                    ),
-                    Color32::WHITE,
-                );
-            } else {
-                ui.painter().rect_filled(
-                    image_rect,
-                    CornerRadius::same(10),
-                    theme.input,
-                );
-                ui.painter().text(
-                    image_rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    "Could not preview",
-                    FontId::proportional(14.0),
-                    theme.muted,
-                );
-            }
-
-            if response.clicked() {
-                clicked = Some(path.clone());
-            }
-
-            ui.add_space(6.0);
-        }
+        ScrollArea::vertical()
+            .id_salt("wallpaper-collage")
+            .max_height(420.0)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                for row in images.chunks(columns) {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = GAP;
+                        for path in row {
+                            let selected = path == &current;
+                            let texture = self.wallpaper_texture(ui.ctx(), path);
+                            let (cell, response) = ui.allocate_exact_size(cell_size, egui::Sense::click());
+                            let hovered = response.hovered();
+                            ui.painter().rect(
+                                cell,
+                                CornerRadius::same(10),
+                                if selected || hovered { theme.card_hover } else { theme.panel_soft },
+                                Stroke::new(
+                                    if selected { 2.0 } else { 1.0 },
+                                    if selected { theme.accent } else { theme.border },
+                                ),
+                                egui::StrokeKind::Inside,
+                            );
+                            let image_rect = egui::Rect::from_min_size(cell.min + Vec2::splat(PADDING), image_size);
+                            if let Some(texture) = texture {
+                                ui.painter().image(
+                                    texture.id(),
+                                    image_rect,
+                                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                                    Color32::WHITE,
+                                );
+                            } else {
+                                ui.painter().rect_filled(image_rect, CornerRadius::same(8), theme.input);
+                                ui.painter().text(
+                                    image_rect.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    "No preview",
+                                    FontId::proportional(12.0),
+                                    theme.muted,
+                                );
+                            }
+                            let name = path.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
+                            if response.on_hover_text(name).clicked() {
+                                clicked = Some(path.clone());
+                            }
+                        }
+                    });
+                    ui.add_space(GAP - ui.spacing().item_spacing.y);
+                }
+            });
 
         if let Some(path) = clicked {
             self.set_value("DOTFILES_WALLPAPER", path.to_string_lossy().to_string());
@@ -1380,6 +1474,14 @@ impl SplinterDots {
     }
 
     fn uninstall_addon_package(&mut self, package: &str) {
+        if package == "splinterdots-yorha-terminal" {
+            self.status = match Command::new(self.paths.script("splinter-yorha")).arg("uninstall").output() {
+                Ok(output) if output.status.success() => "Removed YoRHa Terminal".to_string(),
+                Ok(output) => format!("Could not remove YoRHa Terminal: {}", String::from_utf8_lossy(&output.stderr).trim()),
+                Err(err) => format!("Could not remove YoRHa Terminal: {err}"),
+            };
+            return;
+        }
         let terminal = self.value("DOTFILES_TERMINAL");
         let command = format!(
             "sudo pacman -Rns {}; echo; read -rp 'Press enter to close...'",
@@ -1631,7 +1733,7 @@ misc               = 313244
         } else {
             theme.panel_soft
         };
-        let text = if selected { Color32::WHITE } else { theme.text };
+        let text = if selected { readable_text([theme.accent.r(), theme.accent.g(), theme.accent.b()]) } else { theme.text };
 
         let response = Frame {
             fill,
@@ -1662,12 +1764,14 @@ misc               = 313244
     fn page_header(&self, ui: &mut egui::Ui) {
         let theme = self.app_theme();
 
+        // The header sits on the page background, which can differ a lot from the cards.
+        let (heading, subtitle_color) = text_on(&theme, theme.bg);
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
-                ui.heading(RichText::new(self.tab.title()).color(theme.text));
+                ui.heading(RichText::new(self.tab.title()).color(heading));
                 let subtitle = self.tab.subtitle();
                 if !subtitle.trim().is_empty() {
-                    ui.label(RichText::new(subtitle).color(theme.muted));
+                    ui.label(RichText::new(subtitle).color(subtitle_color));
                 }
             });
 
@@ -2325,28 +2429,44 @@ misc               = 313244
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
             self.custom_theme_editor(ui, &theme);
             // Keep each card usable as the window or UI font size changes.
-            let card_width = (ui.text_style_height(&egui::TextStyle::Body) * 23.0).max(360.0);
+            // Scale with the font size, not its line height: fonts with tall line spacing
+            // (e.g. Rodin Pro) would otherwise force every card onto its own full-width row.
+            let body_size = egui::TextStyle::Body.resolve(ui.style()).size;
+            let card_width = (body_size * 27.0).max(360.0);
+            if ui.available_width() >= card_width * 2.0 + 16.0 {
+                // Side by side, both cards take the taller one's height (measured last frame).
+                let target = self.appearance_pair_height;
+                ui.columns(2, |cols| {
+                    let theme_height = self.appearance_theme_card(&mut cols[0], &theme, target);
+                    let wallpaper_height = self.appearance_wallpaper_card(&mut cols[1], &theme, target);
+                    let tallest = theme_height.max(wallpaper_height);
+                    if (tallest - target).abs() > 0.5 {
+                        self.appearance_pair_height = tallest;
+                        cols[0].ctx().request_repaint();
+                    }
+                });
+            } else {
+                self.appearance_theme_card(ui, &theme, 0.0);
+                self.appearance_wallpaper_card(ui, &theme, 0.0);
+            }
+
+            // Fonts, icon themes and cursor themes each get their own card.
             if ui.available_width() >= card_width * 3.0 + 32.0 {
                 ui.columns(3, |cols| {
-                    self.appearance_theme_card(&mut cols[0], &theme);
-                    self.appearance_wallpaper_card(&mut cols[1], &theme);
-                    self.appearance_fonts_card(&mut cols[2], &theme);
+                    for (kind, col) in [StyleKind::Font, StyleKind::Icons, StyleKind::Cursors].into_iter().zip(cols.iter_mut()) {
+                        self.appearance_style_card(col, &theme, kind);
+                    }
                 });
-            } else if ui.available_width() >= card_width * 2.0 + 16.0 {
-                ui.columns(2, |cols| {
-                    self.appearance_theme_card(&mut cols[0], &theme);
-                    self.appearance_wallpaper_card(&mut cols[1], &theme);
-                });
-                self.appearance_fonts_card(ui, &theme);
             } else {
-                self.appearance_theme_card(ui, &theme);
-                self.appearance_wallpaper_card(ui, &theme);
-                self.appearance_fonts_card(ui, &theme);
+                for kind in [StyleKind::Font, StyleKind::Icons, StyleKind::Cursors] {
+                    self.appearance_style_card(ui, &theme, kind);
+                }
             }
         });
     }
 
-    fn appearance_theme_card(&mut self, ui: &mut egui::Ui, theme: &AppTheme) {
+    /// Returns the card's natural content height; `min_height` stretches it to match its neighbour.
+    fn appearance_theme_card(&mut self, ui: &mut egui::Ui, theme: &AppTheme, min_height: f32) -> f32 {
         Self::card(theme, ui, |ui| {
                         ui.label(RichText::new("Theme").strong().size(18.0));
                         ui.label(
@@ -2357,27 +2477,47 @@ misc               = 313244
 
                         let current_theme = self.value("DOTFILES_THEME");
 
-                       ui.horizontal_wrapped(|ui| {
-                               for choice in [
-                                   ("midnight", "Midnight"),
-                                   ("catppuccin", "Catppuccin"),
-                                   ("nord", "Nord"),
-                                   ("gruvbox", "Gruvbox"),
-                                   ("sakura", "Sakura"),
-                                   ("cyberpunk", "Cyberpunk"),
-                                   ("everforest", "Everforest"),
-                                   ("dracula", "Dracula"),
-                               ]
-                               .iter()
-                               {
-                                   let selected = current_theme == choice.0;
-
-                                   if ui.selectable_label(selected, choice.1).clicked() {
-                                       self.preview_theme(choice.0);
-                                   }
-
-                               }
-                        });
+                        // Each theme is a tile drawn in its own colors.
+                        const GAP: f32 = 8.0;
+                        let choices = [
+                            ("midnight", "Midnight"), ("catppuccin", "Catppuccin"), ("nord", "Nord"),
+                            ("gruvbox", "Gruvbox"), ("sakura", "Sakura"), ("cyberpunk", "Cyberpunk"),
+                            ("everforest", "Everforest"), ("dracula", "Dracula"),
+                        ];
+                        let width = ui.available_width();
+                        let columns = ((width + GAP) / (150.0 + GAP)).floor().clamp(2.0, 4.0) as usize;
+                        let tile = Vec2::new((width - GAP * (columns - 1) as f32) / columns as f32, 72.0);
+                        for row in choices.chunks(columns) {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = GAP;
+                                for (value, label) in row {
+                                    let mut values = self.values.clone();
+                                    values.insert("DOTFILES_THEME".into(), value.to_string());
+                                    let palette = theme_palette(&values);
+                                    let color = |hex: &str| parse_hex_color(hex).unwrap_or(theme.card);
+                                    let (bg, surface, text) = (color(&palette.background), color(&palette.surface), color(&palette.text));
+                                    let selected = current_theme == *value;
+                                    let (rect, response) = ui.allocate_exact_size(tile, egui::Sense::click());
+                                    let painter = ui.painter();
+                                    painter.rect(rect, CornerRadius::same(12), bg,
+                                        Stroke::new(if selected { 3.0 } else { 1.0 }, if selected { theme.accent } else { theme.border }),
+                                        egui::StrokeKind::Inside);
+                                    let strip = egui::Rect::from_min_max(rect.left_bottom() + Vec2::new(10.0, -26.0), rect.right_bottom() + Vec2::new(-10.0, -10.0));
+                                    painter.rect_filled(strip, CornerRadius::same(6), surface);
+                                    painter.text(rect.left_top() + Vec2::new(12.0, 10.0), egui::Align2::LEFT_TOP, *label,
+                                        FontId::proportional(15.0), text);
+                                    let accent = parse_hex_color(default_accent(value)).unwrap_or(theme.accent);
+                                    painter.circle_filled(rect.right_top() + Vec2::new(-18.0, 18.0), 7.0, accent);
+                                    if response.hovered() {
+                                        painter.rect_stroke(rect, CornerRadius::same(12), Stroke::new(1.5, theme.accent), egui::StrokeKind::Inside);
+                                    }
+                                    if response.clicked() {
+                                        self.preview_theme(value);
+                                    }
+                                }
+                            });
+                            ui.add_space(GAP - ui.spacing().item_spacing.y);
+                        }
                         ui.add_space(16.0);
                         let color = parse_hex_color(&self.value("DOTFILES_ACCENT")).unwrap_or(theme.accent);
                         let mut accent = [color.r(), color.g(), color.b()];
@@ -2388,10 +2528,13 @@ misc               = 313244
                             }
                         });
                         ui.add_space(8.0);
-        });
+                        let natural = ui.min_rect().height();
+                        ui.set_min_height(min_height);
+                        natural
+        })
     }
 
-    fn appearance_wallpaper_card(&mut self, ui: &mut egui::Ui, theme: &AppTheme) {
+    fn appearance_wallpaper_card(&mut self, ui: &mut egui::Ui, theme: &AppTheme, min_height: f32) -> f32 {
         Self::card(theme, ui, |ui| {
                         ui.label(RichText::new("Wallpaper").strong().size(18.0));
                         ui.label(
@@ -2438,74 +2581,67 @@ misc               = 313244
                             ui.label(RichText::new(format!("Current: {}", shorten_text(&current, 48))).color(theme.muted));
                         }
                         self.wallpaper_grid(ui, theme);
-        });
+                        let natural = ui.min_rect().height();
+                        ui.set_min_height(min_height);
+                        natural
+        })
     }
 
-    fn appearance_fonts_card(&mut self, ui: &mut egui::Ui, theme: &AppTheme) {
+    fn appearance_style_card(&mut self, ui: &mut egui::Ui, theme: &AppTheme, kind: StyleKind) {
+        let (title, description, key, add_kind, add_label, choices, index) = match kind {
+            StyleKind::Font => ("Fonts", "The font used across SplinterDots, GTK apps and the bar.",
+                "DOTFILES_UI_FONT", "fonts", "Add your own fonts…", font_choices(), 0),
+            StyleKind::Icons => ("Icon themes", "Icons for apps, the launcher and the bar.",
+                "DOTFILES_ICON_THEME", "icons", "Add your own icon theme…", icon_theme_choices(), 1),
+            StyleKind::Cursors => ("Cursor themes", "The mouse pointer everywhere on the desktop.",
+                "DOTFILES_CURSOR_THEME", "cursors", "Add your own cursor theme…", cursor_theme_choices(), 2),
+        };
         Self::card(theme, ui, |ui| {
-                        ui.label(RichText::new("Fonts and icon packs").strong().size(18.0));
-                        ui.label(
-                            RichText::new("Items marked as requiring download need to be installed separately.")
-                                .color(theme.muted),
-                        );
-                        ui.add_space(14.0);
+            ui.label(RichText::new(title).strong().size(18.0));
+            ui.label(RichText::new(description).color(theme.muted));
+            ui.label(RichText::new("Changes apply when you press Save.").color(theme.muted).size(11.0));
+            ui.add_space(8.0);
+            self.add_style_button(ui, add_kind, add_label);
 
-                        ScrollArea::vertical()
-                            .id_salt("appearance-fonts-scroll")
-                            .max_height(620.0)
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                self.load_icon_theme_previews(ui.ctx());
-                                let no_icon_previews = HashMap::new();
-                                let mut font = self.value("DOTFILES_UI_FONT");
-                                if let Some(package) = style_choice_grid(
-                                    ui,
-                                    &theme,
-                                    "UI font",
-                                    &mut font,
-                                    font_choices(),
-                                    &self.preview_font_families,
-                                    &no_icon_previews,
-                                ) {
-                                    self.install_style_package(package);
-                                }
-                                self.set_value("DOTFILES_UI_FONT", font);
-
-                                ui.add_space(18.0);
-
-                                let mut icon_theme = self.value("DOTFILES_ICON_THEME");
-                                if let Some(package) = style_choice_grid(
-                                    ui,
-                                    &theme,
-                                    "System icon theme",
-                                    &mut icon_theme,
-                                    icon_theme_choices(),
-                                    &self.preview_font_families,
-                                    &self.icon_theme_previews,
-                                ) {
-                                    self.install_style_package(package);
-                                }
-                                self.set_value("DOTFILES_ICON_THEME", icon_theme);
-
-                                ui.add_space(18.0);
-
-                                let mut cursor_theme = self.value("DOTFILES_CURSOR_THEME");
-                                if let Some(package) = style_choice_grid(
-                                    ui,
-                                    &theme,
-                                    "Cursor theme",
-                                    &mut cursor_theme,
-                                    cursor_theme_choices(),
-                                    &self.preview_font_families,
-                                    &self.cursor_theme_previews,
-                                ) {
-                                    self.install_style_package(package);
-                                }
-                                self.set_value("DOTFILES_CURSOR_THEME", cursor_theme);
-
-                                ui.add_space(8.0);
-                                ui.label(RichText::new("Fonts, icons and cursors apply when you press Save.").color(theme.muted).size(11.0));
-                            });
+            ScrollArea::vertical()
+                .id_salt(("appearance-style-scroll", index))
+                // Inside the scrolling page the available height is tiny, so set a real minimum.
+                .min_scrolled_height(700.0)
+                .max_height(900.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    self.load_icon_theme_previews(ui.ctx());
+                    let no_previews = HashMap::new();
+                    let no_families = HashSet::new();
+                    let (custom, available, previews) = match kind {
+                        StyleKind::Font => (&self.custom_styles.fonts, &self.custom_styles.font_families, &no_previews),
+                        StyleKind::Icons => (&self.custom_styles.icons, &no_families, &self.icon_theme_previews),
+                        StyleKind::Cursors => (&self.custom_styles.cursors, &no_families, &self.cursor_theme_previews),
+                    };
+                    let added_builtin: &[CustomStyle] = match kind {
+                        StyleKind::Font => &self.custom_styles.added_builtin_fonts,
+                        _ => &[],
+                    };
+                    let mut current = self.value(key);
+                    let action = style_choice_grid(
+                        ui,
+                        theme,
+                        title,
+                        &mut current,
+                        choices,
+                        custom,
+                        available,
+                        added_builtin,
+                        &mut self.style_searches[index],
+                        &mut self.style_delete_confirm,
+                        &self.preview_font_families,
+                        previews,
+                    );
+                    self.set_value(key, current);
+                    if let Some(action) = action {
+                        self.handle_style_action(action);
+                    }
+                });
         });
     }
 
@@ -3141,6 +3277,7 @@ impl eframe::App for SplinterDots {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll_app_theme_sync(ui.ctx());
         self.refresh_addons_if_needed();
+        self.refresh_custom_styles_if_changed(ui.ctx());
         self.sync_ui_font(ui.ctx());
         self.apply_style(ui);
         let theme = self.app_theme();
@@ -4055,6 +4192,28 @@ fn build_bar_zone_qml(
 ")
 }
 
+/// Fill for toggles that are switched on: a light tint of the accent over the
+/// button surface, so "on" stands out without clashing with the bar. Text keeps
+/// the bar's normal color.
+fn on_fill(palette: &Palette) -> String {
+    let surface = parse_hex_color(&palette.surface).unwrap_or(Color32::from_rgb(49, 50, 68));
+    let accent = parse_hex_color(&palette.accent).unwrap_or(Color32::from_rgb(137, 180, 250));
+    let fill = mix_color(surface, accent, 0.3);
+    rgb_hex([fill.r(), fill.g(), fill.b()])
+}
+
+/// Fill and text for highlighted buttons (hover, active workspace): solid accent
+/// with contrasting text, except for near-white accents, where a solid fill would
+/// force dark text; those get the subtle tint and keep the theme's normal text.
+fn highlight(palette: &Palette) -> (String, String) {
+    let accent = parse_hex_color(&palette.accent).unwrap_or(Color32::from_rgb(137, 180, 250));
+    if relative_luminance(accent) > 0.7 {
+        (on_fill(palette), palette.text.clone())
+    } else {
+        (palette.accent.clone(), palette.active_text.clone())
+    }
+}
+
 fn bar_widget_qml(
     widget: &str,
     id: &str,
@@ -4173,15 +4332,16 @@ fn idle_inhibitor_qml(id: &str, palette: &Palette, height: i64, radius: i64, fon
     format!(r#"Rectangle {{
       id: {name}
       property bool active: false
-      width: 124; height: {height}; anchors.verticalCenter: parent.verticalCenter
-      radius: {radius}; color: active ? "{accent}" : "{surface}"
-      ThemedLabel {{ anchors.centerIn: parent; text: {name}.active ? "󰅶 Keep awake" : "󰒲 Idle allowed"
-        color: {name}.active ? "{active_text}" : "{text}"; font.pixelSize: {font_size}; font.family: {font}
+      width: {name}Label.implicitWidth + 20; height: {height}; anchors.verticalCenter: parent.verticalCenter
+      radius: {radius}; color: active ? "{on_fill}" : "{surface}"
+      border.color: "{accent}"; border.width: active ? 2 : 1
+      ThemedLabel {{ id: {name}Label; anchors.centerIn: parent; text: {name}.active ? "󰅶 Keep awake" : "󰒲 Idle allowed"
+        color: "{text}"; font.pixelSize: {font_size}; font.family: {font}
       }}
       IdleInhibitor {{ window: {name}.QsWindow.window; enabled: {name}.active }}
       MouseArea {{ anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: {name}.active = !{name}.active }}
     }}"#, height=(height-8).max(22), radius=(radius-4).max(6), accent=palette.accent,
-       surface=palette.surface, text=palette.text, active_text=palette.active_text, font=json_string(icon_font))
+       surface=palette.surface, text=palette.text, on_fill=on_fill(palette), font=json_string(icon_font))
 }
 
 // Bluetooth headset call mode: highlighted while the headset mic is active.
@@ -4194,12 +4354,12 @@ fn call_mode_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_siz
       property bool busy: {name}Toggle.running
       visible: mode !== "none"
       width: {name}Label.implicitWidth + 20; height: {height}; anchors.verticalCenter: parent.verticalCenter
-      radius: {radius}; color: mode === "on" ? "{accent}" : "{surface}"
-      border.color: "{accent}"; border.width: 1
+      radius: {radius}; color: mode === "on" ? "{on_fill}" : "{surface}"
+      border.color: "{accent}"; border.width: mode === "on" ? 2 : 1
       ThemedLabel {{ id: {name}Label; anchors.centerIn: parent
         text: {name}.busy ? String.fromCodePoint(0xf130) + " Switching…"
           : ({name}.mode === "on" ? String.fromCodePoint(0xf130) + " Call" : String.fromCodePoint(0xf02cb) + " Music")
-        color: {name}.mode === "on" ? "{active_text}" : "{text}"; font.pixelSize: {font_size}; font.bold: true; font.family: {font}
+        color: "{text}"; font.pixelSize: {font_size}; font.bold: true; font.family: {font}
       }}
       Process {{ id: {name}Status; command: ["splinter-call-mode", "status"]; running: true
         stdout: StdioCollector {{ onStreamFinished: {name}.mode = this.text.trim() || "none" }}
@@ -4214,7 +4374,7 @@ fn call_mode_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_siz
         onClicked: {{ if (!{name}Toggle.running) {name}Toggle.running = true }}
       }}
     }}"#, height=(height-8).max(22), radius=(radius-4).max(6), accent=palette.accent, surface=palette.surface,
-       text=palette.text, active_text=palette.active_text, font=json_string(icon_font))
+       text=palette.text, on_fill=on_fill(palette), font=json_string(icon_font))
 }
 
 fn window_title_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_size: i64) -> String {
@@ -4345,15 +4505,16 @@ fn easyeffects_widget_qml(
             Rectangle {
               id: __ID__
               property bool effectsEnabled: false
-              width: 62
+              width: __ID__Label.implicitWidth + 20
               height: __HEIGHT__
               anchors.verticalCenter: parent.verticalCenter
               radius: __RADIUS__
-              color: effectsEnabled ? "__ACCENT__" : "__SURFACE__"
+              color: effectsEnabled ? "__ON_FILL__" : "__SURFACE__"
               border.color: effectsEnabled ? "__ACCENT__" : "__MUTED__"
-              border.width: 1
+              border.width: effectsEnabled ? 2 : 1
 
               ThemedLabel {
+                id: __ID__Label
                 anchors.centerIn: parent
                 text: __ID__.effectsEnabled ? "󰓃 FX ON" : "󰓃 FX OFF"
                 color: "__TEXT__"
@@ -4411,6 +4572,7 @@ fn easyeffects_widget_qml(
     .replace("__SURFACE__", &palette.surface)
     .replace("__MUTED__", &palette.accent)
     .replace("__TEXT__", &palette.text)
+    .replace("__ON_FILL__", &on_fill(palette))
     .replace("__FONT_SIZE__", &font_size.to_string())
     .replace("__ICON_FONT__", icon_font)
     .replace("__INTERVAL__", &interval.max(500).to_string())
@@ -4429,18 +4591,19 @@ fn bluetooth_widget_qml(
             Rectangle {
               id: __ID__
               property bool powered: false
-              width: 86
+              width: __ID__Label.implicitWidth + 20
               height: __HEIGHT__
               anchors.verticalCenter: parent.verticalCenter
               radius: __RADIUS__
-              color: __MOUSE_ID__.containsMouse ? "__ACCENT__" : "__SURFACE__"
+              color: __MOUSE_ID__.containsMouse ? "__HIGHLIGHT__" : "__SURFACE__"
               border.color: powered ? "__ACCENT__" : "__MUTED__"
               border.width: 1
 
               ThemedLabel {
+                id: __ID__Label
                 anchors.centerIn: parent
                 text: __ID__.powered ? " Bluetooth" : "󰂲 Off"
-                color: "__TEXT__"
+                color: __MOUSE_ID__.containsMouse ? "__ACTIVE_TEXT__" : "__TEXT__"
                 font.pixelSize: __FONT_SIZE__
                 font.bold: true
                 font.family: "__ICON_FONT__"
@@ -4493,6 +4656,8 @@ fn bluetooth_widget_qml(
     .replace("__SURFACE__", &palette.surface)
     .replace("__MUTED__", &palette.accent)
     .replace("__TEXT__", &palette.text)
+    .replace("__HIGHLIGHT__", &highlight(palette).0)
+    .replace("__ACTIVE_TEXT__", &highlight(palette).1)
     .replace("__FONT_SIZE__", &font_size.to_string())
     .replace("__ICON_FONT__", icon_font)
     .replace("__INTERVAL__", &interval.max(500).to_string())
@@ -4532,18 +4697,19 @@ fn volume_widget_qml(
                 refreshPending = false
                 __STATUS_ID__.running = true
               }
-              width: 86
+              width: Math.max(__ID__Label.implicitWidth + 20, 70)
               height: __HEIGHT__
               anchors.verticalCenter: parent.verticalCenter
               radius: __RADIUS__
-              color: __MOUSE_ID__.containsMouse ? "__ACCENT__" : "__SURFACE__"
+              color: __MOUSE_ID__.containsMouse ? "__HIGHLIGHT__" : "__SURFACE__"
               border.color: "__ACCENT__"
               border.width: 1
 
               ThemedLabel {
+                id: __ID__Label
                 anchors.centerIn: parent
                 text: __ID__.volumeText
-                color: "__TEXT__"
+                color: __MOUSE_ID__.containsMouse ? "__ACTIVE_TEXT__" : "__TEXT__"
                 font.pixelSize: __FONT_SIZE__
                 font.bold: true
                 font.family: "__ICON_FONT__"
@@ -4645,6 +4811,8 @@ fn volume_widget_qml(
     .replace("__ACCENT__", &palette.accent)
     .replace("__SURFACE__", &palette.surface)
     .replace("__TEXT__", &palette.text)
+    .replace("__HIGHLIGHT__", &highlight(palette).0)
+    .replace("__ACTIVE_TEXT__", &highlight(palette).1)
     .replace("__FONT_SIZE__", &font_size.to_string())
     .replace("__ICON_FONT__", icon_font)
     .replace("__INTERVAL__", &interval.max(500).to_string())
@@ -4751,14 +4919,14 @@ fn command_button_qml(
               height: __HEIGHT__
               anchors.verticalCenter: parent.verticalCenter
               radius: __RADIUS__
-              color: "__SURFACE__"
+              color: __MOUSE_ID__.containsMouse ? "__HIGHLIGHT__" : "__SURFACE__"
               border.color: "__MUTED__"
               border.width: 1
 
               ThemedLabel {
                 anchors.centerIn: parent
                 text: "__LABEL__"
-                color: "__TEXT__"
+                color: __MOUSE_ID__.containsMouse ? "__ACTIVE_TEXT__" : "__TEXT__"
                 font.pixelSize: __FONT_SIZE__
                 font.bold: true
                 font.family: "__ICON_FONT__"
@@ -4766,10 +4934,9 @@ fn command_button_qml(
               }
 
               MouseArea {
+                id: __MOUSE_ID__
                 anchors.fill: parent
                 hoverEnabled: true
-                onEntered: parent.color = "__ACCENT__"
-                onExited: parent.color = "__SURFACE__"
                 onClicked: { __PROC_ID__.running = false; __PROC_ID__.running = true }
               }
 
@@ -4786,6 +4953,9 @@ fn command_button_qml(
     .replace("__MUTED__", &palette.accent)
     .replace("__ACCENT__", &palette.accent)
     .replace("__TEXT__", &palette.text)
+    .replace("__HIGHLIGHT__", &highlight(palette).0)
+    .replace("__ACTIVE_TEXT__", &highlight(palette).1)
+    .replace("__MOUSE_ID__", &qml_id(id, "btnMouse"))
     .replace("__FONT_SIZE__", &font_size.to_string())
     .replace("__ICON_FONT__", icon_font)
     .replace("__LABEL__", &qml_string_escape(label))
@@ -4819,14 +4989,14 @@ fn workspaces_qml(
                   height: __BUTTON_SIZE__
                   radius: __BUTTON_RADIUS__
                   property bool active: root.activeWorkspace === modelData + 1
-                  color: active ? "__ACCENT__" : "__SURFACE__"
+                  color: active ? "__HIGHLIGHT__" : "__SURFACE__"
                   border.color: "__MUTED__"
                   border.width: 1
 
                   Text {{
                     anchors.centerIn: parent
                     text: modelData + 1
-                    color: parent.active ? "__SURFACE__" : "__TEXT__"
+                    color: parent.active ? "__ACTIVE_TEXT__" : "__TEXT__"
                     font.pixelSize: __FONT_SIZE__
                     font.bold: true
                     font.family: "__ICON_FONT__"
@@ -4853,6 +5023,8 @@ fn workspaces_qml(
     .replace("__SURFACE__", &palette.surface)
     .replace("__ACCENT__", &palette.accent)
     .replace("__TEXT__", &palette.text)
+    .replace("__HIGHLIGHT__", &highlight(palette).0)
+    .replace("__ACTIVE_TEXT__", &highlight(palette).1)
     .replace("__MUTED__", &palette.accent)
 }
 
@@ -5098,14 +5270,14 @@ fn media_controls_qml(
                 width: __BUTTON_SIZE__
                 height: __BUTTON_SIZE__
                 radius: __BUTTON_RADIUS__
-                color: __MOUSE_ID__.containsMouse ? "__ACCENT__" : "__SURFACE__"
+                color: __MOUSE_ID__.containsMouse ? "__HIGHLIGHT__" : "__SURFACE__"
                 border.color: "__ACCENT__"
                 border.width: 1
 
                 ThemedLabel {{
                   anchors.centerIn: parent
                   text: ""
-                  color: "__TEXT__"
+                  color: __MOUSE_ID__.containsMouse ? "__ACTIVE_TEXT__" : "__TEXT__"
                   font.family: "__ICON_FONT__"
                   font.pixelSize: __FONT_SIZE__
                   font.bold: true
@@ -5137,6 +5309,8 @@ fn media_controls_qml(
     .replace("__ICON_FONT__", &qml_string_escape(icon_font))
     .replace("__SURFACE__", &palette.surface)
     .replace("__TEXT__", &palette.text)
+    .replace("__HIGHLIGHT__", &highlight(palette).0)
+    .replace("__ACTIVE_TEXT__", &highlight(palette).1)
     .replace("__ACCENT__", &palette.accent)
 }
 
@@ -5681,11 +5855,19 @@ fn parse_fontconfig_match(preferred: &str, output: &str) -> Option<(PathBuf, u32
 }
 
 fn load_font_family(preferred: &str) -> Option<FontData> {
-    let output = Command::new("fc-match")
-        .args(["-f", "%{family}\n%{file}\n%{index}\n", &format!("{preferred}:style=Regular")])
-        .output().ok()?;
-    if !output.status.success() { return None; }
-    let (path, index) = parse_fontconfig_match(preferred, &String::from_utf8_lossy(&output.stdout))?;
+    // Prefer the Regular style, but fonts installed in only one weight (e.g. Rodin Pro B) have none.
+    // Escape fontconfig's pattern syntax: '-' would otherwise start a size ("FOT-Rodin Pro" -> "FOT").
+    let family: String = preferred.chars().flat_map(|c| {
+        let escape = matches!(c, '\\' | '-' | ':' | ',');
+        escape.then_some('\\').into_iter().chain(std::iter::once(c))
+    }).collect();
+    let (path, index) = [format!("{family}:style=Regular"), family].iter().find_map(|pattern| {
+        let output = Command::new("fc-match")
+            .args(["-f", "%{family}\n%{file}\n%{index}\n", pattern])
+            .output().ok()?;
+        if !output.status.success() { return None; }
+        parse_fontconfig_match(preferred, &String::from_utf8_lossy(&output.stdout))
+    })?;
     let mut data = FontData::from_owned(fs::read(path).ok()?);
     data.index = index;
     Some(data)
@@ -5698,6 +5880,197 @@ fn normalize_font_name(name: &str) -> String {
         .replace("_", "")
 }
 
+/// One card in a style picker: a built-in choice or one the user added.
+struct StyleView<'a> {
+    label: &'a str,
+    value: &'a str,
+    package: Option<&'static str>,
+    installed: bool,
+    note: &'static str,
+    removable: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct CustomStyle {
+    label: String,
+    value: String,
+    /// Files or folders that make up this style in the user's own directories;
+    /// empty for styles installed system-wide (remove those with the package manager).
+    removable: Vec<PathBuf>,
+}
+
+#[derive(Clone, Copy)]
+enum StyleKind {
+    Font,
+    Icons,
+    Cursors,
+}
+
+/// What the user asked a style picker to do.
+enum StyleAction {
+    Install(&'static str),
+    Delete(String),
+}
+
+fn user_font_dirs() -> [PathBuf; 2] {
+    let home = home_dir();
+    let data = env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".local/share"));
+    [data.join("fonts"), home.join(".fonts")]
+}
+
+fn user_icon_dirs() -> [PathBuf; 2] {
+    let home = home_dir();
+    let data = env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".local/share"));
+    [data.join("icons"), home.join(".icons")]
+}
+
+/// Deletes a user-added style, refusing anything outside the user's font and icon folders.
+fn delete_style_files(style: &CustomStyle) -> Result<(), String> {
+    if style.removable.is_empty() {
+        return Err(format!("{} is installed system-wide; uninstall its package instead", style.label));
+    }
+    let allowed: Vec<PathBuf> = user_font_dirs().into_iter().chain(user_icon_dirs()).collect();
+    for path in &style.removable {
+        if !allowed.iter().any(|dir| path.starts_with(dir) && path != dir) {
+            return Err(format!("refusing to delete {}", path.display()));
+        }
+    }
+    for path in &style.removable {
+        let result = if path.is_dir() { fs::remove_dir_all(path) } else { fs::remove_file(path) };
+        match result {
+            Err(err) if err.kind() != std::io::ErrorKind::NotFound => return Err(err.to_string()),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Fonts and themes installed outside SplinterDots' built-in lists.
+struct CustomStyles {
+    fonts: Vec<CustomStyle>,
+    icons: Vec<CustomStyle>,
+    cursors: Vec<CustomStyle>,
+    /// Every installed font family, for built-in fonts without a package.
+    font_families: HashSet<String>,
+    /// Built-in fonts without a package (e.g. Rodin Pro) whose files the user added.
+    added_builtin_fonts: Vec<CustomStyle>,
+    /// style_dirs_stamp() when scanned, and when it was last compared.
+    stamp: u64,
+    checked: std::time::Instant,
+}
+
+/// Directories whose modification times change when fonts or themes are added or removed,
+/// including by pacman/AUR packages (which also refresh the fontconfig cache).
+fn style_dirs() -> Vec<PathBuf> {
+    let home = home_dir();
+    let data = env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".local/share"));
+    let cache = env::var_os("XDG_CACHE_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".cache"));
+    vec![
+        data.join("icons"), home.join(".icons"), PathBuf::from("/usr/share/icons"),
+        data.join("fonts"), data.join("fonts/SplinterDots"), home.join(".fonts"),
+        PathBuf::from("/var/cache/fontconfig"), cache.join("fontconfig"),
+    ]
+}
+
+fn style_dirs_stamp() -> u64 {
+    style_dirs()
+        .iter()
+        .filter_map(|dir| fs::metadata(dir).and_then(|meta| meta.modified()).ok())
+        .filter_map(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as u64)
+        .fold(0, |acc, millis| acc.wrapping_mul(31).wrapping_add(millis))
+}
+
+impl CustomStyles {
+    fn scan() -> Self {
+        let stamp = style_dirs_stamp();
+        let home = home_dir();
+        let user_font_dirs = user_font_dirs();
+        let listing = Command::new("fc-list")
+            .args(["--format", "%{file}\t%{family}\n"])
+            .output()
+            .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+            .unwrap_or_default();
+        let known_fonts: HashSet<&str> = font_choices().iter().map(|choice| choice.value).collect();
+        let mut fonts = Vec::new();
+        let mut added_builtin_fonts = Vec::new();
+        let mut font_families = HashSet::new();
+        for (file, families) in listing.lines().filter_map(|line| line.split_once('\t')) {
+            let families: Vec<&str> = families.split(',').map(str::trim).filter(|f| !f.is_empty()).collect();
+            font_families.extend(families.iter().map(|family| family.to_string()));
+            let Some(family) = families.first() else { continue };
+            let user_font = user_font_dirs.iter().any(|dir| Path::new(file).starts_with(dir));
+            if !user_font {
+                continue;
+            }
+            let list = if known_fonts.contains(family) { &mut added_builtin_fonts } else { &mut fonts };
+            match list.iter_mut().find(|f: &&mut CustomStyle| f.value == *family) {
+                Some(font) if !font.removable.contains(&PathBuf::from(file)) => font.removable.push(PathBuf::from(file)),
+                Some(_) => {}
+                None => list.push(CustomStyle {
+                    label: family.to_string(),
+                    value: family.to_string(),
+                    removable: vec![PathBuf::from(file)],
+                }),
+            }
+        }
+        fonts.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
+
+        let roots = [
+            env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".local/share")).join("icons"),
+            home.join(".icons"),
+            PathBuf::from("/usr/share/icons"),
+        ];
+        let known_icons: HashSet<&str> = icon_theme_choices().iter().map(|choice| choice.value).collect();
+        let known_cursors: HashSet<&str> = cursor_theme_choices().iter().map(|choice| choice.value).collect();
+        let (icons, cursors) = scan_icon_roots(&roots, &user_icon_dirs(), &known_icons, &known_cursors);
+        Self { fonts, icons, cursors, font_families, added_builtin_fonts, stamp, checked: std::time::Instant::now() }
+    }
+}
+
+/// Icon and cursor themes found in the given icon directories, excluding known ones.
+fn scan_icon_roots(
+    roots: &[PathBuf],
+    user_roots: &[PathBuf],
+    known_icons: &HashSet<&str>,
+    known_cursors: &HashSet<&str>,
+) -> (Vec<CustomStyle>, Vec<CustomStyle>) {
+    let (mut icons, mut cursors) = (Vec::<CustomStyle>::new(), Vec::<CustomStyle>::new());
+    for root in roots {
+        let Ok(entries) = fs::read_dir(root) else { continue };
+        for entry in entries.flatten() {
+            let dir = entry.path();
+            let value = entry.file_name().to_string_lossy().to_string();
+            if !dir.is_dir() || ["default", "hicolor", "locolor"].contains(&value.as_str()) {
+                continue;
+            }
+            let index = fs::read_to_string(dir.join("index.theme")).unwrap_or_default();
+            let label = index
+                .lines()
+                .find_map(|line| line.strip_prefix("Name="))
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .unwrap_or(&value)
+                .to_string();
+            let removable = if user_roots.contains(root) { vec![dir.clone()] } else { Vec::new() };
+            let has_icons = index
+                .lines()
+                .any(|line| line.strip_prefix("Directories=").is_some_and(|dirs| !dirs.trim().is_empty()));
+            if has_icons && !known_icons.contains(value.as_str()) && !icons.iter().any(|s| s.value == value) {
+                icons.push(CustomStyle { label: label.clone(), value: value.clone(), removable: removable.clone() });
+            }
+            if dir.join("cursors").is_dir() && !known_cursors.contains(value.as_str())
+                && !cursors.iter().any(|s| s.value == value)
+            {
+                cursors.push(CustomStyle { label, value, removable });
+            }
+        }
+    }
+    icons.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
+    cursors.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
+    (icons, cursors)
+}
+
 #[derive(Clone, Copy)]
 struct StyleChoice {
     label: &'static str,
@@ -5707,6 +6080,12 @@ struct StyleChoice {
 
 fn font_choices() -> &'static [StyleChoice] {
     &[
+        // Commercial (Fontworks); selectable once its files are added with "Add your own fonts…".
+        StyleChoice {
+            label: "Rodin Pro",
+            value: "FOT-Rodin Pro",
+            package: None,
+        },
         StyleChoice {
             label: "CaskaydiaCove Nerd Font",
             value: "CaskaydiaCove Nerd Font",
@@ -5855,14 +6234,25 @@ fn style_choice_grid(
     title: &str,
     current: &mut String,
     choices: &[StyleChoice],
+    custom: &[CustomStyle],
+    // Installed names for built-in choices without a package (fonts the user adds manually).
+    available: &HashSet<String>,
+    // Built-in choices without a package whose files the user added, so they can be deleted.
+    added_builtin: &[CustomStyle],
+    search: &mut String,
+    // Value of the added style whose Delete button was pressed once, awaiting confirmation.
+    confirm_delete: &mut Option<String>,
     preview_font_families: &HashMap<String, FontFamily>,
     icon_previews: &HashMap<String, Vec<egui::TextureHandle>>,
-) -> Option<&'static str> {
-    let mut package_to_install = None;
+) -> Option<StyleAction> {
+    let mut action = None;
     let is_font_picker = title.to_ascii_lowercase().contains("font");
 
-    ui.label(RichText::new(title).strong().size(16.0));
+    // The title names the picker for its grid id; the surrounding card shows the heading.
     ui.label(RichText::new("Select a style or install it first").color(theme.muted).size(11.0));
+    ui.add_space(6.0);
+    ui.add(egui::TextEdit::singleline(search).hint_text("Search…").desired_width(f32::INFINITY));
+    let query = search.trim().to_lowercase();
     let columns = if !is_font_picker && ui.available_width() >= 480.0 { 2 } else { 1 };
     let content_width = ((ui.available_width() - 8.0 * (columns - 1) as f32)
         / columns as f32 - 28.0).max(1.0);
@@ -5875,9 +6265,35 @@ fn style_choice_grid(
         .max_col_width(content_width + 28.0)
         .spacing([8.0, 8.0])
         .show(ui, |ui| {
-            for (index, choice) in choices.iter().enumerate() {
+            let built_in = choices.iter().map(|choice| StyleView {
+                label: choice.label,
+                value: choice.value,
+                package: choice.package,
+                installed: match choice.package {
+                    Some(package) => is_package_installed(package),
+                    None => available.contains(choice.value),
+                },
+                note: if choice.package.is_none() { "Add the font files yourself" } else { "" },
+                removable: choice.package.is_none() && added_builtin.iter().any(|style| style.value == choice.value),
+            });
+            let added = custom.iter().map(|style| StyleView {
+                label: &style.label,
+                value: &style.value,
+                package: None,
+                installed: true,
+                note: if style.removable.is_empty() { "Installed on this system" } else { "Added by you" },
+                removable: !style.removable.is_empty(),
+            });
+            let matches = |choice: &StyleView| {
+                query.is_empty()
+                    || choice.label.to_lowercase().contains(&query)
+                    || choice.value.to_lowercase().contains(&query)
+            };
+            let mut shown = 0;
+            for (index, choice) in built_in.chain(added).filter(|choice| matches(choice)).enumerate() {
+                shown += 1;
                 let selected = current == choice.value;
-                let installed = choice.package.map(is_package_installed).unwrap_or(true);
+                let installed = choice.installed;
 
                 Frame {
                     fill: if selected {
@@ -5905,7 +6321,11 @@ fn style_choice_grid(
                             let label = if installed { label.color(theme.text) } else { label.color(theme.muted) };
                             if ui
                                 .add_enabled(installed, egui::Button::selectable(selected, label))
-                                .on_disabled_hover_text("Install this first to select it")
+                                .on_disabled_hover_text(if choice.package.is_some() {
+                                    "Install this first to select it"
+                                } else {
+                                    "Add the font files with \"Add your own fonts…\" first"
+                                })
                                 .clicked()
                             {
                                 *current = choice.value.to_string();
@@ -5946,6 +6366,9 @@ Aa Bb Gg Mm Ww 0123 Il1 O0")
                                         .size(10.0)
                                         .monospace(),
                                 );
+                            } else if !choice.note.is_empty() {
+                                ui.add_space(5.0);
+                                ui.label(RichText::new(choice.note).color(theme.muted).size(10.0));
                             }
                         });
 
@@ -5959,8 +6382,8 @@ Aa Bb Gg Mm Ww 0123 Il1 O0")
                                 );
                             }
                             if !installed {
-                                if ui.button("Install").clicked() {
-                                    package_to_install = choice.package;
+                                if let Some(package) = choice.package.filter(|_| ui.button("Install").clicked()) {
+                                    action = Some(StyleAction::Install(package));
                                 }
                             } else {
                                 ui.label(
@@ -5968,6 +6391,20 @@ Aa Bb Gg Mm Ww 0123 Il1 O0")
                                         .color(theme.success)
                                         .size(11.0),
                                 );
+                            }
+                            if choice.removable {
+                                if confirm_delete.as_deref() == Some(choice.value) {
+                                    let delete = egui::Button::new(RichText::new("Delete permanently").color(theme.danger).strong());
+                                    if ui.add(delete).clicked() {
+                                        action = Some(StyleAction::Delete(choice.value.to_string()));
+                                        *confirm_delete = None;
+                                    }
+                                    if ui.button("Cancel").clicked() {
+                                        *confirm_delete = None;
+                                    }
+                                } else if ui.button(RichText::new("Delete").color(theme.danger)).clicked() {
+                                    *confirm_delete = Some(choice.value.to_string());
+                                }
                             }
                         });
                     });
@@ -5977,9 +6414,12 @@ Aa Bb Gg Mm Ww 0123 Il1 O0")
                     ui.end_row();
                 }
             }
+            if shown == 0 {
+                ui.label(RichText::new("Nothing matches your search").color(theme.muted));
+            }
         });
 
-    package_to_install
+    action
 }
 
 #[derive(Clone, Copy)]
@@ -6022,6 +6462,12 @@ fn addon_choices() -> &'static [AddonChoice] {
         },
         // Apps and theming
 
+        AddonChoice {
+            category: "Apps and theming",
+            name: "YoRHa Terminal",
+            description: "A NieR:Automata styled terminal in the app launcher: YoRHa colors, your wallpaper and the 2B prompt.",
+            package: "splinterdots-yorha-terminal",
+        },
         AddonChoice {
             category: "Apps and theming",
             name: "Vesktop themed bundle",
@@ -6131,6 +6577,12 @@ fn addon_package_installed(package: &str) -> bool {
     }
 
     packages.iter().all(|pkg| match *pkg {
+        // Ships with SplinterDots; installed means its launcher entry exists.
+        "splinterdots-yorha-terminal" => env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home_dir().join(".local/share"))
+            .join("applications/splinterdots-yorha-terminal.desktop")
+            .exists(),
         "vesktop-bin" => {
             package_installed_cached("vesktop-bin")
                 || package_installed_cached("vesktop")
@@ -6859,10 +7311,11 @@ mod tests {
 
         assert!(volume.contains("pavucontrol"));
         assert!(bluetooth.contains("overskride"));
-        assert!(volume.contains("width: 86"));
+        // Buttons size to their label so longer text or icons never overflow.
+        assert!(volume.contains("Label.implicitWidth + 20"));
         assert!(volume.contains("Rectangle"));
         assert!(volume.contains("volumeText"));
-        assert!(bluetooth.contains("width: 86"));
+        assert!(bluetooth.contains("Label.implicitWidth + 20"));
         assert!(bluetooth.contains("Rectangle"));
         assert!(bluetooth.contains("Bluetooth"));
     }
@@ -6977,7 +7430,8 @@ mod tests {
                 screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(420.0, 500.0))),
                 events, ..Default::default()
             }, |ui| {
-                install = style_choice_grid(ui, &theme, "UI font", &mut current, &choices, &HashMap::new(), &HashMap::new());
+                install = style_choice_grid(ui, &theme, "UI font", &mut current, &choices, &[], &HashSet::new(), &[], &mut String::new(), &mut None, &HashMap::new(), &HashMap::new())
+                    .and_then(|action| match action { StyleAction::Install(package) => Some(package), StyleAction::Delete(_) => None });
             });
             (output, install)
         };
@@ -7150,11 +7604,16 @@ mod tests {
                 }).unwrap_or_else(|| panic!("Missing heading {name} at width {width}"));
                 let theme = heading("Theme");
                 let wallpaper = heading("Wallpaper");
-                let fonts = heading("Fonts and icon packs");
+                let fonts = heading("Fonts");
+                let icons = heading("Icon themes");
+                let cursors = heading("Cursor themes");
                 if width <= 700.0 {
-                    assert!(theme.y < wallpaper.y && wallpaper.y < fonts.y);
+                    assert!(theme.y < wallpaper.y && wallpaper.y < fonts.y && fonts.y < icons.y && icons.y < cursors.y);
                 } else if width >= 1500.0 {
-                    assert!(theme.x < wallpaper.x && wallpaper.x < fonts.x);
+                    // Theme and wallpaper side by side; fonts, icons and cursors in a row below.
+                    assert!(theme.x < wallpaper.x && (theme.y - wallpaper.y).abs() < 1.0);
+                    assert!(fonts.y > theme.y && fonts.x < icons.x && icons.x < cursors.x);
+                    assert!((fonts.y - icons.y).abs() < 1.0 && (icons.y - cursors.y).abs() < 1.0);
                 }
                 output.drop_without_applying_deltas();
             }
@@ -7277,6 +7736,78 @@ mod tests {
         assert_eq!(decoded.pixels[0], egui::Color32::from_rgb(0, 0, 255));
         assert_eq!(load_xcursor_image(&file, 1).unwrap().pixels[0], egui::Color32::from_rgb(255, 0, 0));
         assert!(load_xcursor_image(b"nope", 32).is_none());
+    }
+
+
+    #[test]
+    fn scans_user_icon_and_cursor_themes() {
+        let root = env::temp_dir().join(format!("splinter-style-scan-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("MyIcons")).unwrap();
+        fs::write(root.join("MyIcons/index.theme"), "[Icon Theme]\nName=My Icons\nDirectories=48x48/apps\n").unwrap();
+        fs::create_dir_all(root.join("NieR-cursors/cursors")).unwrap();
+        fs::write(root.join("NieR-cursors/index.theme"), "[Icon Theme]\nName=NieR Cursors\n").unwrap();
+        fs::create_dir_all(root.join("Adwaita")).unwrap();
+        fs::write(root.join("Adwaita/index.theme"), "[Icon Theme]\nDirectories=scalable\n").unwrap();
+        fs::create_dir_all(root.join("hicolor")).unwrap();
+
+        let (icons, cursors) = scan_icon_roots(&[root.clone()], &[root.clone()], &HashSet::from(["Adwaita"]), &HashSet::new());
+        assert_eq!(icons, vec![CustomStyle { label: "My Icons".into(), value: "MyIcons".into(), removable: vec![root.join("MyIcons")] }]);
+        assert_eq!(cursors, vec![CustomStyle {
+            label: "NieR Cursors".into(), value: "NieR-cursors".into(), removable: vec![root.join("NieR-cursors")],
+        }]);
+        // Themes outside the user's own folders (installed by packages) cannot be deleted from the app.
+        let (system_icons, _) = scan_icon_roots(&[root.clone()], &[], &HashSet::from(["Adwaita"]), &HashSet::new());
+        assert!(system_icons[0].removable.is_empty());
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn page_text_stays_readable_when_page_and_cards_differ() {
+        // The NieR theme: dark brown page, light beige cards, near-white accent.
+        let mut values = defaults_map();
+        values.insert("DOTFILES_CUSTOM_BACKGROUND".into(), "#3f352f".into());
+        values.insert("DOTFILES_CUSTOM_SURFACE".into(), "#9e8e82".into());
+        values.insert("DOTFILES_ACCENT".into(), "#eeeeee".into());
+        let theme = custom_app_theme(&values);
+        let (heading, muted) = text_on(&theme, theme.bg);
+        assert!(contrast_ratio(theme.text, theme.card) >= 4.5);
+        assert!(contrast_ratio(heading, theme.bg) >= 4.5);
+        assert!(contrast_ratio(muted, theme.bg) >= 3.0);
+        assert!(contrast_ratio(readable_text([0xee, 0xee, 0xee]), theme.accent) >= 4.5);
+        // Built-in themes keep their own text colors.
+        let builtin = custom_app_theme(&defaults_map());
+        assert_eq!(text_on(&builtin, builtin.card).0, builtin.text);
+    }
+
+
+    #[test]
+    fn highlights_keep_white_text_when_the_accent_is_near_white() {
+        let mut values = defaults_map();
+        values.insert("DOTFILES_THEME".into(), "custom:nier".into());
+        values.insert("DOTFILES_CUSTOM_BACKGROUND".into(), "#3f352f".into());
+        values.insert("DOTFILES_CUSTOM_SURFACE".into(), "#9e8e82".into());
+        values.insert("DOTFILES_ACCENT".into(), "#eeeeee".into());
+        let nier = theme_palette(&values);
+        assert_eq!(highlight(&nier), (on_fill(&nier), nier.text.clone()));
+        // A normal accent keeps its solid fill with contrasting text.
+        let midnight = theme_palette(&defaults_map());
+        assert_eq!(highlight(&midnight), (midnight.accent.clone(), midnight.active_text.clone()));
+    }
+
+
+    #[test]
+    fn deleting_styles_never_touches_system_files() {
+        let system = CustomStyle { label: "NieR".into(), value: "nier".into(), removable: vec![] };
+        assert!(delete_style_files(&system).unwrap_err().contains("uninstall its package"));
+        for path in ["/usr/share/icons/nier-cursors-bin", "/etc/passwd"] {
+            let outside = CustomStyle { label: "x".into(), value: "x".into(), removable: vec![PathBuf::from(path)] };
+            assert!(delete_style_files(&outside).unwrap_err().contains("refusing"));
+            assert!(Path::new(path).exists() || !Path::new("/etc").exists());
+        }
+        // The user folders themselves are never deleted, only things inside them.
+        let whole_dir = CustomStyle { label: "x".into(), value: "x".into(), removable: vec![user_icon_dirs()[0].clone()] };
+        assert!(delete_style_files(&whole_dir).is_err());
     }
 
 }

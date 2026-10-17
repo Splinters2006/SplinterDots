@@ -65,9 +65,9 @@ Variants {
       Rectangle {
         anchors.fill: parent
         radius: 8
-        color: "#ea1e1e2e"
+        color: "#ea3f352f"
         border.width: 1
-        border.color: "#313244"
+        border.color: "#9e8e82"
 
         Item {
           anchors.fill: parent
@@ -92,14 +92,14 @@ Variants {
                   height: 26
                   radius: 4
                   property bool active: root.activeWorkspace === modelData + 1
-                  color: active ? "#89b4fa" : "#313244"
-                  border.color: "#89b4fa"
+                  color: active ? "#b6aba2" : "#9e8e82"
+                  border.color: "#eeeeee"
                   border.width: 1
 
                   Text {
                     anchors.centerIn: parent
                     text: modelData + 1
-                    color: parent.active ? "#313244" : "#cdd6f4"
+                    color: parent.active ? "#ffffff" : "#ffffff"
                     font.pixelSize: 12
                     font.bold: true
                     font.family: "Symbols Nerd Font"
@@ -141,18 +141,19 @@ Variants {
                 refreshPending = false
                 volumeStatus_left_1.running = true
               }
-              width: 86
+              width: Math.max(volume_left_1Label.implicitWidth + 20, 70)
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: volumeMouse_left_1.containsMouse ? "#89b4fa" : "#313244"
-              border.color: "#89b4fa"
+              color: volumeMouse_left_1.containsMouse ? "#b6aba2" : "#9e8e82"
+              border.color: "#eeeeee"
               border.width: 1
 
               ThemedLabel {
+                id: volume_left_1Label
                 anchors.centerIn: parent
                 text: volume_left_1.volumeText
-                color: "#cdd6f4"
+                color: volumeMouse_left_1.containsMouse ? "#ffffff" : "#ffffff"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -242,56 +243,30 @@ Variants {
               }
             }
 
-Rectangle {
-      id: callMode_left_2
-      property string mode: "none"
-      property bool busy: callMode_left_2Toggle.running
-      visible: mode !== "none"
-      width: callMode_left_2Label.implicitWidth + 20; height: 26; anchors.verticalCenter: parent.verticalCenter
-      radius: 6; color: mode === "on" ? "#89b4fa" : "#313244"
-      border.color: "#89b4fa"; border.width: 1
-      ThemedLabel { id: callMode_left_2Label; anchors.centerIn: parent
-        text: callMode_left_2.busy ? String.fromCodePoint(0xf130) + " Switching…"
-          : (callMode_left_2.mode === "on" ? String.fromCodePoint(0xf130) + " Call" : String.fromCodePoint(0xf02cb) + " Music")
-        color: callMode_left_2.mode === "on" ? "#11111b" : "#cdd6f4"; font.pixelSize: 12; font.bold: true; font.family: "Symbols Nerd Font"
-      }
-      Process { id: callMode_left_2Status; command: ["splinter-call-mode", "status"]; running: true
-        stdout: StdioCollector { onStreamFinished: callMode_left_2.mode = this.text.trim() || "none" }
-      }
-      Process { id: callMode_left_2Toggle; command: ["splinter-call-mode", "toggle"]
-        onExited: { callMode_left_2Status.running = false; callMode_left_2Status.running = true }
-      }
-      Timer { interval: 2000; running: true; repeat: true
-        onTriggered: { if (!callMode_left_2Status.running) callMode_left_2Status.running = true }
-      }
-      MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-        onClicked: { if (!callMode_left_2Toggle.running) callMode_left_2Toggle.running = true }
-      }
-    }
 
             Rectangle {
               anchors.verticalCenter: parent.verticalCenter
               width: 129
               height: 26
               radius: 6
-              color: "#313244"
-              border.color: "#89b4fa"
+              color: "#9e8e82"
+              border.color: "#eeeeee"
               border.width: 1
-              visible: titleText_window_left_3.text.length > 0
+              visible: titleText_window_left_2.text.length > 0
 
               Item {
-                id: titleViewport_window_left_3
+                id: titleViewport_window_left_2
                 anchors.centerIn: parent
                 width: parent.width - 20
                 height: parent.height - 4
                 clip: true
 
                 Text {
-                  id: titleText_window_left_3
+                  id: titleText_window_left_2
                   anchors.verticalCenter: parent.verticalCenter
                   property real scrollOffset: 0
                   x: Math.max(0, (parent.width - implicitWidth) / 2) + scrollOffset
-                  color: "#cdd6f4"
+                  color: "#ffffff"
                   font.pixelSize: 12
                   font.bold: true
                   font.family: "Sans"
@@ -299,46 +274,72 @@ Rectangle {
                   maximumLineCount: 1
                   text: "empty"
                   function resetScroll() {
-                    titleScroll_window_left_3.stop()
+                    titleScroll_window_left_2.stop()
                     scrollOffset = 0
-                    if (implicitWidth > titleViewport_window_left_3.width) titleScroll_window_left_3.start()
+                    if (implicitWidth > titleViewport_window_left_2.width) titleScroll_window_left_2.start()
                   }
                   onTextChanged: resetScroll()
                   onImplicitWidthChanged: resetScroll()
                 }
 
                 SequentialAnimation {
-                  id: titleScroll_window_left_3
+                  id: titleScroll_window_left_2
                   loops: Animation.Infinite
                   PauseAnimation { duration: 1200 }
                   NumberAnimation {
-                    target: titleText_window_left_3
+                    target: titleText_window_left_2
                     property: "scrollOffset"
                     from: 0
-                    to: Math.min(0, titleViewport_window_left_3.width - titleText_window_left_3.implicitWidth)
-                    duration: Math.max(1, (titleText_window_left_3.implicitWidth - titleViewport_window_left_3.width) / 35 * 1000)
+                    to: Math.min(0, titleViewport_window_left_2.width - titleText_window_left_2.implicitWidth)
+                    duration: Math.max(1, (titleText_window_left_2.implicitWidth - titleViewport_window_left_2.width) / 35 * 1000)
                   }
                   PauseAnimation { duration: 1200 }
-                  PropertyAction { target: titleText_window_left_3; property: "scrollOffset"; value: 0 }
+                  PropertyAction { target: titleText_window_left_2; property: "scrollOffset"; value: 0 }
                 }
               }
 
               Process {
-                id: titleProc_window_left_3
+                id: titleProc_window_left_2
                 command: ["sh", "-c", "hyprctl activewindow -j 2>/dev/null | jq -r '.title // \"\"'"]
                 running: true
                 stdout: StdioCollector {
-                  onStreamFinished: titleText_window_left_3.text = this.text.trim().replace(/\s*\n\s*/g, " ") || "empty"
+                  onStreamFinished: titleText_window_left_2.text = this.text.trim().replace(/\s*\n\s*/g, " ") || "empty"
                 }
               }
               Timer {
                 interval: 250
                 running: true
                 repeat: true
-                onTriggered: { if (!titleProc_window_left_3.running) titleProc_window_left_3.running = true }
+                onTriggered: { if (!titleProc_window_left_2.running) titleProc_window_left_2.running = true }
               }
             }
 
+Rectangle {
+      id: callMode_left_3
+      property string mode: "none"
+      property bool busy: callMode_left_3Toggle.running
+      visible: mode !== "none"
+      width: callMode_left_3Label.implicitWidth + 20; height: 26; anchors.verticalCenter: parent.verticalCenter
+      radius: 6; color: mode === "on" ? "#b6aba2" : "#9e8e82"
+      border.color: "#eeeeee"; border.width: mode === "on" ? 2 : 1
+      ThemedLabel { id: callMode_left_3Label; anchors.centerIn: parent
+        text: callMode_left_3.busy ? String.fromCodePoint(0xf130) + " Switching…"
+          : (callMode_left_3.mode === "on" ? String.fromCodePoint(0xf130) + " Call" : String.fromCodePoint(0xf02cb) + " Music")
+        color: "#ffffff"; font.pixelSize: 12; font.bold: true; font.family: "Symbols Nerd Font"
+      }
+      Process { id: callMode_left_3Status; command: ["splinter-call-mode", "status"]; running: true
+        stdout: StdioCollector { onStreamFinished: callMode_left_3.mode = this.text.trim() || "none" }
+      }
+      Process { id: callMode_left_3Toggle; command: ["splinter-call-mode", "toggle"]
+        onExited: { callMode_left_3Status.running = false; callMode_left_3Status.running = true }
+      }
+      Timer { interval: 2000; running: true; repeat: true
+        onTriggered: { if (!callMode_left_3Status.running) callMode_left_3Status.running = true }
+      }
+      MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+        onClicked: { if (!callMode_left_3Toggle.running) callMode_left_3Toggle.running = true }
+      }
+    }
           }
 
           Row {
@@ -389,8 +390,8 @@ Rectangle {
                 id: dateBubble_center_0
                 height: Math.max(22, 34 - 10)
                 radius: Math.max(10, 8 - 4)
-                color: "#313244"
-                border.color: "#89b4fa"
+                color: "#9e8e82"
+                border.color: "#eeeeee"
                 border.width: 1
                 width: dateText_center_0.implicitWidth + 20
 
@@ -400,7 +401,7 @@ Rectangle {
                     id: dateText_center_0
                     anchors.centerIn: parent
                     text: datetime_center_0.displayText
-                    color: "#cdd6f4"
+                    color: "#ffffff"
                     font.pixelSize: Math.max(10, 12 - 1)
                     font.bold: true
 
@@ -461,8 +462,8 @@ Rectangle {
                 height: Math.max(22, 34 - 10)
                 anchors.verticalCenter: parent.verticalCenter
                 radius: Math.max(10, 8 - 4)
-                color: "#313244"
-                border.color: "#89b4fa"
+                color: "#9e8e82"
+                border.color: "#eeeeee"
                 border.width: 1
                 clip: true
 
@@ -478,7 +479,7 @@ Rectangle {
                             width: 5
                             radius: 3
                             anchors.bottom: parent.bottom
-                            color: "#89b4fa"
+                            color: "#eeeeee"
 
                             height: Math.max(3, (parent.height * Number(visualizer_center_1.rawBars.charAt(index))) / 8)
 
@@ -525,18 +526,19 @@ Rectangle {
                 refreshPending = false
                 volumeStatus_right_0.running = true
               }
-              width: 86
+              width: Math.max(volume_right_0Label.implicitWidth + 20, 70)
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: volumeMouse_right_0.containsMouse ? "#89b4fa" : "#313244"
-              border.color: "#89b4fa"
+              color: volumeMouse_right_0.containsMouse ? "#b6aba2" : "#9e8e82"
+              border.color: "#eeeeee"
               border.width: 1
 
               ThemedLabel {
+                id: volume_right_0Label
                 anchors.centerIn: parent
                 text: volume_right_0.volumeText
-                color: "#cdd6f4"
+                color: volumeMouse_right_0.containsMouse ? "#ffffff" : "#ffffff"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -630,18 +632,19 @@ Rectangle {
             Rectangle {
               id: bluetooth_right_1
               property bool powered: false
-              width: 86
+              width: bluetooth_right_1Label.implicitWidth + 20
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: bluetoothMouse_right_1.containsMouse ? "#89b4fa" : "#313244"
-              border.color: powered ? "#89b4fa" : "#89b4fa"
+              color: bluetoothMouse_right_1.containsMouse ? "#b6aba2" : "#9e8e82"
+              border.color: powered ? "#eeeeee" : "#eeeeee"
               border.width: 1
 
               ThemedLabel {
+                id: bluetooth_right_1Label
                 anchors.centerIn: parent
                 text: bluetooth_right_1.powered ? " Bluetooth" : "󰂲 Off"
-                color: "#cdd6f4"
+                color: bluetoothMouse_right_1.containsMouse ? "#ffffff" : "#ffffff"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -690,8 +693,8 @@ Rectangle {
               width: txt_right_2.width + 20
               height: 26
               radius: 6
-              color: "#313244"
-              border.color: "#89b4fa"
+              color: "#9e8e82"
+              border.color: "#eeeeee"
               border.width: 1
               visible: txt_right_2.text.length > 0
 
@@ -699,7 +702,7 @@ Rectangle {
                 id: txt_right_2
                 anchors.centerIn: parent
                 width: implicitWidth
-                color: "#cdd6f4"
+                color: "#ffffff"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -740,18 +743,19 @@ Rectangle {
             Rectangle {
               id: easyeffects_right_3
               property bool effectsEnabled: false
-              width: 62
+              width: easyeffects_right_3Label.implicitWidth + 20
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: effectsEnabled ? "#89b4fa" : "#313244"
-              border.color: effectsEnabled ? "#89b4fa" : "#89b4fa"
-              border.width: 1
+              color: effectsEnabled ? "#b6aba2" : "#9e8e82"
+              border.color: effectsEnabled ? "#eeeeee" : "#eeeeee"
+              border.width: effectsEnabled ? 2 : 1
 
               ThemedLabel {
+                id: easyeffects_right_3Label
                 anchors.centerIn: parent
                 text: easyeffects_right_3.effectsEnabled ? "󰓃 FX ON" : "󰓃 FX OFF"
-                color: "#cdd6f4"
+                color: "#ffffff"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -803,14 +807,14 @@ Rectangle {
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: "#313244"
-              border.color: "#89b4fa"
+              color: btnMouse_right_4.containsMouse ? "#b6aba2" : "#9e8e82"
+              border.color: "#eeeeee"
               border.width: 1
 
               ThemedLabel {
                 anchors.centerIn: parent
                 text: "⏻"
-                color: "#cdd6f4"
+                color: btnMouse_right_4.containsMouse ? "#ffffff" : "#ffffff"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -818,10 +822,9 @@ Rectangle {
               }
 
               MouseArea {
+                id: btnMouse_right_4
                 anchors.fill: parent
                 hoverEnabled: true
-                onEntered: parent.color = "#89b4fa"
-                onExited: parent.color = "#313244"
                 onClicked: { btnProc_right_4.running = false; btnProc_right_4.running = true }
               }
 

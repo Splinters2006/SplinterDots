@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""Add your own fonts, icon themes or cursor themes to SplinterDots.
+
+  splinter-add-style fonts     pick .ttf/.otf files; copied to ~/.local/share/fonts/SplinterDots
+  splinter-add-style icons     pick a theme archive or its index.theme; installed to ~/.local/share/icons
+  splinter-add-style cursors   same, for cursor themes
+
+Paths can also be given after the kind instead of using the file picker.
+The SplinterDots app refreshes its lists automatically afterwards.
+"""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import zipfile
+
+HOME = Path.home()
+DATA_HOME = Path(os.environ.get('XDG_DATA_HOME', str(HOME / '.local/share')))
+CACHE_HOME = Path(os.environ.get('XDG_CACHE_HOME', str(HOME / '.cache')))
+FONT_DIR = DATA_HOME / 'fonts/SplinterDots'
+ICON_DIR = DATA_HOME / 'icons'
+FONT_SUFFIXES = ('.ttf', '.otf', '.ttc', '.otc', '.woff', '.woff2')
+ARCHIVE_SUFFIXES = ('.tar.gz', '.tgz', '.tar.xz', '.txz', '.tar.bz2', '.tbz2', '.tar.zst', '.tar', '.zip')
+
+
+def pick_files(kind):
+    if kind == 'fonts':
+        title, pattern, multiple = 'Add fonts', 'Fonts | ' + ' '.join(f'*{s} *{s.upper()}' for s in FONT_SUFFIXES), True
+    else:
+        title = f'Add {"an icon" if kind == "icons" else "a cursor"} theme (archive or index.theme)'
+        pattern, multiple = 'Theme archive or index.theme | index.theme ' + ' '.join(f'*{s}' for s in ARCHIVE_SUFFIXES), False
+    command = ['zenity', '--file-selection', f'--title={title}', f'--file-filter={pattern}', '--separator=\n']
+    if multiple:
+        command.append('--multiple')
+    try:
+        result = subprocess.run(command, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise SystemExit('zenity is not installed; pass file paths instead: splinter-add-style ' + kind + ' FILE...')
+    return [Path(line) for line in result.stdout.splitlines() if line.strip()] if result.returncode == 0 else []
+
+
+def font_families(path):
+    result = subprocess.run(['fc-scan', '--format', '%{family[0]}\n', str(path)], capture_output=True, text=True)
+    return sorted({line.strip() for line in result.stdout.splitlines() if line.strip()})
+
+
+def add_fonts(files):
+    FONT_DIR.mkdir(parents=True, exist_ok=True)
+    added, skipped = set(), []
+    for path in files:
+        families = font_families(path) if path.suffix.lower() in FONT_SUFFIXES else []
+        if not families:
+            skipped.append(path.name)
+            continue
+        shutil.copy2(path, FONT_DIR / path.name)
+        added.update(families)
+    if added:
+        subprocess.run(['fc-cache', '-f', str(FONT_DIR)], capture_output=True)
+    return sorted(added), skipped
+
+
+def is_theme(folder, kind):
+    """Icon themes declare icon Directories; cursor themes ship a cursors/ folder."""
+    index = folder / 'index.theme'
+    if kind == 'cursors':
+        return (folder / 'cursors').is_dir()
+    if not index.is_file():
+        return False
+    return any(line.startswith('Directories=') and line.split('=', 1)[1].strip()
+               for line in index.read_text(errors='replace').splitlines())
+
+
+def find_themes(root, kind):
+    candidates = [root] + [path.parent for path in root.rglob('index.theme')] + [path.parent for path in root.rglob('cursors')]
+    found = []
+    for folder in candidates:
+        if folder.is_dir() and is_theme(folder, kind) and folder not in found:
+            found.append(folder)
+    return found
+
+
+def extract(archive, target):
+    """Extract without allowing files to escape the target directory."""
+    name = archive.name.lower()
+    if name.endswith('.zip'):
+        with zipfile.ZipFile(archive) as bundle:
+            for member in bundle.namelist():
+                destination = (target / member).resolve()
+                if not destination.is_relative_to(target.resolve()):
+                    raise ValueError(f'unsafe path in archive: {member}')
+            bundle.extractall(target)
+    elif name.endswith('.tar.zst'):
+        subprocess.run(['tar', '--zstd', '-xf', str(archive), '-C', str(target), '--no-same-owner'], check=True)
+        for path in target.rglob('*'):
+            if path.is_symlink() and not path.resolve().is_relative_to(target.resolve()):
+                path.unlink()
+    else:
+        with tarfile.open(archive) as bundle:
+            bundle.extractall(target, filter='data')
+
+
+def add_theme(selection, kind):
+    with tempfile.TemporaryDirectory() as scratch:
+        if selection.name == 'index.theme':
+            root = selection.parent
+        elif selection.name.lower().endswith(ARCHIVE_SUFFIXES):
+            root = Path(scratch)
+            extract(selection, root)
+        else:
+            root = selection
+        themes = find_themes(root, kind)
+        ICON_DIR.mkdir(parents=True, exist_ok=True)
+        added = []
+        for theme in themes:
+            name = theme.name if theme != Path(scratch) else selection.name.split('.')[0]
+            destination = ICON_DIR / name
+            if destination.resolve() == theme.resolve():
+                added.append(name)  # Already installed in place.
+                continue
+            if destination.exists():
+                shutil.rmtree(destination)
+            shutil.copytree(theme, destination, symlinks=True)
+            added.append(name)
+    return added
+
+
+def notify(message):
+    print(message)
+    subprocess.run(['notify-send', '--app-name=SplinterDots', 'SplinterDots', message], capture_output=True)
+
+
+def main(args):
+    if not args or args[0] not in ('fonts', 'icons', 'cursors'):
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    kind, files = args[0], [Path(arg).expanduser() for arg in args[1:]]
+    files = files or pick_files(kind)
+    if not files:
+        return 1  # Cancelled.
+
+    try:
+        if kind == 'fonts':
+            added, skipped = add_fonts(files)
+            if skipped:
+                notify('Not font files: ' + ', '.join(skipped))
+        else:
+            added = add_theme(files[0], kind)
+    except (OSError, ValueError, tarfile.TarError, zipfile.BadZipFile, subprocess.CalledProcessError) as error:
+        notify(f'Could not add {kind}: {error}')
+        return 1
+
+    if not added:
+        notify({'fonts': 'No fonts were added.', 'icons': 'No icon theme found in that selection.',
+                'cursors': 'No cursor theme found in that selection.'}[kind])
+        return 1
+
+    marker = CACHE_HOME / 'splinterdots/addons-refresh'
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.touch()
+    notify(f'Added {kind[:-1] if len(added) == 1 else kind}: ' + ', '.join(added))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

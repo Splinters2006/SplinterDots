@@ -22,11 +22,18 @@ if [ "$#" -eq 0 ]; then
 fi
 
 for package in "$@"; do
-  "$ROOT_DIR/scripts/splinterdots-style" install "$package"
+  # splinterdots-* add-ons ship with SplinterDots itself; there is no package to download.
+  case "$package" in
+    splinterdots-*) ;;
+    *) "$ROOT_DIR/scripts/splinterdots-style" install "$package" ;;
+  esac
 done
 
 for package in "$@"; do
   case "$package" in
+    splinterdots-yorha-terminal)
+      "$ROOT_DIR/scripts/splinter-yorha" install
+      ;;
     vesktop|vesktop-bin)
       "$ROOT_DIR/scripts/splinter-setup-vesktop" || true
       ;;

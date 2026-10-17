@@ -550,6 +550,8 @@ link_file "$ROOT_DIR/scripts/splinter-setup-easyeffects" "$HOME_DIR/.local/bin/s
 link_file "$ROOT_DIR/scripts/splinter-setup-spicetify" "$HOME_DIR/.local/bin/splinter-setup-spicetify"
 link_file "$ROOT_DIR/scripts/splinter-setup-vesktop" "$HOME_DIR/.local/bin/splinter-setup-vesktop"
 link_file "$ROOT_DIR/scripts/splinter-call-mode" "$HOME_DIR/.local/bin/splinter-call-mode"
+link_file "$ROOT_DIR/scripts/splinter-add-style" "$HOME_DIR/.local/bin/splinter-add-style"
+link_file "$ROOT_DIR/scripts/splinter-yorha" "$HOME_DIR/.local/bin/splinter-yorha"
 
 # Presets and EasyEffects as the default audio devices; skipped when it is not installed.
 run "$ROOT_DIR/scripts/splinter-setup-easyeffects"

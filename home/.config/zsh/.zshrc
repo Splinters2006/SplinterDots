@@ -52,6 +52,12 @@ if [ "${DOTFILES_ENABLE_STARSHIP:-1}" = "1" ] && command -v starship >/dev/null 
   eval "$(starship init zsh)"
 fi
 
+# YoRHa Terminal add-on (splinter-yorha): NieR:Automata style prompt.
+if [ -n "${SPLINTER_YORHA:-}" ]; then
+  PROMPT='2B > '
+  RPROMPT=''
+fi
+
 # Resolve the checkout from this file rather than assuming its capitalization.
 function spdbuild() (
   local repo_dir="${${(%):-%x}:A:h:h:h:h}"
