@@ -65,9 +65,9 @@ Variants {
       Rectangle {
         anchors.fill: parent
         radius: 8
-        color: "#ea282828"
+        color: "#ea1e1e2e"
         border.width: 1
-        border.color: "#3c3836"
+        border.color: "#313244"
 
         Item {
           anchors.fill: parent
@@ -92,14 +92,14 @@ Variants {
                   height: 26
                   radius: 4
                   property bool active: root.activeWorkspace === modelData + 1
-                  color: active ? "#89b4fa" : "#3c3836"
+                  color: active ? "#89b4fa" : "#313244"
                   border.color: "#89b4fa"
                   border.width: 1
 
                   Text {
                     anchors.centerIn: parent
                     text: modelData + 1
-                    color: parent.active ? "#3c3836" : "#ebdbb2"
+                    color: parent.active ? "#313244" : "#cdd6f4"
                     font.pixelSize: 12
                     font.bold: true
                     font.family: "Symbols Nerd Font"
@@ -122,7 +122,7 @@ Variants {
               width: 129
               height: 26
               radius: 6
-              color: "#3c3836"
+              color: "#313244"
               border.color: "#89b4fa"
               border.width: 1
               visible: titleText_window_left_1.text.length > 0
@@ -139,7 +139,7 @@ Variants {
                   anchors.verticalCenter: parent.verticalCenter
                   property real scrollOffset: 0
                   x: Math.max(0, (parent.width - implicitWidth) / 2) + scrollOffset
-                  color: "#ebdbb2"
+                  color: "#cdd6f4"
                   font.pixelSize: 12
                   font.bold: true
                   font.family: "Sans"
@@ -216,14 +216,14 @@ Variants {
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: volumeMouse_left_2.containsMouse ? "#89b4fa" : "#3c3836"
+              color: volumeMouse_left_2.containsMouse ? "#89b4fa" : "#313244"
               border.color: "#89b4fa"
               border.width: 1
 
               ThemedLabel {
                 anchors.centerIn: parent
                 text: volume_left_2.volumeText
-                color: "#ebdbb2"
+                color: "#cdd6f4"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -244,7 +244,9 @@ Variants {
 
               Process {
                 id: volumeEvents_left_2
-                command: ["env", "LC_ALL=C", "pactl", "subscribe"]
+                // pdeathsig stops the listener when the bar exits; orphaned listeners
+                // otherwise pile up until pipewire-pulse refuses new clients.
+                command: ["setpriv", "--pdeathsig", "TERM", "env", "LC_ALL=C", "pactl", "subscribe"]
                 running: true
                 stdout: SplitParser {
                   onRead: data => {
@@ -288,7 +290,8 @@ Variants {
                 onWheel: wheel => {
                   var delta = wheel.angleDelta.y !== 0 ? wheel.angleDelta.y / 120 : wheel.pixelDelta.y / 40
                   var touchpad = wheel.device && wheel.device.type === PointerDevice.TouchPad
-                  if (touchpad || wheel.pixelDelta.y !== 0) delta = -delta
+                  // Inverted: scrolling down raises the level (touchpads report the opposite sign).
+                  if (!touchpad && wheel.pixelDelta.y === 0) delta = -delta
                   if (delta === 0) return
                   volume_left_2.wheelRemainder += delta
                   var steps = Math.trunc(volume_left_2.wheelRemainder)
@@ -360,7 +363,7 @@ Variants {
                 id: dateBubble_center_0
                 height: Math.max(22, 34 - 10)
                 radius: Math.max(10, 8 - 4)
-                color: "#3c3836"
+                color: "#313244"
                 border.color: "#89b4fa"
                 border.width: 1
                 width: dateText_center_0.implicitWidth + 20
@@ -371,7 +374,7 @@ Variants {
                     id: dateText_center_0
                     anchors.centerIn: parent
                     text: datetime_center_0.displayText
-                    color: "#ebdbb2"
+                    color: "#cdd6f4"
                     font.pixelSize: Math.max(10, 12 - 1)
                     font.bold: true
 
@@ -432,7 +435,7 @@ Variants {
                 height: Math.max(22, 34 - 10)
                 anchors.verticalCenter: parent.verticalCenter
                 radius: Math.max(10, 8 - 4)
-                color: "#3c3836"
+                color: "#313244"
                 border.color: "#89b4fa"
                 border.width: 1
                 clip: true
@@ -500,14 +503,14 @@ Variants {
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: volumeMouse_right_0.containsMouse ? "#89b4fa" : "#3c3836"
+              color: volumeMouse_right_0.containsMouse ? "#89b4fa" : "#313244"
               border.color: "#89b4fa"
               border.width: 1
 
               ThemedLabel {
                 anchors.centerIn: parent
                 text: volume_right_0.volumeText
-                color: "#ebdbb2"
+                color: "#cdd6f4"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -528,7 +531,9 @@ Variants {
 
               Process {
                 id: volumeEvents_right_0
-                command: ["env", "LC_ALL=C", "pactl", "subscribe"]
+                // pdeathsig stops the listener when the bar exits; orphaned listeners
+                // otherwise pile up until pipewire-pulse refuses new clients.
+                command: ["setpriv", "--pdeathsig", "TERM", "env", "LC_ALL=C", "pactl", "subscribe"]
                 running: true
                 stdout: SplitParser {
                   onRead: data => {
@@ -572,7 +577,8 @@ Variants {
                 onWheel: wheel => {
                   var delta = wheel.angleDelta.y !== 0 ? wheel.angleDelta.y / 120 : wheel.pixelDelta.y / 40
                   var touchpad = wheel.device && wheel.device.type === PointerDevice.TouchPad
-                  if (touchpad || wheel.pixelDelta.y !== 0) delta = -delta
+                  // Inverted: scrolling down raises the level (touchpads report the opposite sign).
+                  if (!touchpad && wheel.pixelDelta.y === 0) delta = -delta
                   if (delta === 0) return
                   volume_right_0.wheelRemainder += delta
                   var steps = Math.trunc(volume_right_0.wheelRemainder)
@@ -602,14 +608,14 @@ Variants {
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: bluetoothMouse_right_1.containsMouse ? "#89b4fa" : "#3c3836"
+              color: bluetoothMouse_right_1.containsMouse ? "#89b4fa" : "#313244"
               border.color: powered ? "#89b4fa" : "#89b4fa"
               border.width: 1
 
               ThemedLabel {
                 anchors.centerIn: parent
                 text: bluetooth_right_1.powered ? " Bluetooth" : "󰂲 Off"
-                color: "#ebdbb2"
+                color: "#cdd6f4"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -658,7 +664,7 @@ Variants {
               width: txt_right_2.width + 20
               height: 26
               radius: 6
-              color: "#3c3836"
+              color: "#313244"
               border.color: "#89b4fa"
               border.width: 1
               visible: txt_right_2.text.length > 0
@@ -667,7 +673,7 @@ Variants {
                 id: txt_right_2
                 anchors.centerIn: parent
                 width: implicitWidth
-                color: "#ebdbb2"
+                color: "#cdd6f4"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -706,18 +712,78 @@ Variants {
 
 
             Rectangle {
+              id: easyeffects_right_3
+              property bool effectsEnabled: false
+              width: 62
+              height: 26
+              anchors.verticalCenter: parent.verticalCenter
+              radius: 6
+              color: effectsEnabled ? "#89b4fa" : "#313244"
+              border.color: effectsEnabled ? "#89b4fa" : "#89b4fa"
+              border.width: 1
+
+              ThemedLabel {
+                anchors.centerIn: parent
+                text: easyeffects_right_3.effectsEnabled ? "󰓃 FX ON" : "󰓃 FX OFF"
+                color: "#cdd6f4"
+                font.pixelSize: 12
+                font.bold: true
+                font.family: "Symbols Nerd Font"
+
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  if (!easyeffectsToggle_right_3.running) easyeffectsToggle_right_3.running = true
+                }
+              }
+
+              Process {
+                id: easyeffectsStatus_right_3
+                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then QT_QPA_PLATFORM=offscreen timeout 2s easyeffects --bypass 3 2>/dev/null; else printf 1; fi"]
+                running: true
+                stdout: StdioCollector {
+                  onStreamFinished: easyeffects_right_3.effectsEnabled = this.text.trim() === "2"
+                }
+              }
+
+              Process {
+                id: easyeffectsToggle_right_3
+                command: ["sh", "-c", "if pgrep -x easyeffects >/dev/null; then QT_QPA_PLATFORM=offscreen timeout 3s easyeffects --hide-window --bypass-toggle; else easyeffects --service-mode --hide-window >/dev/null 2>&1 & for attempt in 1 2 3 4 5 6 7 8 9 10; do sleep 0.3; state=$(QT_QPA_PLATFORM=offscreen timeout 1s easyeffects --bypass 3 2>/dev/null); case $state in 1|2) QT_QPA_PLATFORM=offscreen timeout 3s easyeffects --hide-window --bypass 2; exit $?;; esac; done; exit 1; fi"]
+                onExited: {
+                  easyeffectsStatus_right_3.running = false
+                  easyeffectsStatus_right_3.running = true
+                }
+              }
+
+              Timer {
+                interval: 1500
+                running: true
+                repeat: true
+                onTriggered: {
+                  easyeffectsStatus_right_3.running = false
+                  easyeffectsStatus_right_3.running = true
+                }
+              }
+            }
+
+
+            Rectangle {
               width: 30
               height: 26
               anchors.verticalCenter: parent.verticalCenter
               radius: 6
-              color: "#3c3836"
+              color: "#313244"
               border.color: "#89b4fa"
               border.width: 1
 
               ThemedLabel {
                 anchors.centerIn: parent
                 text: "⏻"
-                color: "#ebdbb2"
+                color: "#cdd6f4"
                 font.pixelSize: 12
                 font.bold: true
                 font.family: "Symbols Nerd Font"
@@ -728,12 +794,12 @@ Variants {
                 anchors.fill: parent
                 hoverEnabled: true
                 onEntered: parent.color = "#89b4fa"
-                onExited: parent.color = "#3c3836"
-                onClicked: { btnProc_right_3.running = false; btnProc_right_3.running = true }
+                onExited: parent.color = "#313244"
+                onClicked: { btnProc_right_4.running = false; btnProc_right_4.running = true }
               }
 
               Process {
-                id: btnProc_right_3
+                id: btnProc_right_4
                 command: ["sh", "-c", "python3 -c \"\\\"\\\"\\\"Bar status and actions. Embedded in generated QML; no helper installation needed.\\\"\\\"\\\"\nimport json\nimport os\nfrom pathlib import Path\nimport random\nimport shutil\nimport subprocess\nimport sys\n\n\ndef run(args, **kwargs):\n    return subprocess.run(args, capture_output=True, text=True, timeout=kwargs.pop('timeout', 5), **kwargs)\n\n\n# Icon theme names shown next to menu choices in splinter-launcher.\nCHOICE_ICONS = {'Restore latest': 'edit-undo', 'Dismiss all': 'edit-clear-all', 'Sleep': 'system-suspend',\n                'Lock': 'system-lock-screen', 'Reboot': 'system-reboot', 'Power off': 'system-shutdown'}\n\n\ndef choose(prompt, choices):\n    lines = [f\\\"{choice}\\\\t{CHOICE_ICONS[choice]}\\\" if choice in CHOICE_ICONS else choice for choice in choices]\n    result = run(['splinter-launcher', '--dmenu', '--prompt', prompt], input='\\\\n'.join(lines), timeout=None)\n    return result.stdout.strip() if result.returncode == 0 else ''\n\n\ndef keyboard():\n    data = json.loads(run(['hyprctl', '-j', 'devices']).stdout)\n    keyboards = data.get('keyboards', [])\n    main = next((k for k in keyboards if k.get('main')), next(iter(keyboards), {}))\n    return main.get('active_keymap', 'Unknown')\n\n\ndef splinterdots_repo():\n    # dotctl is linked from the checkout, so its real path locates the repository.\n    dotctl = shutil.which('dotctl')\n    return Path(os.path.realpath(dotctl)).parents[1] if dotctl else None\n\n\ndef splinterdots_updates():\n    \\\"\\\"\\\"Number of upstream SplinterDots commits not yet pulled; 0 when unknown.\\\"\\\"\\\"\n    repo = splinterdots_repo()\n    if repo is None or not (repo / '.git').exists():\n        return 0\n    try:\n        if run(['git', '-C', str(repo), 'fetch', '--quiet'], timeout=30).returncode:\n            return 0\n        result = run(['git', '-C', str(repo), 'rev-list', '--count', 'HEAD..@{upstream}'])\n        return int(result.stdout.strip()) if result.returncode == 0 else 0\n    except (OSError, ValueError, subprocess.TimeoutExpired):\n        return 0\n\n\ndef updates(command):\n    if command.strip() in ('checkupdates', 'checkupdates 2>/dev/null | wc -l'):\n        result = run(['checkupdates'], timeout=120)\n        count = str(len(result.stdout.splitlines())) if result.returncode in (0, 2) else '?'\n    else:\n        result = run(['sh', '-c', command], timeout=120)\n        count = result.stdout.strip() if result.returncode == 0 else '?'\n    dots = splinterdots_updates()\n    return f'Updates {count}' + (f' · SplinterDots {dots}' if dots else '')\n\n\ndef notifications():\n    data = json.loads(run(['makoctl', 'list', '-j']).stdout)\n    groups = data.get('data', []) if isinstance(data, dict) else data\n    count = sum(len(group) if isinstance(group, list) else 1 for group in groups)\n    return f'Notifications {count}'\n\n\ndef notification_menu():\n    choice = choose('Notifications', ['Restore latest', 'Dismiss all'])\n    if choice == 'Restore latest':\n        return run(['makoctl', 'restore']).returncode\n    if choice == 'Dismiss all':\n        return run(['makoctl', 'dismiss', '--all']).returncode\n    return 0\n\n\ndef power_menu():\n    choice = choose('Power', ['Sleep', 'Lock', 'Reboot', 'Power off'])\n    commands = {'Sleep': ['systemctl', 'suspend'], 'Reboot': ['systemctl', 'reboot'],\n                'Power off': ['systemctl', 'poweroff']}\n    if choice == 'Lock':\n        if not shutil.which('hyprlock'):\n            raise ValueError('Install hyprlock to use the Lock action')\n        command = ['hyprlock']\n        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)\n    elif choice in commands:\n        return run(commands[choice], timeout=30).returncode\n    return 0\n\n\ndef wallpaper_choice(files, current, direction):\n    if not files:\n        raise ValueError('No wallpapers found in the configured folder')\n    if direction == 'shuffle':\n        return random.choice([p for p in files if p != current] or files)\n    if current not in files:\n        return files[-1] if direction == 'prev' else files[0]\n    return files[(files.index(current) + (-1 if direction == 'prev' else 1)) % len(files)]\n\n\ndef wallpaper(direction):\n    config = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'dotfiles/local.conf'\n    # This is the same trusted shell configuration used by splinter-wallpaper.\n    result = run(['bash', '-c', 'source \\\"$1\\\"; printf \\\"%s\\\\\\\\0%s\\\" \\\"${DOTFILES_WALLPAPER_DIR:-$HOME/Pictures/Wallpapers}\\\" \\\"${DOTFILES_WALLPAPER:-}\\\"', '_', str(config)])\n    if result.returncode:\n        raise ValueError('Could not read wallpaper settings')\n    folder, current = result.stdout.split('\\\\0', 1)\n    supported = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tiff', '.avif'}\n    files = sorted((p for p in Path(folder).expanduser().rglob('*') if p.is_file() and p.suffix.lower() in supported), key=lambda p: str(p).casefold())\n    selected = wallpaper_choice(files, Path(current).expanduser(), direction)\n    return run(['splinter-wallpaper', 'set', str(selected)], timeout=30).returncode\n\n\ndef main(args):\n    action = args[0]\n    try:\n        if action == 'keyboard':\n            print(keyboard())\n        elif action == 'keyboard-next':\n            return run(['hyprctl', 'switchxkblayout', 'all', 'next']).returncode\n        elif action == 'updates':\n            print(updates(args[1]))\n        elif action == 'notifications':\n            print(notifications())\n        elif action == 'notification-menu':\n            return notification_menu()\n        elif action == 'power':\n            return power_menu()\n        elif action == 'wallpaper':\n            return wallpaper(args[1])\n        elif action == 'script':\n            result = run(['sh', '-c', args[1]])\n            print(result.stdout.strip()[:250] if result.returncode == 0 else 'Script error')\n        else:\n            raise ValueError('Unknown widget action')\n        return 0\n    except (OSError, ValueError, subprocess.TimeoutExpired) as error:\n        if action in ('keyboard', 'updates', 'notifications', 'script'):\n            print({'keyboard': 'Keyboard ?', 'updates': 'Updates ?', 'notifications': 'Notifications ?', 'script': 'Script error'}[action])\n        else:\n            print(str(error), file=sys.stderr)\n            if shutil.which('notify-send'):\n                try:\n                    run(['notify-send', 'SplinterDots', str(error)])\n                except (OSError, subprocess.TimeoutExpired):\n                    pass\n        return 1\n\n\nif __name__ == '__main__':\n    sys.exit(main(sys.argv[1:]))\n\" \"power\""]
               }
             }

@@ -4528,7 +4528,9 @@ fn volume_widget_qml(
 
               Process {
                 id: __EVENT_ID__
-                command: ["env", "LC_ALL=C", "pactl", "subscribe"]
+                // pdeathsig stops the listener when the bar exits; orphaned listeners
+                // otherwise pile up until pipewire-pulse refuses new clients.
+                command: ["setpriv", "--pdeathsig", "TERM", "env", "LC_ALL=C", "pactl", "subscribe"]
                 running: true
                 stdout: SplitParser {
                   onRead: data => {
@@ -4572,7 +4574,8 @@ fn volume_widget_qml(
                 onWheel: wheel => {
                   var delta = wheel.angleDelta.y !== 0 ? wheel.angleDelta.y / 120 : wheel.pixelDelta.y / 40
                   var touchpad = wheel.device && wheel.device.type === PointerDevice.TouchPad
-                  if (touchpad || wheel.pixelDelta.y !== 0) delta = -delta
+                  // Inverted: scrolling down raises the level (touchpads report the opposite sign).
+                  if (!touchpad && wheel.pixelDelta.y === 0) delta = -delta
                   if (delta === 0) return
                   __ID__.wheelRemainder += delta
                   var steps = Math.trunc(__ID__.wheelRemainder)

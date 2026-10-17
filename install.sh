@@ -549,9 +549,8 @@ link_file "$ROOT_DIR/scripts/splinter-install-addon" "$HOME_DIR/.local/bin/splin
 link_file "$ROOT_DIR/scripts/splinter-setup-easyeffects" "$HOME_DIR/.local/bin/splinter-setup-easyeffects"
 link_file "$ROOT_DIR/scripts/splinter-setup-spicetify" "$HOME_DIR/.local/bin/splinter-setup-spicetify"
 
-if [ "$INSTALL_PACKAGES" -eq 1 ]; then
-  run "$ROOT_DIR/scripts/splinter-setup-easyeffects"
-fi
+# Presets and EasyEffects as the default audio devices; skipped when it is not installed.
+run "$ROOT_DIR/scripts/splinter-setup-easyeffects"
 
 # Reapply the Spotify theme after installing/updating or applying these dotfiles.
 if [ "$DRY_RUN" -eq 1 ] && [ "$INSTALL_AUR" -eq 1 ]; then

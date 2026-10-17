@@ -1,42 +1,82 @@
 #!/usr/bin/env bash
+# Installs the SplinterDots EasyEffects presets, loads them, and makes the
+# EasyEffects virtual devices the default audio output and input so every app
+# goes through the effects chain.
 set -euo pipefail
 
-ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+EE_RC="$CONFIG_HOME/easyeffects/db/easyeffectsrc"
+
+OUTPUT_PRESET="SplinterDots-Output"
+INPUT_PRESET="SplinterDots-Mic"
 
 if ! command -v easyeffects >/dev/null 2>&1; then
   echo "EasyEffects is not installed."
   exit 0
 fi
 
-mkdir -p "$DATA_HOME/easyeffects/output" "$DATA_HOME/easyeffects/input"
+mkdir -p "$DATA_HOME/easyeffects/output" "$DATA_HOME/easyeffects/input" "${EE_RC%/*}"
+cp "$ROOT_DIR/files/easyeffects/output/$OUTPUT_PRESET.json" "$DATA_HOME/easyeffects/output/"
+cp "$ROOT_DIR/files/easyeffects/input/$INPUT_PRESET.json" "$DATA_HOME/easyeffects/input/"
 
-if [ -f "$ROOT_DIR/files/easyeffects/output/SplinterDots-Output.json" ]; then
-  cp "$ROOT_DIR/files/easyeffects/output/SplinterDots-Output.json" \
-     "$DATA_HOME/easyeffects/output/SplinterDots-Output.json"
+# EasyEffects saves its settings on exit, so stop it before editing them.
+if pgrep -x easyeffects >/dev/null 2>&1; then
+  easyeffects --quit >/dev/null 2>&1 || pkill -x easyeffects || true
+  for _ in $(seq 20); do
+    pgrep -x easyeffects >/dev/null 2>&1 || break
+    sleep 0.25
+  done
 fi
 
-if [ -f "$ROOT_DIR/files/easyeffects/output/Dotfiles Audio.json" ]; then
-  cp "$ROOT_DIR/files/easyeffects/output/Dotfiles Audio.json" \
-     "$DATA_HOME/easyeffects/output/Dotfiles Audio.json"
+# Process every app stream and remember the SplinterDots presets.
+python3 - "$EE_RC" "$OUTPUT_PRESET" "$INPUT_PRESET" <<'PYTHON'
+import configparser
+import sys
+from pathlib import Path
+
+path, output_preset, input_preset = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+rc = configparser.ConfigParser(interpolation=None, strict=False)
+rc.optionxform = str
+if path.exists():
+    rc.read(path)
+for section, values in {
+    "Presets": {"lastLoadedOutputPreset": output_preset, "lastLoadedInputPreset": input_preset},
+    "StreamOutputs": {"processAllOutputs": "true"},
+    "StreamInputs": {"processAllInputs": "true"},
+}.items():
+    if not rc.has_section(section):
+        rc.add_section(section)
+    rc[section].update(values)
+with path.open("w") as output:
+    rc.write(output, space_around_delimiters=False)
+PYTHON
+
+easyeffects --service-mode --hide-window >/dev/null 2>&1 &
+disown || true
+
+# Wait for the virtual devices before making them the defaults.
+ready=0
+for _ in $(seq 40); do
+  if pactl list short sinks 2>/dev/null | grep -q $'\teasyeffects_sink\t' \
+    && pactl list short sources 2>/dev/null | grep -q $'\teasyeffects_source\t'; then
+    ready=1
+    break
+  fi
+  sleep 0.25
+done
+
+easyeffects --load-preset "$OUTPUT_PRESET" >/dev/null 2>&1 || true
+easyeffects --load-preset "$INPUT_PRESET" >/dev/null 2>&1 || true
+
+if [ "$ready" -eq 1 ]; then
+  # WirePlumber remembers these, so they survive reboots.
+  pactl set-default-sink easyeffects_sink
+  pactl set-default-source easyeffects_source
+  echo "EasyEffects is now the default audio output and input."
+else
+  echo "EasyEffects did not create its audio devices; run splinter-setup-easyeffects again after logging in." >&2
 fi
 
-if [ -f "$ROOT_DIR/files/easyeffects/input/SplinterDots-Mic.json" ]; then
-  cp "$ROOT_DIR/files/easyeffects/input/SplinterDots-Mic.json" \
-     "$DATA_HOME/easyeffects/input/SplinterDots-Mic.json"
-fi
-
-# Start it once so it can pick up presets.
-if ! pgrep -x easyeffects >/dev/null 2>&1; then
-  easyeffects --service-mode >/dev/null 2>&1 &
-  sleep 1
-fi
-
-# Try common CLI forms. Different EasyEffects versions expose slightly different options.
-easyeffects --load-preset "Dotfiles Audio" >/dev/null 2>&1 || true
-easyeffects --load-preset SplinterDots-Mic >/dev/null 2>&1 || true
-
-echo "EasyEffects SplinterDots presets installed."
-echo "Open EasyEffects and select:"
-echo "  Output preset: Dotfiles Audio"
-echo "  Input preset:  SplinterDots-Mic"
+echo "Loaded presets: $OUTPUT_PRESET (output), $INPUT_PRESET (input)."
