@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Manual call mode for Bluetooth headsets.
+
+  splinter-call-mode on       reconnect the headset and switch to its call profile (e.g. mSBC)
+  splinter-call-mode off      switch back to the best playback profile (e.g. aptX HD)
+  splinter-call-mode toggle   switch to the other mode
+  splinter-call-mode status   print "on", "off" or "none" (no headset connected)
+
+Entering call mode reconnects the headset first: on some adapters (e.g.
+MediaTek MT7922) the call audio link only works reliably when freshly set up.
+The mic is then checked for real signal, retrying once before giving up.
+"""
+import array
+import fcntl
+import json
+import math
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import time
+
+CALL_PREFIX = 'headset-head-unit'
+PLAYBACK_PREFIX = 'a2dp-sink'
+ATTEMPTS = 2
+
+
+def run(*args, timeout=15):
+    return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+
+
+def best_profile(profiles, prefix):
+    """Highest-priority available profile whose name starts with prefix."""
+    candidates = [(info.get('priority', 0), name) for name, info in profiles.items()
+                  if name.startswith(prefix) and info.get('available', True)]
+    return max(candidates)[1] if candidates else None
+
+
+def mode_of(card):
+    return 'on' if card.get('active_profile', '').startswith(CALL_PREFIX) else 'off'
+
+
+def card_address(card_name):
+    """Bluetooth address from a card name like bluez_card.80_C3_BA_4D_75_80."""
+    return card_name.removeprefix('bluez_card.').replace('_', ':')
+
+
+def headset_card():
+    """The connected Bluetooth card that supports both playback and call profiles."""
+    result = run('pactl', '-f', 'json', 'list', 'cards')
+    cards = json.loads(result.stdout) if result.returncode == 0 and result.stdout.strip() else []
+    for card in cards:
+        profiles = card.get('profiles', {})
+        if (card.get('name', '').startswith('bluez_card.') and best_profile(profiles, CALL_PREFIX)
+                and best_profile(profiles, PLAYBACK_PREFIX)):
+            return card
+    return None
+
+
+def wait_for_card(name, seconds=15):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        card = headset_card()
+        if card and card['name'] == name:
+            return card
+        time.sleep(0.5)
+    return None
+
+
+def source_names():
+    return {line.split('\t')[1] for line in run('pactl', 'list', 'short', 'sources').stdout.splitlines() if '\t' in line}
+
+
+def headset_mic():
+    return next((name for name in source_names() if name.startswith('bluez_input.') and not name.endswith('.monitor')), None)
+
+
+def rms(samples):
+    return math.sqrt(sum(s * s for s in samples) / len(samples)) if samples else 0.0
+
+
+def mic_has_signal(source):
+    """A working mic always picks up some noise; a broken call link records exact silence."""
+    with tempfile.NamedTemporaryFile(suffix='.raw') as capture:
+        subprocess.run(['timeout', '2', 'pw-record', '--target', source, '--format', 's16', '--rate', '16000',
+                        '--channels', '1', capture.name], capture_output=True)
+        data = Path(capture.name).read_bytes()
+        samples = array.array('h', data[:len(data) // 2 * 2])
+    return rms(samples[1600:]) > 1.0  # Skip the first 0.1 s while the stream starts.
+
+
+def route_through_easyeffects():
+    """Profile changes recreate the headset devices; keep apps on the EasyEffects devices."""
+    sinks = {line.split('\t')[1] for line in run('pactl', 'list', 'short', 'sinks').stdout.splitlines() if '\t' in line}
+    if 'easyeffects_sink' in sinks:
+        run('pactl', 'set-default-sink', 'easyeffects_sink')
+    if 'easyeffects_source' in source_names():
+        run('pactl', 'set-default-source', 'easyeffects_source')
+
+
+def mic_reaches_easyeffects(links):
+    """Whether pw-link -l output shows the headset mic feeding an EasyEffects node."""
+    source = None
+    for line in links.splitlines():
+        if not line.startswith(' '):
+            source = line
+        elif source and source.startswith('bluez_input') and '|->' in line and 'ee_' in line:
+            return True
+    return False
+
+
+def ensure_easyeffects_mic():
+    """EasyEffects can miss the headset mic appearing; restarting it reconnects the mic."""
+    if run('pgrep', '-x', 'easyeffects').returncode != 0:
+        return
+    # EasyEffects rebuilds its mic chain after the headset mic appears, which can take several seconds.
+    for _ in range(20):
+        if mic_reaches_easyeffects(run('pw-link', '-l').stdout):
+            return
+        time.sleep(0.5)
+    run('easyeffects', '--quit')
+    for _ in range(20):
+        if run('pgrep', '-x', 'easyeffects').returncode != 0:
+            break
+        time.sleep(0.25)
+    subprocess.Popen(['easyeffects', '--service-mode', '--hide-window'], stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+    for _ in range(20):
+        time.sleep(0.5)
+        if mic_reaches_easyeffects(run('pw-link', '-l').stdout):
+            return
+
+
+def notify(message):
+    run('notify-send', '--app-name=SplinterDots', 'Call mode', message)
+
+
+def set_profile(card, prefix):
+    profile = best_profile(card['profiles'], prefix)
+    run('pactl', 'set-card-profile', card['name'], profile)
+    time.sleep(1.5)  # Let PipeWire recreate the headset devices.
+    route_through_easyeffects()
+    return profile
+
+
+def call_mode_on(card):
+    for attempt in range(1, ATTEMPTS + 1):
+        address = card_address(card['name'])
+        run('bluetoothctl', 'disconnect', address)
+        time.sleep(2)
+        run('bluetoothctl', 'connect', address, timeout=30)
+        card = wait_for_card(card['name'])
+        if card is None:
+            break
+        set_profile(card, CALL_PREFIX)
+        ensure_easyeffects_mic()
+        mic = headset_mic()
+        if mic and mic_has_signal(mic):
+            notify('On: headset mic active')
+            return 0
+    # Never leave the headset in call quality with a dead mic.
+    card = headset_card()
+    if card:
+        set_profile(card, PLAYBACK_PREFIX)
+    notify('Could not get the headset mic working, so playback quality was restored. Try again.')
+    return 1
+
+
+def call_mode_off(card):
+    set_profile(card, PLAYBACK_PREFIX)
+    notify('Off: high-quality playback')
+    return 0
+
+
+def main(args):
+    action = args[0] if args else 'toggle'
+    if action not in ('on', 'off', 'toggle', 'status'):
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+
+    card = headset_card()
+    if action == 'status':
+        print(mode_of(card) if card else 'none')
+        return 0
+    if card is None:
+        notify('No Bluetooth headset with a microphone is connected')
+        return 1
+
+    # One switch at a time, even when the button is pressed repeatedly.
+    lock = open(Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp')) / 'splinter-call-mode.lock', 'w')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return 0
+
+    if action == 'toggle':
+        action = 'off' if mode_of(card) == 'on' else 'on'
+    return call_mode_on(card) if action == 'on' else call_mode_off(card)
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

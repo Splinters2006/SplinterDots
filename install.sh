@@ -548,9 +548,15 @@ link_file "$ROOT_DIR/scripts/splinter-apply-kitty-theme" "$HOME_DIR/.local/bin/s
 link_file "$ROOT_DIR/scripts/splinter-install-addon" "$HOME_DIR/.local/bin/splinter-install-addon"
 link_file "$ROOT_DIR/scripts/splinter-setup-easyeffects" "$HOME_DIR/.local/bin/splinter-setup-easyeffects"
 link_file "$ROOT_DIR/scripts/splinter-setup-spicetify" "$HOME_DIR/.local/bin/splinter-setup-spicetify"
+link_file "$ROOT_DIR/scripts/splinter-setup-vesktop" "$HOME_DIR/.local/bin/splinter-setup-vesktop"
+link_file "$ROOT_DIR/scripts/splinter-call-mode" "$HOME_DIR/.local/bin/splinter-call-mode"
 
 # Presets and EasyEffects as the default audio devices; skipped when it is not installed.
 run "$ROOT_DIR/scripts/splinter-setup-easyeffects"
+
+if command -v vesktop >/dev/null 2>&1; then
+  run "$ROOT_DIR/scripts/splinter-setup-vesktop" || log "Vesktop plugins were not applied; close Vesktop and run splinter-setup-vesktop."
+fi
 
 # Reapply the Spotify theme after installing/updating or applying these dotfiles.
 if [ "$DRY_RUN" -eq 1 ] && [ "$INSTALL_AUR" -eq 1 ]; then

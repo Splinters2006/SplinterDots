@@ -1,0 +1,79 @@
+{
+  "CommandsAPI": {
+    "enabled": true
+  },
+  "MessageAccessoriesAPI": {
+    "enabled": true
+  },
+  "MessageEventsAPI": {
+    "enabled": true
+  },
+  "UserSettingsAPI": {
+    "enabled": true
+  },
+  "BetterUploadButton": {
+    "enabled": true
+  },
+  "CallTimer": {
+    "enabled": true
+  },
+  "CharacterCounter": {
+    "enabled": true
+  },
+  "ClearURLs": {
+    "enabled": true
+  },
+  "CrashHandler": {
+    "enabled": true
+  },
+  "FixSpotifyEmbeds": {
+    "enabled": true
+  },
+  "SpotifyControls": {
+    "enabled": true
+  },
+  "SpotifyCrack": {
+    "enabled": true
+  },
+  "WebKeybinds": {
+    "enabled": true,
+    "showNavigationButtons": true,
+    "overrideCommonKeybinds": true
+  },
+  "WebScreenShareFixes": {
+    "enabled": true
+  },
+  "BadgeAPI": {
+    "enabled": true
+  },
+  "NoTrack": {
+    "enabled": true,
+    "disableAnalytics": true
+  },
+  "Settings": {
+    "enabled": true,
+    "settingsLocation": "aboveNitro",
+    "includeVencordInfoWhenCopying": true
+  },
+  "ConcatenatedComponentExtractor": {
+    "enabled": true
+  },
+  "ContextMenuAPI": {
+    "enabled": true
+  },
+  "DisableDeepLinks": {
+    "enabled": true
+  },
+  "FixDiscordCss": {
+    "enabled": true
+  },
+  "NoticesAPI": {
+    "enabled": true
+  },
+  "SupportHelper": {
+    "enabled": true
+  },
+  "WebContextMenus": {
+    "enabled": true
+  }
+}

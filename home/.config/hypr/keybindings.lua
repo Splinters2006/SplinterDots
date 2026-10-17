@@ -18,6 +18,7 @@ hl.bind("SUPER + SHIFT + R", hl.dsp.exec_cmd("hyprctl reload"))
 hl.bind("SUPER + T", hl.dsp.exec_cmd("kitty"))
 hl.bind("SUPER + S", hl.dsp.exec_cmd("spotify"))
 hl.bind("SUPER + D", hl.dsp.exec_cmd("vesktop"))
+hl.bind("SUPER + C", hl.dsp.exec_cmd("splinter-call-mode toggle"))
 hl.bind("SUPER + N", hl.dsp.exec_cmd("kitty"))
 
 hl.bind(mainMod .. " + left", hl.dsp.focus({ direction = "left" }))

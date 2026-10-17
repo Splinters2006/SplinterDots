@@ -13,7 +13,7 @@ cat > "$CAVA_CONFIG" <<'CAVACONF'
 bars = 18
 framerate = 90
 autosens = 1
-sensitivity = 60
+sensitivity = 150
 
 [input]
 method = pipewire
@@ -29,7 +29,7 @@ bar_delimiter = 10
 [smoothing]
 monstercat = 0
 waves = 0
-noise_reduction = 0.35
+noise_reduction = 0.25
 CAVACONF
 
 printf '000000000000000000' > "$FRAME_FILE"
@@ -51,7 +51,9 @@ proc = subprocess.Popen(
 
 values = []
 previous = [0.0] * 18
-SMOOTH = 0.45
+SMOOTH = 0.3
+# Values below 1 lift quiet bars so soft passages still move the visualizer.
+CURVE = 0.65
 
 while True:
     line = proc.stdout.readline()
@@ -78,7 +80,8 @@ while True:
 
     output = []
     for i, value in enumerate(frame_values):
-        smoothed = previous[i] * SMOOTH + value * (1.0 - SMOOTH)
+        boosted = 8.0 * (value / 8.0) ** CURVE
+        smoothed = previous[i] * SMOOTH + boosted * (1.0 - SMOOTH)
         previous[i] = smoothed
         output.append(str(max(0, min(8, int(round(smoothed))))))
 

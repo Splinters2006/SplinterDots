@@ -3309,6 +3309,7 @@ fn default_keybinds() -> Vec<Keybind> {
         sc("Terminal", "T", "app", "kitty"),
         sc("Spotify", "S", "app", "spotify"),
         sc("Vesktop", "D", "app", "vesktop"),
+        sc("Call mode", "C", "app", "splinter-call-mode toggle"),
     ]
 }
 
@@ -4088,6 +4089,7 @@ fn bar_widget_qml(
         "notifications" => interactive_text_qml(id, palette, height, radius, font_size, icon_font,
             &widget_action(&["notifications"]), status_ms.max(1500), Some(&widget_action(&["notification-menu"]))),
         "idle_inhibitor" => idle_inhibitor_qml(id, palette, height, radius, font_size, icon_font),
+        "call_mode" => call_mode_qml(id, palette, height, radius, font_size, icon_font),
         "wallpaper_prev" | "wallpaper_shuffle" | "wallpaper_next" => {
             let action = widget.strip_prefix("wallpaper_").unwrap_or("shuffle");
             let label = match action { "prev" => "◀", "next" => "▶", _ => "Shuffle" };
@@ -4180,6 +4182,39 @@ fn idle_inhibitor_qml(id: &str, palette: &Palette, height: i64, radius: i64, fon
       MouseArea {{ anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: {name}.active = !{name}.active }}
     }}"#, height=(height-8).max(22), radius=(radius-4).max(6), accent=palette.accent,
        surface=palette.surface, text=palette.text, active_text=palette.active_text, font=json_string(icon_font))
+}
+
+// Bluetooth headset call mode: highlighted while the headset mic is active.
+// Hidden when no headset with a microphone is connected.
+fn call_mode_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_size: i64, icon_font: &str) -> String {
+    let name = qml_id(id, "callMode");
+    format!(r#"Rectangle {{
+      id: {name}
+      property string mode: "none"
+      property bool busy: {name}Toggle.running
+      visible: mode !== "none"
+      width: {name}Label.implicitWidth + 20; height: {height}; anchors.verticalCenter: parent.verticalCenter
+      radius: {radius}; color: mode === "on" ? "{accent}" : "{surface}"
+      border.color: "{accent}"; border.width: 1
+      ThemedLabel {{ id: {name}Label; anchors.centerIn: parent
+        text: {name}.busy ? String.fromCodePoint(0xf130) + " Switching…"
+          : ({name}.mode === "on" ? String.fromCodePoint(0xf130) + " Call" : String.fromCodePoint(0xf02cb) + " Music")
+        color: {name}.mode === "on" ? "{active_text}" : "{text}"; font.pixelSize: {font_size}; font.bold: true; font.family: {font}
+      }}
+      Process {{ id: {name}Status; command: ["splinter-call-mode", "status"]; running: true
+        stdout: StdioCollector {{ onStreamFinished: {name}.mode = this.text.trim() || "none" }}
+      }}
+      Process {{ id: {name}Toggle; command: ["splinter-call-mode", "toggle"]
+        onExited: {{ {name}Status.running = false; {name}Status.running = true }}
+      }}
+      Timer {{ interval: 2000; running: true; repeat: true
+        onTriggered: {{ if (!{name}Status.running) {name}Status.running = true }}
+      }}
+      MouseArea {{ anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+        onClicked: {{ if (!{name}Toggle.running) {name}Toggle.running = true }}
+      }}
+    }}"#, height=(height-8).max(22), radius=(radius-4).max(6), accent=palette.accent, surface=palette.surface,
+       text=palette.text, active_text=palette.active_text, font=json_string(icon_font))
 }
 
 fn window_title_qml(id: &str, palette: &Palette, height: i64, radius: i64, font_size: i64) -> String {
@@ -6284,6 +6319,7 @@ fn bar_widget_choices() -> &'static [BarWidgetChoice] {
         BarWidgetChoice { id: "window_title",       label: "Window Title",          setting: "DOTFILES_WIDGET_WINDOW_TITLE" },
         BarWidgetChoice { id: "notifications",      label: "Notifications",         setting: "DOTFILES_WIDGET_NOTIFICATIONS" },
         BarWidgetChoice { id: "idle_inhibitor",     label: "Idle Inhibitor",        setting: "DOTFILES_WIDGET_IDLE_INHIBITOR" },
+        BarWidgetChoice { id: "call_mode",          label: "Call Mode",             setting: "DOTFILES_WIDGET_CALL_MODE" },
 
         BarWidgetChoice { id: "wallpaper_prev",     label: "Wallpaper Previous",    setting: "DOTFILES_WIDGET_WALLPAPER" },
         BarWidgetChoice { id: "wallpaper_shuffle",  label: "Wallpaper Shuffle",     setting: "DOTFILES_WIDGET_WALLPAPER" },

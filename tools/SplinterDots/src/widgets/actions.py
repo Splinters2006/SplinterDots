@@ -17,9 +17,9 @@ CHOICE_ICONS = {'Restore latest': 'edit-undo', 'Dismiss all': 'edit-clear-all', 
                 'Lock': 'system-lock-screen', 'Reboot': 'system-reboot', 'Power off': 'system-shutdown'}
 
 
-def choose(prompt, choices):
+def choose(choices):
     lines = [f"{choice}\t{CHOICE_ICONS[choice]}" if choice in CHOICE_ICONS else choice for choice in choices]
-    result = run(['splinter-launcher', '--dmenu', '--prompt', prompt], input='\n'.join(lines), timeout=None)
+    result = run(['splinter-launcher', '--dmenu'], input='\n'.join(lines), timeout=None)
     return result.stdout.strip() if result.returncode == 0 else ''
 
 
@@ -69,7 +69,7 @@ def notifications():
 
 
 def notification_menu():
-    choice = choose('Notifications', ['Restore latest', 'Dismiss all'])
+    choice = choose(['Restore latest', 'Dismiss all'])
     if choice == 'Restore latest':
         return run(['makoctl', 'restore']).returncode
     if choice == 'Dismiss all':
@@ -78,7 +78,7 @@ def notification_menu():
 
 
 def power_menu():
-    choice = choose('Power', ['Sleep', 'Lock', 'Reboot', 'Power off'])
+    choice = choose(['Sleep', 'Lock', 'Reboot', 'Power off'])
     commands = {'Sleep': ['systemctl', 'suspend'], 'Reboot': ['systemctl', 'reboot'],
                 'Power off': ['systemctl', 'poweroff']}
     if choice == 'Lock':

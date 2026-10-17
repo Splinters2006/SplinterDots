@@ -44,6 +44,7 @@ Row {
     map[g(0xf039e)] = ["accessories-text-editor", "notes"]
     map[g(0xf012c)] = ["checkbox-checked", "task-complete"]
     map[g(0xf001)] = ["audio-x-generic", "multimedia-player"]
+    map[g(0xf02cb)] = ["audio-headphones", "audio-headset"]
     map[g(0xf0176)] = ["caffeine-cup-full", "preferences-desktop-screensaver"]
     map[g(0xf04b2)] = ["caffeine-cup-empty", "system-suspend"]
     map["◀"] = ["go-previous"]

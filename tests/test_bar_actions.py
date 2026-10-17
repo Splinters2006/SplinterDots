@@ -80,7 +80,7 @@ class BarActionsTests(unittest.TestCase):
 
     def test_menu_cancel_and_notification_actions(self):
         with patch.object(actions, 'run', return_value=result('Sleep', 1)):
-            self.assertEqual(actions.choose('Power', ['Sleep']), '')
+            self.assertEqual(actions.choose(['Sleep']), '')
         with patch.object(actions, 'choose', return_value='Restore latest'), patch.object(actions, 'run', return_value=result()) as run:
             actions.notification_menu()
             run.assert_called_once_with(['makoctl', 'restore'])

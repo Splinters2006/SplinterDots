@@ -12,12 +12,10 @@ HISTORY_FILE="$CACHE_HOME/splinterdots/launcher-history.json"
 # --dmenu reads "label" or "label<TAB>icon-name" lines from stdin and prints the
 # chosen label, exiting 1 when cancelled. It replaces wofi --dmenu.
 dmenu=0
-prompt="Search apps, m: math, s: web search, or type a command"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dmenu) dmenu=1 ;;
-    --prompt) prompt="${2:-}"; shift ;;
-    *) echo "Usage: splinter-launcher [--dmenu [--prompt TEXT]]" >&2; exit 2 ;;
+    *) echo "Usage: splinter-launcher [--dmenu]" >&2; exit 2 ;;
   esac
   shift
 done
@@ -410,15 +408,6 @@ ShellRoot {
             font.pixelSize: 16
             clip: true
             focus: true
-
-            Text {
-              anchors.fill: parent
-              verticalAlignment: Text.AlignVCenter
-              text: "$(qml_string "$prompt")"
-              color: "$muted"
-              font: search.font
-              visible: search.text.length === 0
-            }
 
             Keys.onPressed: function(event) {
               var ctrl = event.modifiers & Qt.ControlModifier
