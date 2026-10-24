@@ -109,7 +109,8 @@ Variants {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                      Hyprland.dispatch("workspace " + (modelData + 1))
+                      // Hyprland's Lua config takes Lua dispatcher expressions.
+                      Hyprland.dispatch("hl.dsp.focus({ workspace = " + (modelData + 1) + " })")
                     }
                   }
                 }

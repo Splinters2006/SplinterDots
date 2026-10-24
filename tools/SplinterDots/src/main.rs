@@ -5006,7 +5006,8 @@ fn workspaces_qml(
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {{
-                      Hyprland.dispatch("workspace " + (modelData + 1))
+                      // Hyprland's Lua config takes Lua dispatcher expressions.
+                      Hyprland.dispatch("hl.dsp.focus({{ workspace = " + (modelData + 1) + " }})")
                     }}
                   }}
                 }}
@@ -7808,6 +7809,14 @@ mod tests {
         // The user folders themselves are never deleted, only things inside them.
         let whole_dir = CustomStyle { label: "x".into(), value: "x".into(), removable: vec![user_icon_dirs()[0].clone()] };
         assert!(delete_style_files(&whole_dir).is_err());
+    }
+
+
+    #[test]
+    fn workspace_buttons_use_lua_dispatch() {
+        let qml = workspaces_qml("left_0", &theme_palette(&defaults_map()), 34, 10, 12, 5, "Sans");
+        assert!(qml.contains(r#"Hyprland.dispatch("hl.dsp.focus({ workspace = " + (modelData + 1) + " })")"#));
+        assert!(!qml.contains(r#"dispatch("workspace "#));
     }
 
 }
